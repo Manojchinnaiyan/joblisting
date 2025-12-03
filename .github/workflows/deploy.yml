@@ -239,12 +239,14 @@ jobs:
           EMAIL_PROVIDER=RESEND
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}
-          RESEND_FROM_NAME=Job Platform
+          RESEND_FROM_NAME="Job Platform"
 
           # URLs
           FRONTEND_URL=${{ secrets.FRONTEND_URL }}
           ADMIN_FRONTEND_URL=${{ secrets.ADMIN_FRONTEND_URL }}
           NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+          EMAIL_VERIFICATION_URL=${{ secrets.FRONTEND_URL }}/verify-email
+          PASSWORD_RESET_URL=${{ secrets.FRONTEND_URL }}/reset-password
 
           # Docker Images
           BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest

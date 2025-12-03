@@ -53,7 +53,7 @@ services:
     environment:
       MEILI_ENV: production
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
-      MEILI_NO_ANALYTICS: true
+      MEILI_NO_ANALYTICS: "true"
     volumes:
       - meilisearch_data:/meili_data
     networks:
