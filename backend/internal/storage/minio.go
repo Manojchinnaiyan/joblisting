@@ -68,8 +68,6 @@ func NewMinioClient(config *MinioConfig) (*MinioClient, error) {
 
 // InitBuckets creates all required buckets if they don't exist
 func (m *MinioClient) InitBuckets() error {
-	ctx := context.Background()
-
 	buckets := []string{
 		m.config.BucketResumes,
 		m.config.BucketAvatars,
@@ -80,18 +78,6 @@ func (m *MinioClient) InitBuckets() error {
 	for _, bucket := range buckets {
 		if err := m.EnsureBucket(bucket); err != nil {
 			return fmt.Errorf("failed to ensure bucket %s: %w", bucket, err)
-		}
-	}
-
-	// Check bucket policies
-	for _, bucket := range buckets {
-		// Check if bucket exists
-		bucketExists, err := m.client.BucketExists(ctx, bucket)
-		if err != nil {
-			return fmt.Errorf("failed to check bucket %s: %w", bucket, err)
-		}
-		if !bucketExists {
-			continue
 		}
 	}
 
