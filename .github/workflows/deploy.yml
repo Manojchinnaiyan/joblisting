@@ -223,54 +223,47 @@ jobs:
         env:
           SSHPASS: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "cat > /opt/job-platform/.env << 'ENVEOF'
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'cat > /opt/job-platform/.env << EOF
           # Database
           DB_USER=${{ secrets.DB_USER }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
           DB_NAME=${{ secrets.DB_NAME }}
           DB_SSLMODE=disable
-
           # Redis
           REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
-
           # Meilisearch
           MEILI_MASTER_KEY=${{ secrets.MEILI_MASTER_KEY }}
-
           # MinIO
           MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}
           MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
           MINIO_BUCKET_NAME=resumes
-
           # JWT
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           JWT_ACCESS_EXPIRY=15m
           JWT_REFRESH_EXPIRY=168h
-
           # Security
           BCRYPT_COST=12
-
           # OAuth
           GOOGLE_CLIENT_ID=${{ secrets.GOOGLE_CLIENT_ID }}
           GOOGLE_CLIENT_SECRET=${{ secrets.GOOGLE_CLIENT_SECRET }}
           GOOGLE_REDIRECT_URL=${{ secrets.GOOGLE_REDIRECT_URL }}
-
           # Email
           EMAIL_PROVIDER=RESEND
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}
-          RESEND_FROM_NAME="Job Platform"
-
+          RESEND_FROM_NAME=JobPlatform
           # URLs
           FRONTEND_URL=${{ secrets.FRONTEND_URL }}
           ADMIN_FRONTEND_URL=${{ secrets.ADMIN_FRONTEND_URL }}
           NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
           EMAIL_VERIFICATION_URL=${{ secrets.FRONTEND_URL }}/verify-email
           PASSWORD_RESET_URL=${{ secrets.FRONTEND_URL }}/reset-password
-
           # Docker Images
           BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest
           FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:latest
-          ENVEOF"
+          EOF'
+          # Remove leading spaces from .env file
+          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "sed -i 's/^[[:space:]]*//' /opt/job-platform/.env"
 
       - name: Deploy to server
         env:
