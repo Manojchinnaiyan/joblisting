@@ -1,0 +1,248 @@
+package router
+
+import (
+	"job-platform/internal/config"
+	"job-platform/internal/handler"
+	"job-platform/internal/middleware"
+	"job-platform/internal/repository"
+	"job-platform/internal/service"
+	"job-platform/internal/util/email"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
+)
+
+func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client) *gin.Engine {
+	r := gin.Default()
+
+	// Middleware
+	r.Use(middleware.CORS())
+
+	// Initialize repositories
+	userRepo := repository.NewUserRepository(db)
+	tokenRepo := repository.NewTokenRepository(db)
+	profileRepo := repository.NewProfileRepository(db)
+	loginHistoryRepo := repository.NewLoginHistoryRepository(db)
+	passwordHistoryRepo := repository.NewPasswordHistoryRepository(db)
+	adminSettingsRepo := repository.NewAdminSettingsRepository(db)
+
+	// Parse duration strings
+	emailVerificationExpiry, _ := config.ParseDuration(cfg.EmailVerificationExpiry)
+	passwordResetExpiry, _ := config.ParseDuration(cfg.PasswordResetExpiry)
+	jwtAccessExpiry, _ := config.ParseDuration(cfg.JWTAccessExpiry)
+	jwtRefreshExpiry, _ := config.ParseDuration(cfg.JWTRefreshExpiry)
+	jwtAdminExpiry, _ := config.ParseDuration(cfg.JWTAdminExpiry)
+
+	// Initialize email service based on provider
+	var emailService email.EmailSender
+		SendVerificationEmail(email.EmailData) error
+		SendPasswordResetEmail(email.EmailData) error
+		SendWelcomeEmail(email.EmailData) error
+		SendPasswordChangedEmail(email.EmailData) error
+		SendAccountLockedEmail(email.EmailData) error
+		SendAdminLoginAlert(email.EmailData) error
+	}
+
+	if cfg.EmailProvider == "RESEND" {
+		emailService = email.NewResendService(&email.ResendConfig{
+			APIKey:    cfg.ResendAPIKey,
+			FromEmail: cfg.ResendFromEmail,
+			FromName:  cfg.ResendFromName,
+		})
+	} else {
+		// Default to SMTP
+		emailService = email.NewEmailService(&email.EmailConfig{
+			SMTPHost:     cfg.SMTPHost,
+			SMTPPort:     cfg.SMTPPort,
+			SMTPUser:     cfg.SMTPUser,
+			SMTPPassword: cfg.SMTPPassword,
+			FromEmail:    cfg.EmailFrom,
+			FromName:     "Job Platform",
+		})
+	}
+
+	// Initialize services
+	tokenService := service.NewTokenService(
+		tokenRepo,
+		cfg.JWTSecret,
+		jwtAccessExpiry,
+		jwtRefreshExpiry,
+		jwtAdminExpiry,
+	)
+
+	authService := service.NewAuthService(
+		userRepo,
+		tokenRepo,
+		profileRepo,
+		loginHistoryRepo,
+		passwordHistoryRepo,
+		tokenService,
+		emailService,
+		db,
+		&service.AuthConfig{
+			EmailVerificationExpiry: emailVerificationExpiry,
+			PasswordResetExpiry:     passwordResetExpiry,
+			MaxLoginAttempts:        cfg.MaxLoginAttempts,
+		},
+	)
+
+	userService := service.NewUserService(userRepo, profileRepo)
+
+	adminService := service.NewAdminService(
+		userRepo,
+		profileRepo,
+		tokenRepo,
+		loginHistoryRepo,
+		tokenService,
+		emailService,
+		db,
+		&service.AdminConfig{
+			AdminEmailDomain: cfg.AdminEmailDomain,
+			CompanyName:      "Job Platform",
+			SupportEmail:     cfg.EmailFrom,
+			BcryptCost:       cfg.BcryptCost,
+		},
+	)
+
+	cmsService := service.NewCMSService(adminSettingsRepo)
+
+	googleOAuthService := service.NewGoogleOAuthService(
+		userRepo,
+		profileRepo,
+		loginHistoryRepo,
+		tokenService,
+		db,
+		cfg.GoogleClientID,
+		cfg.GoogleClientSecret,
+		cfg.GoogleRedirectURL,
+	)
+
+	// Initialize handlers
+	healthHandler := handler.NewHealthHandler(db, redis)
+	authHandler := handler.NewAuthHandler(authService, tokenService, userService)
+	adminAuthHandler := handler.NewAdminAuthHandler(adminService, tokenService)
+	adminUserHandler := handler.NewAdminUserHandler(adminService, userService)
+	adminCMSHandler := handler.NewAdminCMSHandler(cmsService)
+	adminAnalyticsHandler := handler.NewAdminAnalyticsHandler(userService, adminService)
+	oauthHandler := handler.NewOAuthHandler(googleOAuthService)
+
+	// Initialize middleware
+	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
+	adminMiddleware := middleware.AdminMiddleware()
+	loginRateLimitMiddleware := middleware.LoginRateLimitMiddleware(redis)
+	emailRateLimitMiddleware := middleware.EmailRateLimitMiddleware(redis)
+	generalRateLimitMiddleware := middleware.RateLimitMiddleware(redis, 100, 1*time.Minute)
+
+	// Health routes (no prefix)
+	r.GET("/health", healthHandler.Check)
+	r.GET("/health/ready", healthHandler.Readiness)
+	r.GET("/health/live", healthHandler.Liveness)
+
+	// API v1 routes
+	v1 := r.Group("/api/v1")
+	{
+		// Welcome endpoint
+		v1.GET("/", func(c *gin.Context) {
+			c.JSON(200, gin.H{
+				"message": "Welcome to Job Platform API",
+				"version": "1.0.0",
+				"status":  "running",
+			})
+		})
+
+		// ==================== Public Auth Routes ====================
+		auth := v1.Group("/auth")
+		{
+			// Registration & Login
+			auth.POST("/register", generalRateLimitMiddleware, authHandler.Register)
+			auth.POST("/login", loginRateLimitMiddleware, authHandler.Login)
+			auth.POST("/refresh", authHandler.RefreshToken)
+
+			// Email Verification
+			auth.GET("/verify-email", authHandler.VerifyEmail)
+			auth.POST("/resend-verification", emailRateLimitMiddleware, authHandler.ResendVerification)
+
+			// Password Reset
+			auth.POST("/forgot-password", emailRateLimitMiddleware, authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
+
+			// Google OAuth
+			oauth := auth.Group("/oauth")
+			{
+				oauth.GET("/google", oauthHandler.GetGoogleAuthURL)
+				oauth.POST("/google/callback", oauthHandler.GoogleCallback)
+			}
+		}
+
+		// ==================== Protected Auth Routes ====================
+		authProtected := v1.Group("/auth")
+		authProtected.Use(authMiddleware)
+		{
+			// User Info & Profile
+			authProtected.GET("/me", authHandler.GetMe)
+			authProtected.POST("/change-password", authHandler.ChangePassword)
+			authProtected.POST("/logout", authHandler.Logout)
+
+			// OAuth Account Linking
+			authProtected.POST("/oauth/google/link", oauthHandler.LinkGoogleAccount)
+			authProtected.DELETE("/oauth/google/unlink", oauthHandler.UnlinkGoogleAccount)
+		}
+
+		// ==================== Admin Auth Routes ====================
+		adminAuth := v1.Group("/admin/auth")
+		{
+			// Admin Login (with 2FA)
+			adminAuth.POST("/login", loginRateLimitMiddleware, adminAuthHandler.Login)
+			adminAuth.POST("/verify-2fa", adminAuthHandler.Verify2FA)
+			adminAuth.POST("/refresh", adminAuthHandler.RefreshToken)
+		}
+
+		// ==================== Protected Admin Auth Routes ====================
+		adminAuthProtected := v1.Group("/admin/auth")
+		adminAuthProtected.Use(authMiddleware, adminMiddleware)
+		{
+			adminAuthProtected.GET("/me", adminAuthHandler.GetMe)
+			adminAuthProtected.POST("/logout", adminAuthHandler.Logout)
+			adminAuthProtected.POST("/enable-2fa", adminAuthHandler.Enable2FA)
+			adminAuthProtected.POST("/disable-2fa", adminAuthHandler.Disable2FA)
+		}
+
+		// ==================== Admin User Management Routes ====================
+		adminUsers := v1.Group("/admin/users")
+		adminUsers.Use(authMiddleware, adminMiddleware)
+		{
+			adminUsers.GET("", adminUserHandler.ListUsers)
+			adminUsers.GET("/:id", adminUserHandler.GetUser)
+			adminUsers.PUT("/:id", adminUserHandler.UpdateUser)
+			adminUsers.DELETE("/:id", adminUserHandler.DeleteUser)
+			adminUsers.POST("/:id/suspend", adminUserHandler.SuspendUser)
+			adminUsers.POST("/:id/activate", adminUserHandler.ActivateUser)
+			adminUsers.POST("/create-admin", adminUserHandler.CreateAdmin)
+			adminUsers.GET("/:id/login-history", adminUserHandler.GetLoginHistory)
+			adminUsers.POST("/:id/revoke-sessions", adminUserHandler.RevokeSessions)
+		}
+
+		// ==================== Admin CMS Routes ====================
+		adminCMS := v1.Group("/admin/settings")
+		adminCMS.Use(authMiddleware, adminMiddleware)
+		{
+			adminCMS.GET("", adminCMSHandler.GetAllSettings)
+			adminCMS.GET("/:key", adminCMSHandler.GetSetting)
+			adminCMS.PUT("/:key", adminCMSHandler.UpdateSetting)
+			adminCMS.DELETE("/:key", adminCMSHandler.DeleteSetting)
+		}
+
+		// ==================== Admin Analytics Routes ====================
+		adminAnalytics := v1.Group("/admin/analytics")
+		adminAnalytics.Use(authMiddleware, adminMiddleware)
+		{
+			adminAnalytics.GET("/users", adminAnalyticsHandler.GetUserStats)
+			adminAnalytics.GET("/logins", adminAnalyticsHandler.GetLoginStats)
+			adminAnalytics.GET("/security-events", adminAnalyticsHandler.GetSecurityEvents)
+		}
+	}
+
+	return r
+}

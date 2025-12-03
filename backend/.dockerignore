@@ -1,0 +1,38 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build output
+bin/
+*.exe
+
+# Test files
+*_test.go
+coverage.out
+
+# Development
+.air.toml
+tmp/
+
+# Environment (should use docker-compose env vars)
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+!README.md
+
+# Logs
+*.log
+logs/
