@@ -40,6 +40,11 @@ func main() {
 	}
 	log.Println("✅ Connected to PostgreSQL")
 
+	// Run database migrations
+	if err := database.RunMigrations(db); err != nil {
+		log.Printf("⚠️  Warning: Migration failed: %v", err)
+	}
+
 	// Initialize Redis
 	redisClient, err := database.NewRedis(cfg)
 	if err != nil {
