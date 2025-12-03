@@ -64,7 +64,7 @@ func (p *PortfolioProject) HasLinks() bool {
 
 // HasMedia checks if project has images or thumbnail
 func (p *PortfolioProject) HasMedia() bool {
-	return p.ThumbnailURL != nil || (p.Images != nil && len(p.Images) > 0)
+	return p.ThumbnailURL != nil || len(p.Images) > 0
 }
 
 // GetImageCount returns the number of images

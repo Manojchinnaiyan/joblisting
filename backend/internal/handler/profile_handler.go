@@ -62,7 +62,7 @@ func (h *ProfileHandler) GetMyProfile(c *gin.Context) {
 
 	user, err := h.userService.GetByID(userID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to fetch user data"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to fetch user data"), nil)
 		return
 	}
 
@@ -96,7 +96,7 @@ func (h *ProfileHandler) CreateProfile(c *gin.Context) {
 	}
 
 	// Create profile first
-	profile, err := h.profileService.CreateProfile(userID)
+	_, err = h.profileService.CreateProfile(userID)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err, nil)
 		return
@@ -122,7 +122,7 @@ func (h *ProfileHandler) CreateProfile(c *gin.Context) {
 		Visibility:             req.Visibility,
 	}
 
-	profile, err = h.profileService.UpdateProfile(userID, input)
+	profile, err := h.profileService.UpdateProfile(userID, input)
 	if err != nil {
 		response.Error(c, http.StatusBadRequest, err, nil)
 		return
@@ -188,7 +188,7 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 
 	user, err := h.userService.GetByID(userID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to fetch user data"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to fetch user data"), nil)
 		return
 	}
 
@@ -326,7 +326,7 @@ func (h *ProfileHandler) UploadAvatar(c *gin.Context) {
 
 	file, err := c.FormFile("file")
 	if err != nil {
-		response.Error(c, http.StatusBadRequest, errors.New("File is required"), nil)
+		response.Error(c, http.StatusBadRequest, errors.New("file is required"), nil)
 		return
 	}
 
@@ -334,13 +334,13 @@ func (h *ProfileHandler) UploadAvatar(c *gin.Context) {
 	ext := strings.ToLower(filepath.Ext(file.Filename))
 	allowedExts := map[string]bool{".jpg": true, ".jpeg": true, ".png": true, ".gif": true, ".webp": true}
 	if !allowedExts[ext] {
-		response.Error(c, http.StatusBadRequest, errors.New("Only image files are allowed (jpg, jpeg, png, gif, webp)"), nil)
+		response.Error(c, http.StatusBadRequest, errors.New("only image files are allowed (jpg, jpeg, png, gif, webp)"), nil)
 		return
 	}
 
 	// Validate file size (max 5MB)
 	if file.Size > 5*1024*1024 {
-		response.Error(c, http.StatusBadRequest, errors.New("File size must not exceed 5MB"), nil)
+		response.Error(c, http.StatusBadRequest, errors.New("file size must not exceed 5MB"), nil)
 		return
 	}
 
@@ -351,7 +351,7 @@ func (h *ProfileHandler) UploadAvatar(c *gin.Context) {
 	// Upload to MinIO
 	result, err := h.storage.UploadFile(h.storage.GetConfig().BucketAvatars, file, avatarPath)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to upload avatar"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to upload avatar"), nil)
 		return
 	}
 
@@ -373,7 +373,7 @@ func (h *ProfileHandler) UploadAvatar(c *gin.Context) {
 
 	user, err := h.userService.GetByID(userID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to fetch user data"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to fetch user data"), nil)
 		return
 	}
 
@@ -456,7 +456,7 @@ func (h *ProfileHandler) GetProfileByUserID(c *gin.Context) {
 
 	user, err := h.userService.GetByID(userID)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to fetch user data"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to fetch user data"), nil)
 		return
 	}
 

@@ -83,14 +83,14 @@ func (m *MinioClient) InitBuckets() error {
 		}
 	}
 
-	// Set bucket policies to allow download via signed URLs only
+	// Check bucket policies
 	for _, bucket := range buckets {
-		// Check if bucket exists before setting policy
-		exists, err := m.client.BucketExists(ctx, bucket)
+		// Check if bucket exists
+		bucketExists, err := m.client.BucketExists(ctx, bucket)
 		if err != nil {
 			return fmt.Errorf("failed to check bucket %s: %w", bucket, err)
 		}
-		if !exists {
+		if !bucketExists {
 			continue
 		}
 	}

@@ -321,7 +321,7 @@ func (s *NotificationService) NotifyCompanyReviewPosted(
 	reviewerName string,
 	rating int,
 ) error {
-	link := fmt.Sprintf("/employer/company/reviews")
+	link := "/employer/company/reviews"
 
 	_, err := s.CreateNotification(ctx, CreateNotificationInput{
 		UserID:  companyOwnerID,

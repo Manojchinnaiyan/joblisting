@@ -221,7 +221,7 @@ func (h *JobHandler) GetLocations(c *gin.Context) {
 
 	locations, err := h.jobService.GetLocations(limit)
 	if err != nil {
-		response.Error(c, http.StatusInternalServerError, errors.New("Failed to fetch locations"), nil)
+		response.Error(c, http.StatusInternalServerError, errors.New("failed to fetch locations"), nil)
 		return
 	}
 
