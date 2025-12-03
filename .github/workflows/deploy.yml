@@ -174,9 +174,6 @@ jobs:
     name: Deploy to Server
     runs-on: ubuntu-latest
     needs: build-and-push
-    environment:
-      name: production
-      url: http://${{ secrets.SERVER_HOST }}
 
     steps:
       - name: Checkout code
