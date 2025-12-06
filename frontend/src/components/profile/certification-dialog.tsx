@@ -24,7 +24,7 @@ const certificationSchema = z.object({
   expiry_date: z.string().optional(),
   credential_id: z.string().max(255).optional(),
   credential_url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  does_not_expire: z.boolean().default(false),
+  does_not_expire: z.boolean(),
 }).refine(
   (data) => {
     if (!data.does_not_expire && data.expiry_date) {

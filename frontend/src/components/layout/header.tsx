@@ -23,6 +23,7 @@ import { getInitials } from '@/lib/utils'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { NotificationBell } from '@/components/notifications/notification-bell'
+import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Header() {
   const { user, isAuthenticated, logout, refreshToken } = useAuthStore()
@@ -54,6 +55,7 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             {isAuthenticated && user ? (
               <>
                 <NotificationBell notificationsHref="/notifications" />

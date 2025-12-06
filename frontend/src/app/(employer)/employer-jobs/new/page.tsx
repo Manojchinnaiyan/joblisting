@@ -44,13 +44,13 @@ const jobSchema = z.object({
   workplace_type: z.enum(['ONSITE', 'REMOTE', 'HYBRID']),
   salary_min: z.number().optional(),
   salary_max: z.number().optional(),
-  salary_currency: z.string().default('USD'),
-  skills: z.array(z.string()).default([]),
-  benefits: z.array(z.string()).default([]),
-  category_ids: z.array(z.string()).default([]),
+  salary_currency: z.string(),
+  skills: z.array(z.string()),
+  benefits: z.array(z.string()),
+  category_ids: z.array(z.string()),
   application_deadline: z.string().optional(),
-  is_featured: z.boolean().default(false),
-  is_urgent: z.boolean().default(false),
+  is_featured: z.boolean(),
+  is_urgent: z.boolean(),
 })
 
 type JobFormData = z.infer<typeof jobSchema>

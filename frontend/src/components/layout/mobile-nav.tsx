@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, Briefcase, Building2, Info, Home } from 'lucide-react'
+import { Menu, Briefcase, Building2, Info, Home, BookOpen } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
@@ -14,6 +14,7 @@ const navItems = [
   { href: ROUTES.HOME, label: 'Home', icon: Home },
   { href: ROUTES.JOBS, label: 'Jobs', icon: Briefcase },
   { href: ROUTES.COMPANIES, label: 'Companies', icon: Building2 },
+  { href: '/blogs', label: 'Blog', icon: BookOpen },
   { href: ROUTES.ABOUT, label: 'About', icon: Info },
 ]
 

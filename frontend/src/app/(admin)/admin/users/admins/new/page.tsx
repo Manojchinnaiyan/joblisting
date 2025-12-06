@@ -34,8 +34,8 @@ const createAdminSchema = z.object({
     .regex(/[^A-Za-z0-9]/, 'Password must contain at least one special character'),
   confirm_password: z.string(),
   permissions: z.array(z.string()).min(1, 'Select at least one permission'),
-  require_2fa: z.boolean().default(true),
-  send_welcome_email: z.boolean().default(true),
+  require_2fa: z.boolean(),
+  send_welcome_email: z.boolean(),
 }).refine((data) => data.password === data.confirm_password, {
   message: "Passwords don't match",
   path: ['confirm_password'],

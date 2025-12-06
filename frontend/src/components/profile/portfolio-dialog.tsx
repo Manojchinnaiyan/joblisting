@@ -25,7 +25,7 @@ const portfolioSchema = z.object({
   description: z.string().min(1, 'Description is required').max(2000),
   project_url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
   github_url: z.string().url('Must be a valid URL').optional().or(z.literal('')),
-  is_featured: z.boolean().default(false),
+  is_featured: z.boolean(),
 })
 
 type PortfolioFormData = z.infer<typeof portfolioSchema>

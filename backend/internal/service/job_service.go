@@ -81,6 +81,14 @@ type CreateJobInput struct {
 	ApplicationEmail   string
 }
 
+// AdminCreateJobInput represents input for admin creating a job
+type AdminCreateJobInput struct {
+	CreateJobInput
+	CompanyName    string
+	CompanyLogoURL string
+	Status         string // Optional: ACTIVE, DRAFT, PENDING_APPROVAL
+}
+
 // UpdateJobInput represents input for updating a job
 type UpdateJobInput struct {
 	Title              *string
@@ -108,6 +116,14 @@ type UpdateJobInput struct {
 	CategoryIDs        []uuid.UUID
 	ApplicationURL     *string
 	ApplicationEmail   *string
+}
+
+// AdminUpdateJobInput represents input for admin updating a job
+type AdminUpdateJobInput struct {
+	UpdateJobInput
+	CompanyName    *string
+	CompanyLogoURL *string
+	Status         *string
 }
 
 // CreateJob creates a new job posting
@@ -169,6 +185,112 @@ func (s *JobService) CreateJob(employerID uuid.UUID, input CreateJobInput) (*dom
 		ShortDescription:   input.ShortDescription,
 		CompanyName:        companyName,
 		CompanyLogoURL:     companyLogoURL,
+		JobType:            input.JobType,
+		ExperienceLevel:    input.ExperienceLevel,
+		WorkplaceType:      input.WorkplaceType,
+		Location:           input.Location,
+		City:               input.City,
+		State:              input.State,
+		Country:            input.Country,
+		Latitude:           input.Latitude,
+		Longitude:          input.Longitude,
+		SalaryMin:          input.SalaryMin,
+		SalaryMax:          input.SalaryMax,
+		SalaryCurrency:     input.SalaryCurrency,
+		SalaryPeriod:       input.SalaryPeriod,
+		HideSalary:         input.HideSalary,
+		Skills:             input.Skills,
+		Education:          input.Education,
+		YearsExperienceMin: input.YearsExperienceMin,
+		YearsExperienceMax: input.YearsExperienceMax,
+		Benefits:           input.Benefits,
+		ApplicationURL:     input.ApplicationURL,
+		ApplicationEmail:   input.ApplicationEmail,
+		Status:             status,
+		ExpiresAt:          &expiresAt,
+	}
+
+	if status == domain.JobStatusActive {
+		now := time.Now()
+		job.PublishedAt = &now
+	}
+
+	// Create job in transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	jobRepoTx := repository.NewJobRepository(tx)
+	if err := jobRepoTx.Create(job); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// Add categories if provided
+	if len(input.CategoryIDs) > 0 {
+		if err := jobRepoTx.AddCategories(job.ID, input.CategoryIDs); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	// Reload job with associations
+	return s.jobRepo.GetByID(job.ID)
+}
+
+// AdminCreateJob creates a job directly by admin (bypasses employer checks)
+func (s *JobService) AdminCreateJob(adminID uuid.UUID, input AdminCreateJobInput) (*domain.Job, error) {
+	// Get admin user to verify
+	admin, err := s.userRepo.GetByID(adminID)
+	if err != nil {
+		return nil, domain.ErrUserNotFound
+	}
+
+	// Verify admin role
+	if admin.Role != domain.RoleAdmin {
+		return nil, domain.ErrInvalidRole
+	}
+
+	// Generate unique slug
+	baseSlug := slug.Generate(input.Title)
+	finalSlug := slug.MakeUnique(baseSlug, func(slugStr string) bool {
+		exists, _ := s.jobRepo.SlugExists(slugStr)
+		return exists
+	})
+
+	// Determine status - admin can choose, defaults to ACTIVE
+	status := domain.JobStatusActive
+	if input.Status != "" {
+		switch input.Status {
+		case "DRAFT":
+			status = domain.JobStatusDraft
+		case "PENDING_APPROVAL":
+			status = domain.JobStatusPendingApproval
+		case "ACTIVE":
+			status = domain.JobStatusActive
+		}
+	}
+
+	// Set expiry date
+	expiresAt := time.Now().AddDate(0, 0, s.config.DefaultExpiryDays)
+
+	// Create job with admin-provided company info
+	job := &domain.Job{
+		ID:                 uuid.New(),
+		EmployerID:         adminID, // Use admin ID as employer ID
+		Title:              input.Title,
+		Slug:               finalSlug,
+		Description:        input.Description,
+		ShortDescription:   input.ShortDescription,
+		CompanyName:        input.CompanyName,
+		CompanyLogoURL:     input.CompanyLogoURL,
 		JobType:            input.JobType,
 		ExperienceLevel:    input.ExperienceLevel,
 		WorkplaceType:      input.WorkplaceType,
@@ -325,6 +447,140 @@ func (s *JobService) UpdateJob(jobID, employerID uuid.UUID, input UpdateJobInput
 	}
 	if input.ApplicationEmail != nil {
 		job.ApplicationEmail = *input.ApplicationEmail
+	}
+
+	// Update in transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	jobRepoTx := repository.NewJobRepository(tx)
+	if err := jobRepoTx.Update(job); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
+
+	// Update categories if provided
+	if input.CategoryIDs != nil {
+		if err := jobRepoTx.AddCategories(job.ID, input.CategoryIDs); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	// Reload job with associations
+	return s.jobRepo.GetByID(job.ID)
+}
+
+// AdminUpdateJob updates a job by admin (no ownership check)
+func (s *JobService) AdminUpdateJob(jobID uuid.UUID, input AdminUpdateJobInput) (*domain.Job, error) {
+	// Get job
+	job, err := s.jobRepo.GetByID(jobID)
+	if err != nil {
+		return nil, domain.ErrJobNotFound
+	}
+
+	// Update fields if provided
+	if input.Title != nil {
+		job.Title = *input.Title
+		// Regenerate slug if title changed
+		baseSlug := slug.Generate(*input.Title)
+		if baseSlug != job.Slug {
+			job.Slug = slug.MakeUnique(baseSlug, func(slugStr string) bool {
+				if slugStr == job.Slug {
+					return false // Current slug is OK
+				}
+				exists, _ := s.jobRepo.SlugExists(slugStr)
+				return exists
+			})
+		}
+	}
+	if input.Description != nil {
+		job.Description = *input.Description
+	}
+	if input.ShortDescription != nil {
+		job.ShortDescription = *input.ShortDescription
+	}
+	if input.JobType != nil {
+		job.JobType = *input.JobType
+	}
+	if input.ExperienceLevel != nil {
+		job.ExperienceLevel = *input.ExperienceLevel
+	}
+	if input.WorkplaceType != nil {
+		job.WorkplaceType = *input.WorkplaceType
+	}
+	if input.Location != nil {
+		job.Location = *input.Location
+	}
+	if input.City != nil {
+		job.City = *input.City
+	}
+	if input.State != nil {
+		job.State = *input.State
+	}
+	if input.Country != nil {
+		job.Country = *input.Country
+	}
+	if input.Latitude != nil {
+		job.Latitude = input.Latitude
+	}
+	if input.Longitude != nil {
+		job.Longitude = input.Longitude
+	}
+	if input.SalaryMin != nil {
+		job.SalaryMin = input.SalaryMin
+	}
+	if input.SalaryMax != nil {
+		job.SalaryMax = input.SalaryMax
+	}
+	if input.SalaryCurrency != nil {
+		job.SalaryCurrency = *input.SalaryCurrency
+	}
+	if input.SalaryPeriod != nil {
+		job.SalaryPeriod = *input.SalaryPeriod
+	}
+	if input.HideSalary != nil {
+		job.HideSalary = *input.HideSalary
+	}
+	if input.Skills != nil {
+		job.Skills = input.Skills
+	}
+	if input.Education != nil {
+		job.Education = *input.Education
+	}
+	if input.YearsExperienceMin != nil {
+		job.YearsExperienceMin = *input.YearsExperienceMin
+	}
+	if input.YearsExperienceMax != nil {
+		job.YearsExperienceMax = input.YearsExperienceMax
+	}
+	if input.Benefits != nil {
+		job.Benefits = input.Benefits
+	}
+	if input.ApplicationURL != nil {
+		job.ApplicationURL = *input.ApplicationURL
+	}
+	if input.ApplicationEmail != nil {
+		job.ApplicationEmail = *input.ApplicationEmail
+	}
+
+	// Admin-specific fields
+	if input.CompanyName != nil {
+		job.CompanyName = *input.CompanyName
+	}
+	if input.CompanyLogoURL != nil {
+		job.CompanyLogoURL = *input.CompanyLogoURL
+	}
+	if input.Status != nil {
+		job.Status = domain.JobStatus(*input.Status)
 	}
 
 	// Update in transaction
@@ -540,19 +796,6 @@ func (s *JobService) AdminGetAllJobs(status *domain.JobStatus, limit, offset int
 // ListJobs retrieves jobs with flexible filters (for admin)
 func (s *JobService) ListJobs(filters map[string]interface{}, limit, offset int) ([]domain.Job, int64, error) {
 	return s.jobRepo.ListJobs(filters, limit, offset)
-}
-
-// AdminUpdateJob updates any job (admin)
-func (s *JobService) AdminUpdateJob(jobID uuid.UUID, input UpdateJobInput) (*domain.Job, error) {
-	_, err := s.jobRepo.GetByID(jobID)
-	if err != nil {
-		return nil, domain.ErrJobNotFound
-	}
-
-	// Apply updates (same logic as UpdateJob but without ownership check)
-	// ... (implementation similar to UpdateJob)
-
-	return s.jobRepo.GetByID(jobID)
 }
 
 // AdminDeleteJob permanently deletes a job (admin)

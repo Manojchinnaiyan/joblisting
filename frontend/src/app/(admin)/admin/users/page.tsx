@@ -299,7 +299,7 @@ export default function UsersPage() {
     : undefined
 
   return (
-    <div className="space-y-4 md:space-y-6">
+    <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Users</h1>

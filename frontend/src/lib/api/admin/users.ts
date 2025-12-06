@@ -151,7 +151,18 @@ export const adminUsersApi = {
 
   async getUser(id: string): Promise<AdminUserDetail> {
     const response = await apiClient.get(`/admin/users/${id}`)
-    return response.data.data || response.data.user || response.data
+    const data = response.data.data || response.data
+
+    // Backend returns { user: {...}, profile: {...} } - merge them
+    if (data.user) {
+      return {
+        ...data.user,
+        profile: data.profile || undefined,
+        is_2fa_enabled: data.user.two_factor_enabled,
+      }
+    }
+
+    return data
   },
 
   async updateUser(id: string, data: UpdateUserData): Promise<AdminUserDetail> {

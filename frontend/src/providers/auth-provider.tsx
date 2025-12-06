@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, ReactNode } from 'react'
+import { useEffect, useState, ReactNode } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { authApi } from '@/lib/api/auth'
 
@@ -17,25 +17,31 @@ function LoadingScreen() {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { setUser, setLoading, logout, accessToken, _hasHydrated } = useAuthStore()
+  const [isValidating, setIsValidating] = useState(true)
 
   useEffect(() => {
     const initAuth = async () => {
+      // Wait for hydration before validating
+      if (!_hasHydrated) return
+
       if (accessToken) {
         try {
           const user = await authApi.getMe()
           setUser(user)
-        } catch (error) {
+        } catch {
+          // Token is invalid - clear auth state
           logout()
         }
       }
       setLoading(false)
+      setIsValidating(false)
     }
 
     initAuth()
-  }, [accessToken, setUser, setLoading, logout])
+  }, [accessToken, setUser, setLoading, logout, _hasHydrated])
 
-  // Show loading screen until zustand store has hydrated from localStorage
-  if (!_hasHydrated) {
+  // Show loading screen until zustand store has hydrated and auth is validated
+  if (!_hasHydrated || isValidating) {
     return <LoadingScreen />
   }
 

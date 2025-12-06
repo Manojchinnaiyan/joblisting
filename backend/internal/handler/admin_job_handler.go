@@ -318,6 +318,194 @@ func (h *AdminJobHandler) DeleteJob(c *gin.Context) {
 	response.OK(c, "Job deleted successfully", nil)
 }
 
+// CreateJob creates a new job (admin only)
+// POST /api/v1/admin/jobs
+func (h *AdminJobHandler) CreateJob(c *gin.Context) {
+	// Get current user (admin)
+	user, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		response.Unauthorized(c, err)
+		return
+	}
+
+	// Parse request
+	var req dto.AdminCreateJobRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err)
+		return
+	}
+
+	// Parse category IDs
+	var categoryIDs []uuid.UUID
+	for _, idStr := range req.CategoryIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			response.BadRequest(c, domain.ErrInvalidCategoryID)
+			return
+		}
+		categoryIDs = append(categoryIDs, id)
+	}
+
+	// Create job input
+	input := service.AdminCreateJobInput{
+		CreateJobInput: service.CreateJobInput{
+			Title:              req.Title,
+			Description:        req.Description,
+			ShortDescription:   req.ShortDescription,
+			JobType:            domain.JobType(req.JobType),
+			ExperienceLevel:    domain.ExperienceLevel(req.ExperienceLevel),
+			WorkplaceType:      domain.WorkplaceType(req.WorkplaceType),
+			Location:           req.Location,
+			City:               req.City,
+			State:              req.State,
+			Country:            req.Country,
+			Latitude:           req.Latitude,
+			Longitude:          req.Longitude,
+			SalaryMin:          req.SalaryMin,
+			SalaryMax:          req.SalaryMax,
+			SalaryCurrency:     req.SalaryCurrency,
+			SalaryPeriod:       req.SalaryPeriod,
+			HideSalary:         req.HideSalary,
+			Skills:             req.Skills,
+			Education:          req.Education,
+			YearsExperienceMin: req.YearsExperienceMin,
+			YearsExperienceMax: req.YearsExperienceMax,
+			Benefits:           req.Benefits,
+			CategoryIDs:        categoryIDs,
+			ApplicationURL:     req.ApplicationURL,
+			ApplicationEmail:   req.ApplicationEmail,
+		},
+		CompanyName:    req.CompanyName,
+		CompanyLogoURL: req.CompanyLogoURL,
+		Status:         req.Status,
+	}
+
+	// Create job
+	job, err := h.jobService.AdminCreateJob(user.ID, input)
+	if err != nil {
+		if err == domain.ErrInvalidRole {
+			response.Forbidden(c, err)
+			return
+		}
+		response.InternalError(c, err)
+		return
+	}
+
+	// Convert to response
+	jobResponse := dto.ToJobResponse(job, nil)
+
+	response.Created(c, "Job created successfully", jobResponse)
+}
+
+// UpdateJob updates an existing job (admin only)
+// PUT /api/v1/admin/jobs/:id
+func (h *AdminJobHandler) UpdateJob(c *gin.Context) {
+	// Parse job ID
+	jobIDStr := c.Param("id")
+	jobID, err := uuid.Parse(jobIDStr)
+	if err != nil {
+		response.BadRequest(c, domain.ErrInvalidJobID)
+		return
+	}
+
+	// Parse request
+	var req dto.AdminUpdateJobRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err)
+		return
+	}
+
+	// Parse category IDs if provided
+	var categoryIDs []uuid.UUID
+	if req.CategoryIDs != nil {
+		for _, idStr := range *req.CategoryIDs {
+			id, err := uuid.Parse(idStr)
+			if err != nil {
+				response.BadRequest(c, domain.ErrInvalidCategoryID)
+				return
+			}
+			categoryIDs = append(categoryIDs, id)
+		}
+	}
+
+	// Build update input
+	input := service.AdminUpdateJobInput{
+		UpdateJobInput: service.UpdateJobInput{
+			Title:            req.Title,
+			Description:      req.Description,
+			ShortDescription: req.ShortDescription,
+			Location:         req.Location,
+			City:             req.City,
+			State:            req.State,
+			Country:          req.Country,
+			Latitude:         req.Latitude,
+			Longitude:        req.Longitude,
+			SalaryMin:        req.SalaryMin,
+			SalaryMax:        req.SalaryMax,
+			SalaryCurrency:   req.SalaryCurrency,
+			SalaryPeriod:     req.SalaryPeriod,
+			HideSalary:       req.HideSalary,
+			Education:        req.Education,
+			YearsExperienceMin: req.YearsExperienceMin,
+			YearsExperienceMax: req.YearsExperienceMax,
+			ApplicationURL:   req.ApplicationURL,
+			ApplicationEmail: req.ApplicationEmail,
+		},
+		CompanyName:    req.CompanyName,
+		CompanyLogoURL: req.CompanyLogoURL,
+		Status:         req.Status,
+	}
+
+	// Handle job type
+	if req.JobType != nil {
+		jobType := domain.JobType(*req.JobType)
+		input.JobType = &jobType
+	}
+
+	// Handle experience level
+	if req.ExperienceLevel != nil {
+		expLevel := domain.ExperienceLevel(*req.ExperienceLevel)
+		input.ExperienceLevel = &expLevel
+	}
+
+	// Handle workplace type
+	if req.WorkplaceType != nil {
+		wpType := domain.WorkplaceType(*req.WorkplaceType)
+		input.WorkplaceType = &wpType
+	}
+
+	// Handle skills
+	if req.Skills != nil {
+		input.Skills = *req.Skills
+	}
+
+	// Handle benefits
+	if req.Benefits != nil {
+		input.Benefits = *req.Benefits
+	}
+
+	// Handle categories
+	if req.CategoryIDs != nil {
+		input.CategoryIDs = categoryIDs
+	}
+
+	// Update job
+	job, err := h.jobService.AdminUpdateJob(jobID, input)
+	if err != nil {
+		if err == domain.ErrJobNotFound {
+			response.NotFound(c, err)
+			return
+		}
+		response.InternalError(c, err)
+		return
+	}
+
+	// Convert to response
+	jobResponse := dto.ToJobResponse(job, nil)
+
+	response.OK(c, "Job updated successfully", jobResponse)
+}
+
 // GetPendingJobs retrieves all pending jobs awaiting approval
 // GET /api/v1/admin/jobs/pending
 func (h *AdminJobHandler) GetPendingJobs(c *gin.Context) {

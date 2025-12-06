@@ -37,8 +37,8 @@ const categoryFormSchema = z.object({
   description: z.string().optional(),
   icon: z.string().optional(),
   parent_id: z.string().optional(),
-  order: z.number().int().min(0).default(0),
-  is_active: z.boolean().default(true),
+  order: z.coerce.number().int().min(0),
+  is_active: z.boolean(),
 })
 
 type CategoryFormValues = z.infer<typeof categoryFormSchema>

@@ -8,6 +8,7 @@ import { ROUTES } from '@/lib/constants'
 const navItems = [
   { href: ROUTES.JOBS, label: 'Jobs' },
   { href: ROUTES.COMPANIES, label: 'Companies' },
+  { href: '/blogs', label: 'Blog' },
   { href: ROUTES.ABOUT, label: 'About' },
 ]
 

@@ -7,13 +7,17 @@ import { useAuthStore } from '@/store/auth-store'
 import { useSaveJob, useUnsaveJob } from '@/hooks/use-job-mutations'
 import { useRouter } from 'next/navigation'
 import { ROUTES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import type { Job } from '@/types/job'
+
+export type ViewMode = 'grid' | 'list'
 
 interface JobListProps {
   jobs: Job[]
+  viewMode?: ViewMode
 }
 
-export function JobList({ jobs }: JobListProps) {
+export function JobList({ jobs, viewMode = 'grid' }: JobListProps) {
   const { isAuthenticated } = useAuthStore()
   const router = useRouter()
   const saveJob = useSaveJob()
@@ -32,6 +36,7 @@ export function JobList({ jobs }: JobListProps) {
       saveJob.mutate(jobId)
     }
   }
+
   if (jobs.length === 0) {
     return (
       <EmptyState
@@ -43,9 +48,15 @@ export function JobList({ jobs }: JobListProps) {
   }
 
   return (
-    <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+    <div
+      className={cn(
+        viewMode === 'grid'
+          ? 'grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-2'
+          : 'flex flex-col gap-4'
+      )}
+    >
       {jobs.map((job) => (
-        <JobCard key={job.id} job={job} onSave={handleSave} />
+        <JobCard key={job.id} job={job} onSave={handleSave} viewMode={viewMode} />
       ))}
     </div>
   )

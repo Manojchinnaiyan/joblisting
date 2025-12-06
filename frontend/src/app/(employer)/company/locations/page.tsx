@@ -55,8 +55,8 @@ const locationSchema = z.object({
   postal_code: z.string().max(20).optional(),
   phone: z.string().max(20).optional(),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
-  is_headquarters: z.boolean().default(false),
-  is_hiring: z.boolean().default(true),
+  is_headquarters: z.boolean(),
+  is_hiring: z.boolean(),
 })
 
 type LocationFormValues = z.infer<typeof locationSchema>

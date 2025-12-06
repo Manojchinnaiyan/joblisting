@@ -7,13 +7,123 @@ import { Button } from '@/components/ui/button'
 import { SalaryDisplay } from './salary-display'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Job } from '@/types/job'
+import type { ViewMode } from './job-list'
 
 interface JobCardProps {
   job: Job
   onSave?: (jobId: string) => void
+  viewMode?: ViewMode
 }
 
-export function JobCard({ job, onSave }: JobCardProps) {
+export function JobCard({ job, onSave, viewMode = 'grid' }: JobCardProps) {
+  if (viewMode === 'list') {
+    return <JobCardListView job={job} onSave={onSave} />
+  }
+  return <JobCardGridView job={job} onSave={onSave} />
+}
+
+function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
+  return (
+    <Card className="hover:shadow-md transition-shadow group">
+      <CardContent className="p-5 sm:p-6">
+        <div className="flex items-start gap-5">
+          {/* Company Logo */}
+          {job.company_logo_url ? (
+            <Image
+              src={job.company_logo_url}
+              alt={job.company_name}
+              width={64}
+              height={64}
+              className="rounded-xl object-contain shrink-0 w-16 h-16"
+            />
+          ) : (
+            <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-2xl font-bold text-primary">
+                {job.company_name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <Link href={`/jobs/${job.slug}`}>
+                  <h3 className="font-semibold text-lg group-hover:text-primary transition-colors line-clamp-1">
+                    {job.title}
+                  </h3>
+                </Link>
+                <p className="text-sm text-muted-foreground mt-1">{job.company_name}</p>
+              </div>
+
+              {/* Right Side - Salary & Save */}
+              <div className="flex items-center gap-4 shrink-0">
+                <SalaryDisplay salary={job.salary} className="text-base font-semibold hidden lg:block" />
+                {onSave && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      onSave(job.id)
+                    }}
+                    className="h-9 w-9"
+                  >
+                    <Bookmark
+                      className={`h-5 w-5 ${job.is_saved ? 'fill-current text-primary' : ''}`}
+                    />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Location & Tags Row */}
+            <div className="flex flex-wrap items-center gap-3 mt-3">
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <MapPin className="h-4 w-4" />
+                <span>{job.location}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
+                  {job.job_type.replace('_', ' ')}
+                </Badge>
+                <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
+                  {job.workplace_type}
+                </Badge>
+                <Badge variant="secondary" className="text-xs font-medium px-2.5 py-0.5">
+                  {job.experience_level}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Salary for mobile */}
+            <div className="lg:hidden mt-3">
+              <SalaryDisplay salary={job.salary} className="text-sm font-semibold" />
+            </div>
+
+            {/* Skills */}
+            {job.skills && job.skills.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-4">
+                {job.skills.slice(0, 6).map((skill) => (
+                  <Badge key={skill} variant="outline" className="text-xs font-normal px-2.5 py-0.5">
+                    {skill}
+                  </Badge>
+                ))}
+                {job.skills.length > 6 && (
+                  <Badge variant="outline" className="text-xs font-normal text-muted-foreground px-2.5 py-0.5">
+                    +{job.skills.length - 6}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
   return (
     <Card className="hover:shadow-md transition-shadow group">
       <CardContent className="p-4 sm:p-5">

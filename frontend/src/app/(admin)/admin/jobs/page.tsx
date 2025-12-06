@@ -18,6 +18,7 @@ import {
   Clock,
   MapPin,
   DollarSign,
+  Plus,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -329,6 +330,12 @@ export default function JobsPage() {
             <Link href="/admin/jobs/featured">
               <Star className="mr-2 h-4 w-4" />
               Featured
+            </Link>
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/admin/jobs/new">
+              <Plus className="mr-2 h-4 w-4" />
+              Create Job
             </Link>
           </Button>
         </div>

@@ -96,7 +96,7 @@ services:
   # Go Application Server
   app:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     container_name: job_app
     restart: unless-stopped

@@ -201,6 +201,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Notification service
 	notificationService := service.NewNotificationService(notificationRepo, notificationPrefsRepo)
 
+	// Blog service
+	blogRepo := repository.NewBlogRepository(db)
+	blogService := service.NewBlogService(blogRepo)
+
 	// Set notification service on application service (to avoid circular dependency)
 	applicationService.SetNotificationService(notificationService)
 
@@ -240,6 +244,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 
 	// Notification handler
 	notificationHandler := handler.NewNotificationHandler(notificationService)
+
+	// Blog handler
+	blogHandler := handler.NewBlogHandler(blogService)
 
 	// Initialize middleware
 	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
@@ -545,10 +552,12 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 		adminJobs.Use(authMiddleware, adminMiddleware)
 		{
 			// Job management
+			adminJobs.POST("", adminJobHandler.CreateJob)
 			adminJobs.GET("", adminJobHandler.GetAllJobs)
 			adminJobs.GET("/pending", adminJobHandler.GetPendingJobs)
 			adminJobs.GET("/stats", adminJobHandler.GetJobStats)
 			adminJobs.GET("/:id", adminJobHandler.GetJobByID)
+			adminJobs.PUT("/:id", adminJobHandler.UpdateJob)
 			adminJobs.DELETE("/:id", adminJobHandler.DeleteJob)
 
 			// Job moderation
@@ -763,6 +772,48 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminCompanyAnalytics.GET("/platform", adminCompanyHandler.GetPlatformStats)
 			adminCompanyAnalytics.GET("/industries", adminCompanyHandler.GetIndustryStats)
 			adminCompanyAnalytics.GET("/locations", adminCompanyHandler.GetLocationStats)
+		}
+
+		// ==================== Public Blog Routes ====================
+		blogs := v1.Group("/blogs")
+		{
+			blogs.GET("", blogHandler.ListBlogs)              // List published blogs (paginated)
+			blogs.GET("/:id", blogHandler.GetBlog)            // Get blog by ID (published only)
+			blogs.GET("/slug/:slug", blogHandler.GetBlogBySlug) // Get blog by slug (published only)
+		}
+
+		// Public blog categories and tags
+		v1.GET("/blog-categories", blogHandler.GetCategories)
+		v1.GET("/blog-tags", blogHandler.GetTags)
+
+		// ==================== Admin Blog Routes ====================
+		adminBlogs := v1.Group("/admin/blogs")
+		adminBlogs.Use(authMiddleware, adminMiddleware)
+		{
+			adminBlogs.POST("", blogHandler.CreateBlog)
+			adminBlogs.GET("", blogHandler.AdminListBlogs)
+			adminBlogs.GET("/:id", blogHandler.AdminGetBlog)
+			adminBlogs.PUT("/:id", blogHandler.UpdateBlog)
+			adminBlogs.DELETE("/:id", blogHandler.DeleteBlog)
+			adminBlogs.POST("/:id/publish", blogHandler.PublishBlog)
+			adminBlogs.POST("/:id/unpublish", blogHandler.UnpublishBlog)
+		}
+
+		// Admin blog categories management
+		adminBlogCategories := v1.Group("/admin/blog-categories")
+		adminBlogCategories.Use(authMiddleware, adminMiddleware)
+		{
+			adminBlogCategories.POST("", blogHandler.CreateCategory)
+			adminBlogCategories.PUT("/:id", blogHandler.UpdateCategory)
+			adminBlogCategories.DELETE("/:id", blogHandler.DeleteCategory)
+		}
+
+		// Admin blog tags management
+		adminBlogTags := v1.Group("/admin/blog-tags")
+		adminBlogTags.Use(authMiddleware, adminMiddleware)
+		{
+			adminBlogTags.POST("", blogHandler.CreateTag)
+			adminBlogTags.DELETE("/:id", blogHandler.DeleteTag)
 		}
 	}
 

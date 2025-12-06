@@ -2,17 +2,24 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { ArrowLeft, X } from 'lucide-react'
+import { ArrowLeft, X, LayoutGrid, List, SlidersHorizontal } from 'lucide-react'
 import { Container } from '@/components/layout/container'
 import { JobSearch } from '@/components/jobs/job-search'
-import { JobFilters } from '@/components/jobs/job-filters'
-import { JobList } from '@/components/jobs/job-list'
+import { JobFiltersSidebar } from '@/components/jobs/job-filters-sidebar'
+import { JobList, ViewMode } from '@/components/jobs/job-list'
 import { JobSkeletonList } from '@/components/jobs/job-skeleton'
 import { Pagination } from '@/components/shared/pagination'
 import { ErrorState } from '@/components/shared/error-state'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet'
 import { jobsApi } from '@/lib/api/jobs'
 import { toast } from 'sonner'
 import type { Job, JobFilters as JobFiltersType } from '@/types/job'
@@ -28,10 +35,20 @@ export default function JobsPage() {
   const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
   const [categoryName, setCategoryName] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
   const [filters, setFilters] = useState<JobFiltersType>({
     location: searchParams.get('location') || undefined,
     category: searchParams.get('category') || undefined,
   })
+  const [mobileFilters, setMobileFilters] = useState<JobFiltersType>(filters)
+
+  // Count active filters
+  const activeFilterCount =
+    (filters.job_type?.length || 0) +
+    (filters.experience_level?.length || 0) +
+    (filters.workplace_type?.length || 0) +
+    (filters.location ? 1 : 0)
 
   // Fetch category name when category filter is active
   useEffect(() => {
@@ -99,7 +116,8 @@ export default function JobsPage() {
 
   return (
     <Container className="py-4 sm:py-8">
-      <div className="mb-4 sm:mb-8">
+      {/* Header Section */}
+      <div className="mb-4 sm:mb-6">
         {/* Category filter header */}
         {filters.category && (
           <div className="flex items-center gap-3 mb-4">
@@ -128,32 +146,116 @@ export default function JobsPage() {
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">
           {categoryName ? `${categoryName} Jobs` : 'Find Your Next Job'}
         </h1>
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
-          <div className="flex-1">
-            <JobSearch defaultValue={searchQuery} onSearch={handleSearch} />
-          </div>
-          <JobFilters filters={{ ...filters, q: searchQuery || undefined }} onFiltersChange={handleFiltersChange} />
-        </div>
+        <JobSearch defaultValue={searchQuery} onSearch={handleSearch} />
       </div>
 
-      {error ? (
-        <ErrorState message={error} retry={() => setCurrentPage(1)} />
-      ) : isLoading ? (
-        <JobSkeletonList count={12} />
-      ) : (
-        <>
-          <JobList jobs={jobs} />
-          {pagination && pagination.total_pages > 1 && (
-            <div className="mt-4 sm:mt-8">
-              <Pagination
-                currentPage={currentPage}
-                totalPages={pagination.total_pages}
-                onPageChange={setCurrentPage}
-              />
+      {/* Main Content with Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-6">
+        {/* Left Sidebar - Filters (hidden on mobile) */}
+        <aside className="hidden lg:block w-72 shrink-0">
+          <JobFiltersSidebar
+            filters={{ ...filters, q: searchQuery || undefined }}
+            onFiltersChange={handleFiltersChange}
+            className="sticky top-24"
+          />
+        </aside>
+
+        {/* Main Content */}
+        <main className="flex-1 min-w-0">
+          {/* View Toggle, Filter Button (mobile), and Results Count */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              {/* Mobile Filter Button */}
+              <Sheet
+                open={mobileFilterOpen}
+                onOpenChange={(open) => {
+                  setMobileFilterOpen(open)
+                  if (open) {
+                    // Reset mobile filters to current filters when opening
+                    setMobileFilters({ ...filters, q: searchQuery || undefined })
+                  }
+                }}
+              >
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm" className="lg:hidden gap-2">
+                    <SlidersHorizontal className="h-4 w-4" />
+                    Filters
+                    {activeFilterCount > 0 && (
+                      <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                        {activeFilterCount}
+                      </Badge>
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="left" className="w-80 p-0 flex flex-col">
+                  <SheetHeader className="p-4 border-b">
+                    <SheetTitle>Filters</SheetTitle>
+                  </SheetHeader>
+                  <div className="flex-1 p-4 overflow-y-auto">
+                    <JobFiltersSidebar
+                      filters={mobileFilters}
+                      onFiltersChange={setMobileFilters}
+                      className="border-0 p-0"
+                    />
+                  </div>
+                  <div className="p-4 border-t bg-background">
+                    <Button
+                      className="w-full"
+                      onClick={() => {
+                        handleFiltersChange(mobileFilters)
+                        setMobileFilterOpen(false)
+                      }}
+                    >
+                      Apply Filters
+                    </Button>
+                  </div>
+                </SheetContent>
+              </Sheet>
+
+              <div className="text-sm text-muted-foreground">
+                {pagination && (
+                  <span>
+                    {pagination.total} job{pagination.total !== 1 ? 's' : ''} found
+                  </span>
+                )}
+              </div>
             </div>
+
+            <ToggleGroup
+              type="single"
+              value={viewMode}
+              onValueChange={(value) => value && setViewMode(value as ViewMode)}
+              className="hidden sm:flex border rounded-lg p-1"
+            >
+              <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 p-0">
+                <List className="h-4 w-4" />
+              </ToggleGroupItem>
+              <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 p-0">
+                <LayoutGrid className="h-4 w-4" />
+              </ToggleGroupItem>
+            </ToggleGroup>
+          </div>
+
+          {error ? (
+            <ErrorState message={error} retry={() => setCurrentPage(1)} />
+          ) : isLoading ? (
+            <JobSkeletonList count={12} />
+          ) : (
+            <>
+              <JobList jobs={jobs} viewMode={viewMode} />
+              {pagination && pagination.total_pages > 1 && (
+                <div className="mt-4 sm:mt-8">
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={pagination.total_pages}
+                    onPageChange={setCurrentPage}
+                  />
+                </div>
+              )}
+            </>
           )}
-        </>
-      )}
+        </main>
+      </div>
     </Container>
   )
 }

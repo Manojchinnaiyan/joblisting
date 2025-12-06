@@ -99,6 +99,14 @@ apiClient.interceptors.response.use(
             originalRequest.headers.Authorization = `Bearer ${newToken}`
           }
           return apiClient(originalRequest)
+        } else {
+          // No refresh token available - clear stale auth state
+          if (isAdminRoute) {
+            useAdminAuthStore.getState().logout()
+          } else {
+            useAuthStore.getState().logout()
+          }
+          return Promise.reject(error)
         }
       } catch (refreshError) {
         isRefreshing = false

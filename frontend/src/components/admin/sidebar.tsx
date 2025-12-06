@@ -15,11 +15,9 @@ import {
   BarChart3,
   Shield,
   UserCog,
-  Clock,
-  Star,
-  CheckCircle,
   ChevronDown,
   LogOut,
+  BookOpen,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -70,6 +68,15 @@ const navItems: NavItem[] = [
       { title: 'All Jobs', href: '/admin/jobs' },
       { title: 'Pending Approval', href: '/admin/jobs/pending' },
       { title: 'Featured', href: '/admin/jobs/featured' },
+    ],
+  },
+  {
+    title: 'Blog',
+    icon: BookOpen,
+    children: [
+      { title: 'All Posts', href: '/admin/blogs' },
+      { title: 'Categories', href: '/admin/blogs/categories' },
+      { title: 'Tags', href: '/admin/blogs/tags' },
     ],
   },
   {

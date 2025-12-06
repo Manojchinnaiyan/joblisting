@@ -39,14 +39,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex flex-1 flex-col h-screen overflow-hidden">
+      <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
         {/* Header - Fixed height */}
         <div className="h-16 flex-shrink-0">
           <AdminHeader />
         </div>
 
-        {/* Scrollable Main Content - calc remaining height */}
-        <main className="flex-1 overflow-y-auto" style={{ height: 'calc(100vh - 4rem)' }}>
+        {/* Scrollable Main Content */}
+        <main className="flex-1 overflow-y-auto overscroll-contain">
           <div className="p-4 md:p-6 max-w-7xl mx-auto">
             {children}
           </div>

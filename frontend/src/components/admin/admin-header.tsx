@@ -17,6 +17,7 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { AdminSidebar } from './sidebar'
 import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { useAdminLogout } from '@/hooks/admin/use-admin-auth'
+import { ThemeToggle } from '@/components/theme-toggle'
 import Link from 'next/link'
 
 interface AdminHeaderProps {
@@ -66,6 +67,9 @@ export function AdminHeader({ title }: AdminHeaderProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
+        {/* Theme toggle */}
+        <ThemeToggle />
+
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -77,36 +81,36 @@ export function AdminHeader({ title }: AdminHeaderProps) {
               <span className="sr-only">Notifications</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80">
-            <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
+          <DropdownMenuContent align="end" className="w-80 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <DropdownMenuLabel className="text-slate-900 dark:text-white">Notifications</DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
+            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">New company verification</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-slate-900 dark:text-white">New company verification</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   TechCorp Inc. submitted verification documents
                 </p>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">Job pending approval</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-slate-900 dark:text-white">Job pending approval</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Senior Developer position needs review
                 </p>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">Review flagged</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-sm font-medium text-slate-900 dark:text-white">Review flagged</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   A review has been reported for moderation
                 </p>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/admin/notifications" className="w-full text-center text-sm">
+            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
+            <DropdownMenuItem asChild className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
+              <Link href="/admin/notifications" className="w-full text-center text-sm text-slate-900 dark:text-white">
                 View all notifications
               </Link>
             </DropdownMenuItem>
@@ -121,26 +125,26 @@ export function AdminHeader({ title }: AdminHeaderProps) {
               <span className="sr-only">User menu</span>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>
+          <DropdownMenuContent align="end" className="bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
+            <DropdownMenuLabel className="text-slate-900 dark:text-white">
               <div className="flex flex-col">
                 <span>
                   {user?.first_name} {user?.last_name}
                 </span>
-                <span className="text-xs font-normal text-muted-foreground">
+                <span className="text-xs font-normal text-slate-500 dark:text-slate-400">
                   {user?.email}
                 </span>
               </div>
             </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
+            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
+            <DropdownMenuItem asChild className="text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               <Link href="/admin/profile">Profile</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
+            <DropdownMenuItem asChild className="text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               <Link href="/admin/profile/2fa">2FA Settings</Link>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => logout()} className="text-red-600">
+            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
+            <DropdownMenuItem onClick={() => logout()} className="text-red-600 dark:text-red-400 hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
               Log out
             </DropdownMenuItem>
           </DropdownMenuContent>

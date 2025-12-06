@@ -30,10 +30,10 @@ const experienceSchema = z.object({
   company_name: z.string().min(1, 'Company name is required').max(255),
   location: z.string().max(255).optional(),
   employment_type: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'FREELANCE', 'INTERNSHIP']),
-  is_remote: z.boolean().default(false),
+  is_remote: z.boolean(),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().optional(),
-  is_current: z.boolean().default(false),
+  is_current: z.boolean(),
   description: z.string().max(2000).optional(),
 }).refine(
   (data) => {

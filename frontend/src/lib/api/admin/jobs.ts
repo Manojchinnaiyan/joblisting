@@ -23,6 +23,7 @@ export interface AdminJobListItem {
 
 export interface AdminJobDetail extends AdminJobListItem {
   description: string
+  short_description?: string
   requirements?: string
   responsibilities?: string
   skills: string[]
@@ -30,14 +31,24 @@ export interface AdminJobDetail extends AdminJobListItem {
   salary_min?: number
   salary_max?: number
   salary_currency?: string
+  salary_period?: string
   is_salary_visible: boolean
+  hide_salary?: boolean
   is_urgent: boolean
   is_remote?: boolean
+  city?: string
+  state?: string
+  country?: string
+  education?: string
+  years_experience_min?: number
+  years_experience_max?: number
   external_apply_url?: string
+  application_url?: string
+  application_email?: string
   rejection_reason?: string
   approved_at?: string
   approved_by?: string
-  company: {
+  company?: {
     id: string
     name: string
     slug: string
@@ -50,6 +61,11 @@ export interface AdminJobDetail extends AdminJobListItem {
     name: string
     slug: string
   }
+  categories?: Array<{
+    id: string
+    name: string
+    slug: string
+  }>
   applications_by_status?: {
     pending: number
     reviewed: number
@@ -117,26 +133,73 @@ export interface JobStats {
 export interface UpdateJobData {
   title?: string
   description?: string
-  requirements?: string
-  responsibilities?: string
+  short_description?: string
+  job_type?: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP'
+  experience_level?: 'ENTRY' | 'MID' | 'SENIOR' | 'LEAD' | 'EXECUTIVE'
+  workplace_type?: 'ONSITE' | 'REMOTE' | 'HYBRID'
   location?: string
-  job_type?: string
-  experience_level?: string
-  workplace_type?: string
+  city?: string
+  state?: string
+  country?: string
+  latitude?: number
+  longitude?: number
   salary_min?: number
   salary_max?: number
   salary_currency?: string
-  is_salary_visible?: boolean
+  salary_period?: string
+  hide_salary?: boolean
   skills?: string[]
+  education?: string
+  years_experience_min?: number
+  years_experience_max?: number
   benefits?: string[]
-  is_featured?: boolean
-  is_urgent?: boolean
-  status?: string
-  category_id?: string
-  expires_at?: string
+  category_ids?: string[]
+  application_url?: string
+  application_email?: string
+  // Admin-specific fields
+  company_name?: string
+  company_logo_url?: string
+  status?: 'ACTIVE' | 'DRAFT' | 'PENDING_APPROVAL' | 'EXPIRED' | 'CLOSED' | 'REJECTED'
+}
+
+export interface AdminCreateJobData {
+  title: string
+  description: string
+  short_description?: string
+  job_type: 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP'
+  experience_level: 'ENTRY' | 'MID' | 'SENIOR' | 'LEAD' | 'EXECUTIVE'
+  workplace_type: 'ONSITE' | 'REMOTE' | 'HYBRID'
+  location: string
+  city?: string
+  state?: string
+  country?: string
+  latitude?: number
+  longitude?: number
+  salary_min?: number
+  salary_max?: number
+  salary_currency?: string
+  salary_period?: string
+  hide_salary?: boolean
+  skills?: string[]
+  education?: string
+  years_experience_min?: number
+  years_experience_max?: number
+  benefits?: string[]
+  category_ids?: string[]
+  application_url?: string
+  application_email?: string
+  // Admin-specific fields
+  company_name: string
+  company_logo_url?: string
+  status?: 'ACTIVE' | 'DRAFT' | 'PENDING_APPROVAL'
 }
 
 export const adminJobsApi = {
+  async createJob(data: AdminCreateJobData): Promise<AdminJobDetail> {
+    const response = await apiClient.post('/admin/jobs', data)
+    return response.data.data || response.data.job || response.data
+  },
+
   async getJobs(filters: JobsFilters = {}, pagination: JobsPagination = { page: 1, limit: 20 }): Promise<JobsResponse> {
     const params = { ...filters, ...pagination }
     const response = await apiClient.get('/admin/jobs', { params })

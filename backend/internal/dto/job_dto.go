@@ -40,6 +40,39 @@ type CreateJobRequest struct {
 	ApplicationEmail   string   `json:"application_email" binding:"omitempty,email"`
 }
 
+// AdminCreateJobRequest represents a request for admin to create a job
+type AdminCreateJobRequest struct {
+	Title              string   `json:"title" binding:"required,min=5,max=255"`
+	Description        string   `json:"description" binding:"required,min=100"`
+	ShortDescription   string   `json:"short_description" binding:"max=500"`
+	JobType            string   `json:"job_type" binding:"required,oneof=FULL_TIME PART_TIME CONTRACT FREELANCE INTERNSHIP"`
+	ExperienceLevel    string   `json:"experience_level" binding:"required,oneof=ENTRY MID SENIOR LEAD EXECUTIVE"`
+	WorkplaceType      string   `json:"workplace_type" binding:"required,oneof=ONSITE REMOTE HYBRID"`
+	Location           string   `json:"location" binding:"required"`
+	City               string   `json:"city"`
+	State              string   `json:"state"`
+	Country            string   `json:"country"`
+	Latitude           *float64 `json:"latitude"`
+	Longitude          *float64 `json:"longitude"`
+	SalaryMin          *int     `json:"salary_min"`
+	SalaryMax          *int     `json:"salary_max"`
+	SalaryCurrency     string   `json:"salary_currency"`
+	SalaryPeriod       string   `json:"salary_period"`
+	HideSalary         bool     `json:"hide_salary"`
+	Skills             []string `json:"skills"`
+	Education          string   `json:"education"`
+	YearsExperienceMin int      `json:"years_experience_min"`
+	YearsExperienceMax *int     `json:"years_experience_max"`
+	Benefits           []string `json:"benefits"`
+	CategoryIDs        []string `json:"category_ids"`
+	ApplicationURL     string   `json:"application_url"`
+	ApplicationEmail   string   `json:"application_email" binding:"omitempty,email"`
+	// Admin-specific fields
+	CompanyName    string `json:"company_name" binding:"required,min=2,max=255"`
+	CompanyLogoURL string `json:"company_logo_url"`
+	Status         string `json:"status" binding:"omitempty,oneof=ACTIVE DRAFT PENDING_APPROVAL"`
+}
+
 // UpdateJobRequest represents a request to update a job
 type UpdateJobRequest struct {
 	Title              *string   `json:"title" binding:"omitempty,min=5,max=255"`
@@ -67,6 +100,39 @@ type UpdateJobRequest struct {
 	CategoryIDs        *[]string `json:"category_ids"`
 	ApplicationURL     *string   `json:"application_url"`
 	ApplicationEmail   *string   `json:"application_email" binding:"omitempty,email"`
+}
+
+// AdminUpdateJobRequest represents a request for admin to update a job
+type AdminUpdateJobRequest struct {
+	Title              *string   `json:"title" binding:"omitempty,min=5,max=255"`
+	Description        *string   `json:"description" binding:"omitempty,min=100"`
+	ShortDescription   *string   `json:"short_description" binding:"omitempty,max=500"`
+	JobType            *string   `json:"job_type" binding:"omitempty,oneof=FULL_TIME PART_TIME CONTRACT FREELANCE INTERNSHIP"`
+	ExperienceLevel    *string   `json:"experience_level" binding:"omitempty,oneof=ENTRY MID SENIOR LEAD EXECUTIVE"`
+	WorkplaceType      *string   `json:"workplace_type" binding:"omitempty,oneof=ONSITE REMOTE HYBRID"`
+	Location           *string   `json:"location"`
+	City               *string   `json:"city"`
+	State              *string   `json:"state"`
+	Country            *string   `json:"country"`
+	Latitude           *float64  `json:"latitude"`
+	Longitude          *float64  `json:"longitude"`
+	SalaryMin          *int      `json:"salary_min"`
+	SalaryMax          *int      `json:"salary_max"`
+	SalaryCurrency     *string   `json:"salary_currency"`
+	SalaryPeriod       *string   `json:"salary_period"`
+	HideSalary         *bool     `json:"hide_salary"`
+	Skills             *[]string `json:"skills"`
+	Education          *string   `json:"education"`
+	YearsExperienceMin *int      `json:"years_experience_min"`
+	YearsExperienceMax *int      `json:"years_experience_max"`
+	Benefits           *[]string `json:"benefits"`
+	CategoryIDs        *[]string `json:"category_ids"`
+	ApplicationURL     *string   `json:"application_url"`
+	ApplicationEmail   *string   `json:"application_email" binding:"omitempty,email"`
+	// Admin-specific fields
+	CompanyName    *string `json:"company_name" binding:"omitempty,min=2,max=255"`
+	CompanyLogoURL *string `json:"company_logo_url"`
+	Status         *string `json:"status" binding:"omitempty,oneof=ACTIVE DRAFT PENDING_APPROVAL EXPIRED CLOSED REJECTED"`
 }
 
 // RenewJobRequest represents a request to renew a job

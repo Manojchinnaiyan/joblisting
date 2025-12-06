@@ -22,7 +22,7 @@ type JobCategory struct {
 	// Relationships
 	Parent       *JobCategory  `gorm:"foreignKey:ParentID"`
 	Subcategories []JobCategory `gorm:"foreignKey:ParentID"`
-	Jobs         []Job         `gorm:"many2many:job_category_mappings;"`
+	Jobs         []Job         `gorm:"many2many:job_category_mappings;joinForeignKey:CategoryID;joinReferences:JobID"`
 }
 
 // TableName specifies the table name for JobCategory

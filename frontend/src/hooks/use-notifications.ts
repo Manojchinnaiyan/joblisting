@@ -3,19 +3,34 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { notificationsApi } from '@/lib/api/notifications'
 import { toast } from 'sonner'
+import { useAuthStore } from '@/store/auth-store'
 
 export function useNotifications(page: number = 1, perPage: number = 20) {
+  const { isAuthenticated, accessToken, _hasHydrated } = useAuthStore()
+
+  // Only enable when hydrated and authenticated with a valid token
+  const isReady = _hasHydrated && isAuthenticated && !!accessToken
+
   return useQuery({
     queryKey: ['notifications', page, perPage],
     queryFn: () => notificationsApi.getNotifications(page, perPage),
+    enabled: isReady,
+    retry: false, // Don't retry on 401 errors
   })
 }
 
 export function useUnreadCount() {
+  const { isAuthenticated, accessToken, _hasHydrated } = useAuthStore()
+
+  // Only enable when hydrated and authenticated with a valid token
+  const isReady = _hasHydrated && isAuthenticated && !!accessToken
+
   return useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => notificationsApi.getUnreadCount(),
-    refetchInterval: 30000, // Poll every 30 seconds
+    refetchInterval: isReady ? 30000 : false, // Poll every 30 seconds only when authenticated
+    enabled: isReady,
+    retry: false, // Don't retry on 401 errors
   })
 }
 
@@ -76,9 +91,16 @@ export function useClearReadNotifications() {
 }
 
 export function useNotificationPreferences() {
+  const { isAuthenticated, accessToken, _hasHydrated } = useAuthStore()
+
+  // Only enable when hydrated and authenticated with a valid token
+  const isReady = _hasHydrated && isAuthenticated && !!accessToken
+
   return useQuery({
     queryKey: ['notification-preferences'],
     queryFn: () => notificationsApi.getPreferences(),
+    enabled: isReady,
+    retry: false, // Don't retry on 401 errors
   })
 }
 

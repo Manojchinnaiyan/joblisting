@@ -31,7 +31,7 @@ const educationSchema = z.object({
   field_of_study: z.string().min(1, 'Field of study is required').max(255),
   start_date: z.string().min(1, 'Start date is required'),
   end_date: z.string().optional(),
-  is_current: z.boolean().default(false),
+  is_current: z.boolean(),
   grade: z.string().max(50).optional(),
   description: z.string().max(2000).optional(),
 }).refine(

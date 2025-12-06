@@ -7,6 +7,7 @@ import {
   JobsFilters,
   JobsPagination,
   UpdateJobData,
+  AdminCreateJobData,
 } from '@/lib/api/admin/jobs'
 
 export const adminJobsKeys = {
@@ -36,6 +37,22 @@ export function useAdminJob(id: string) {
     queryKey: adminJobsKeys.detail(id),
     queryFn: () => adminJobsApi.getJob(id),
     enabled: !!id,
+  })
+}
+
+export function useCreateAdminJob() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (data: AdminCreateJobData) => adminJobsApi.createJob(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: adminJobsKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: adminJobsKeys.stats() })
+      toast.success('Job created successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to create job')
+    },
   })
 }
 

@@ -120,7 +120,7 @@ type Job struct {
 	// Relationships
 	Employer     User                    `gorm:"foreignKey:EmployerID"`
 	Moderator    *User                   `gorm:"foreignKey:ModeratedBy"`
-	Categories   []JobCategory           `gorm:"many2many:job_category_mappings;"`
+	Categories   []JobCategory           `gorm:"many2many:job_category_mappings;joinForeignKey:JobID;joinReferences:CategoryID"`
 	Applications []Application           `gorm:"foreignKey:JobID"`
 	SavedJobs    []SavedJob              `gorm:"foreignKey:JobID"`
 	Views        []JobView               `gorm:"foreignKey:JobID"`
