@@ -316,8 +316,6 @@ services:
       - backend
     networks:
       - job_network
-    profiles:
-      - with-nginx
 
   # PostgreSQL Backup Service
   postgres-backup:

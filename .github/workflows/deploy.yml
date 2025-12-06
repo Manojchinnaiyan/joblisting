@@ -413,7 +413,7 @@ jobs:
 
             # Step 6: Deploy new containers
             echo "[6/7] Deploying new application containers..."
-            docker compose -f docker-compose.prod.yml up -d backend frontend
+            docker compose -f docker-compose.prod.yml up -d backend frontend nginx
 
             # Wait for new containers to start
             echo "Waiting for new containers to initialize..."
