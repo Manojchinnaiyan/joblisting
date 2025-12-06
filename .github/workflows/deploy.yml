@@ -249,9 +249,7 @@ jobs:
       (needs.build-and-push.result == 'success') &&
       (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
       (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
-    environment:
-      name: production
-      url: ${{ secrets.FRONTEND_URL }}
+    environment: production
     env:
       BACKEND_IMAGE: ${{ needs.build-and-push.outputs.backend_image }}
       FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend_image }}
