@@ -279,7 +279,13 @@ jobs:
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             scripts/deploy.sh \
+            scripts/backup-to-gdrive.sh \
+            scripts/setup-gdrive-backup.sh \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/scripts/
+
+          # Make backup scripts executable
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "chmod +x /opt/job-platform/scripts/*.sh"
 
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             scripts/postgres/init-db.sh \
