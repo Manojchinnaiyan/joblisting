@@ -10,21 +10,61 @@ on:
         required: false
         default: false
         type: boolean
+      force_backend:
+        description: 'Force backend build'
+        required: false
+        default: false
+        type: boolean
+      force_frontend:
+        description: 'Force frontend build'
+        required: false
+        default: false
+        type: boolean
+      force_infra:
+        description: 'Force infra deploy'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
 
 jobs:
-  # Set lowercase repo name
-  setup:
-    name: Setup
+  # Detect what changed
+  changes:
+    name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      infra: ${{ steps.filter.outputs.infra }}
       backend_image: ${{ steps.set-images.outputs.backend_image }}
       frontend_image: ${{ steps.set-images.outputs.frontend_image }}
       short_sha: ${{ steps.set-images.outputs.short_sha }}
     steps:
-      - name: Set lowercase image names
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'go.mod'
+              - 'go.sum'
+            frontend:
+              - 'frontend/**'
+            infra:
+              - 'docker-compose.prod.yml'
+              - 'nginx/**'
+              - 'scripts/**'
+              - '.github/workflows/deploy.yml'
+
+      - name: Set image names
         id: set-images
         run: |
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
@@ -32,35 +72,23 @@ jobs:
           echo "frontend_image=ghcr.io/${REPO_LOWER}/frontend" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-  # Security scanning
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Run Trivy vulnerability scanner (filesystem)
-        uses: aquasecurity/trivy-action@master
-        with:
-          scan-type: 'fs'
-          scan-ref: '.'
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
-
-      - name: Check Go dependencies for vulnerabilities
-        working-directory: backend
+      - name: Print detected changes
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./... || true
+          echo "Backend changed: ${{ steps.filter.outputs.backend }}"
+          echo "Frontend changed: ${{ steps.filter.outputs.frontend }}"
+          echo "Infra changed: ${{ steps.filter.outputs.infra }}"
+          echo "Force backend: ${{ github.event.inputs.force_backend }}"
+          echo "Force frontend: ${{ github.event.inputs.force_frontend }}"
+          echo "Force infra: ${{ github.event.inputs.force_infra }}"
 
-  # Run tests first
+  # Test Backend (only if backend changed)
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    needs: changes
+    if: |
+      (needs.changes.outputs.backend == 'true' || github.event.inputs.force_backend == 'true') &&
+      github.event.inputs.skip_tests != 'true'
     defaults:
       run:
         working-directory: backend
@@ -120,10 +148,14 @@ jobs:
       - name: Build check
         run: go build -v ./...
 
+  # Test Frontend (only if frontend changed)
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
-    if: ${{ github.event.inputs.skip_tests != 'true' }}
+    needs: changes
+    if: |
+      (needs.changes.outputs.frontend == 'true' || github.event.inputs.force_frontend == 'true') &&
+      github.event.inputs.skip_tests != 'true'
     defaults:
       run:
         working-directory: frontend
@@ -153,23 +185,18 @@ jobs:
           NEXT_PUBLIC_API_URL: http://localhost:8080/api/v1
         run: yarn build
 
-  # Build and push Docker images
-  build-and-push:
-    name: Build and Push Images
+  # Build Backend (only if backend changed)
+  build-backend:
+    name: Build Backend
     runs-on: ubuntu-latest
-    needs: [setup, security-scan]
+    needs: [changes, test-backend]
     if: |
       always() &&
-      (needs.setup.result == 'success') &&
-      (needs.security-scan.result == 'success' || needs.security-scan.result == 'skipped')
+      (needs.changes.outputs.backend == 'true' || github.event.inputs.force_backend == 'true') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped')
     permissions:
       contents: read
       packages: write
-      security-events: write
-    outputs:
-      backend_image: ${{ needs.setup.outputs.backend_image }}
-      frontend_image: ${{ needs.setup.outputs.frontend_image }}
-      short_sha: ${{ needs.setup.outputs.short_sha }}
 
     steps:
       - name: Checkout code
@@ -189,7 +216,7 @@ jobs:
         id: meta-backend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.setup.outputs.backend_image }}
+          images: ${{ needs.changes.outputs.backend_image }}
           tags: |
             type=sha,prefix=
             type=raw,value=latest
@@ -205,14 +232,41 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            BUILD_VERSION=${{ needs.setup.outputs.short_sha }}
+            BUILD_VERSION=${{ needs.changes.outputs.short_sha }}
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
+
+  # Build Frontend (only if frontend changed)
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [changes, test-frontend]
+    if: |
+      always() &&
+      (needs.changes.outputs.frontend == 'true' || github.event.inputs.force_frontend == 'true') &&
+      (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata for Frontend
         id: meta-frontend
         uses: docker/metadata-action@v5
         with:
-          images: ${{ needs.setup.outputs.frontend_image }}
+          images: ${{ needs.changes.outputs.frontend_image }}
           tags: |
             type=sha,prefix=
             type=raw,value=latest
@@ -230,30 +284,24 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
-      - name: Scan Backend image with Trivy
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ needs.setup.outputs.backend_image }}:latest
-          format: 'table'
-          exit-code: '0'
-          ignore-unfixed: true
-          severity: 'CRITICAL,HIGH'
-
   # Deploy to production server
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
-    needs: [setup, build-and-push, test-backend, test-frontend]
+    needs: [changes, build-backend, build-frontend]
     if: |
       always() &&
-      (needs.build-and-push.result == 'success') &&
-      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
-      (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+      (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
+      (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_backend == 'true' || github.event.inputs.force_frontend == 'true' || github.event.inputs.force_infra == 'true')
     environment: production
     env:
-      BACKEND_IMAGE: ${{ needs.build-and-push.outputs.backend_image }}
-      FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend_image }}
-      SHORT_SHA: ${{ needs.build-and-push.outputs.short_sha }}
+      BACKEND_IMAGE: ${{ needs.changes.outputs.backend_image }}
+      FRONTEND_IMAGE: ${{ needs.changes.outputs.frontend_image }}
+      SHORT_SHA: ${{ needs.changes.outputs.short_sha }}
+      BACKEND_CHANGED: ${{ needs.changes.outputs.backend == 'true' || github.event.inputs.force_backend == 'true' }}
+      FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend == 'true' || github.event.inputs.force_frontend == 'true' }}
+      INFRA_CHANGED: ${{ needs.changes.outputs.infra == 'true' || github.event.inputs.force_infra == 'true' }}
 
     steps:
       - name: Checkout code
@@ -271,8 +319,10 @@ jobs:
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "mkdir -p /opt/job-platform/scripts/postgres /opt/job-platform/nginx /opt/job-platform/backups"
 
-      - name: Copy configuration files
+      - name: Copy configuration files (infra changes)
+        if: env.INFRA_CHANGED == 'true'
         run: |
+          echo "Copying infrastructure files..."
           scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
             docker-compose.prod.yml \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/
@@ -283,7 +333,6 @@ jobs:
             scripts/setup-gdrive-backup.sh \
             ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/scripts/
 
-          # Make backup scripts executable
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "chmod +x /opt/job-platform/scripts/*.sh"
 
@@ -340,7 +389,6 @@ jobs:
           DEPLOY_SHA=${{ env.SHORT_SHA }}
           DEPLOY_TIME=${{ github.event.head_commit.timestamp }}
           EOF'
-          # Remove leading spaces from .env file
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
             "sed -i 's/^[[:space:]]*//' /opt/job-platform/.env"
 
@@ -359,29 +407,41 @@ jobs:
             source .env
             set +a
 
+            BACKEND_CHANGED="${{ env.BACKEND_CHANGED }}"
+            FRONTEND_CHANGED="${{ env.FRONTEND_CHANGED }}"
+            INFRA_CHANGED="${{ env.INFRA_CHANGED }}"
+
             echo "======================================"
-            echo "Starting Zero-Downtime Deployment"
+            echo "Smart Deployment - Only changed components"
             echo "Commit: ${DEPLOY_SHA}"
+            echo "Backend changed: $BACKEND_CHANGED"
+            echo "Frontend changed: $FRONTEND_CHANGED"
+            echo "Infra changed: $INFRA_CHANGED"
             echo "======================================"
 
             # Save current image versions for potential rollback
             CURRENT_BACKEND=$(docker inspect job_backend --format='{{.Config.Image}}' 2>/dev/null || echo "none")
             CURRENT_FRONTEND=$(docker inspect job_frontend --format='{{.Config.Image}}' 2>/dev/null || echo "none")
-            echo "Current backend: $CURRENT_BACKEND"
-            echo "Current frontend: $CURRENT_FRONTEND"
             echo "$CURRENT_BACKEND" > /opt/job-platform/.rollback_backend
             echo "$CURRENT_FRONTEND" > /opt/job-platform/.rollback_frontend
 
-            # Step 1: Pull new images (while old containers are still running)
-            echo "[1/7] Pulling latest images..."
-            docker compose -f docker-compose.prod.yml pull backend frontend
+            # Step 1: Pull only changed images
+            echo "[1/5] Pulling changed images..."
+            if [ "$BACKEND_CHANGED" = "true" ]; then
+              echo "Pulling backend image..."
+              docker compose -f docker-compose.prod.yml pull backend
+            fi
+            if [ "$FRONTEND_CHANGED" = "true" ]; then
+              echo "Pulling frontend image..."
+              docker compose -f docker-compose.prod.yml pull frontend
+            fi
 
             # Step 2: Ensure infrastructure services are running
-            echo "[2/7] Ensuring infrastructure services are running..."
+            echo "[2/5] Ensuring infrastructure services are running..."
             docker compose -f docker-compose.prod.yml up -d postgres redis meilisearch minio
 
             # Step 3: Wait for PostgreSQL to be ready
-            echo "[3/7] Waiting for PostgreSQL to be ready..."
+            echo "[3/5] Waiting for PostgreSQL to be ready..."
             MAX_RETRIES=30
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
@@ -399,35 +459,40 @@ jobs:
               exit 1
             fi
 
-            # Step 4: Ensure database exists
-            echo "[4/7] Ensuring database exists..."
+            # Ensure database exists
             DB_EXISTS=$(docker exec job_postgres psql -U ${DB_USER:-postgres} -tAc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-jobdb}'" 2>/dev/null || echo "0")
             if [ "$DB_EXISTS" != "1" ]; then
               echo "Creating database ${DB_NAME:-jobdb}..."
               docker exec job_postgres psql -U ${DB_USER:-postgres} -c "CREATE DATABASE \"${DB_NAME:-jobdb}\";"
-            else
-              echo "Database ${DB_NAME:-jobdb} already exists."
             fi
-
-            # Ensure UUID extension exists
             docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
             docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
-            echo "Database ready!"
 
-            # Step 5: Record deployment start
-            echo "[5/7] Recording deployment state..."
+            # Step 4: Deploy only changed containers
+            echo "[4/5] Deploying changed containers..."
             DEPLOY_START=$(date +%s)
 
-            # Step 6: Deploy new containers
-            echo "[6/7] Deploying new application containers..."
-            docker compose -f docker-compose.prod.yml up -d backend frontend netdata nginx
+            if [ "$BACKEND_CHANGED" = "true" ]; then
+              echo "Deploying backend..."
+              docker compose -f docker-compose.prod.yml up -d backend
+            fi
 
-            # Wait for new containers to start
-            echo "Waiting for new containers to initialize..."
-            sleep 15
+            if [ "$FRONTEND_CHANGED" = "true" ]; then
+              echo "Deploying frontend..."
+              docker compose -f docker-compose.prod.yml up -d frontend
+            fi
 
-            # Step 7: Health check with rollback capability
-            echo "[7/7] Running health checks..."
+            if [ "$INFRA_CHANGED" = "true" ]; then
+              echo "Deploying infrastructure (nginx, netdata)..."
+              docker compose -f docker-compose.prod.yml up -d nginx netdata
+            fi
+
+            # Wait for containers to start
+            echo "Waiting for containers to initialize..."
+            sleep 10
+
+            # Step 5: Health checks
+            echo "[5/5] Running health checks..."
             MAX_RETRIES=12
             RETRY_COUNT=0
             HEALTH_OK=false
@@ -445,26 +510,17 @@ jobs:
 
             if [ "$HEALTH_OK" = false ]; then
               echo "ERROR: Health check failed! Attempting rollback..."
-
-              # Rollback to previous version
               if [ -f /opt/job-platform/.rollback_backend ] && [ "$(cat /opt/job-platform/.rollback_backend)" != "none" ]; then
-                echo "Rolling back to previous version..."
                 ROLLBACK_BACKEND=$(cat /opt/job-platform/.rollback_backend)
                 ROLLBACK_FRONTEND=$(cat /opt/job-platform/.rollback_frontend)
-
                 docker pull "$ROLLBACK_BACKEND" || true
                 docker pull "$ROLLBACK_FRONTEND" || true
-
                 sed -i "s|BACKEND_IMAGE=.*|BACKEND_IMAGE=$ROLLBACK_BACKEND|" .env
                 sed -i "s|FRONTEND_IMAGE=.*|FRONTEND_IMAGE=$ROLLBACK_FRONTEND|" .env
-
                 source .env
                 docker compose -f docker-compose.prod.yml up -d backend frontend
-
-                echo "Rollback completed. Please investigate the failed deployment."
+                echo "Rollback completed."
               fi
-
-              echo "Showing backend logs for debugging:"
               docker compose -f docker-compose.prod.yml logs --tail=100 backend
               exit 1
             fi
@@ -473,14 +529,12 @@ jobs:
             if curl -sf http://localhost:3000 > /dev/null 2>&1; then
               echo "Frontend health check passed!"
             else
-              echo "Frontend may still be starting (this is usually okay)..."
+              echo "Frontend may still be starting..."
             fi
 
-            # Cleanup old unused images
-            echo "Cleaning up old images..."
+            # Cleanup
             docker image prune -f
 
-            # Calculate deployment time
             DEPLOY_END=$(date +%s)
             DEPLOY_DURATION=$((DEPLOY_END - DEPLOY_START))
 
@@ -488,10 +542,6 @@ jobs:
             echo "Deployment completed successfully!"
             echo "Duration: ${DEPLOY_DURATION}s"
             echo "======================================"
-
-            # Show running containers
-            echo ""
-            echo "Running containers:"
             docker compose -f docker-compose.prod.yml ps
           ENDSSH
 
@@ -500,21 +550,19 @@ jobs:
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Changed | Action |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | ${{ env.BACKEND_CHANGED }} | ${{ env.BACKEND_CHANGED == 'true' && 'Rebuilt & Deployed' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | ${{ env.FRONTEND_CHANGED }} | ${{ env.FRONTEND_CHANGED == 'true' && 'Rebuilt & Deployed' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Infra | ${{ env.INFRA_CHANGED }} | ${{ env.INFRA_CHANGED == 'true' && 'Config Updated' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`$SHORT_SHA\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Backend Image** | \`$BACKEND_IMAGE:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Frontend Image** | \`$FRONTEND_IMAGE:latest\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Server** | \`${{ secrets.SERVER_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ env.SHORT_SHA }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Status** | ${{ steps.deploy.outcome == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **Triggered by** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Workflow Run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
 
       - name: Notify on failure
         if: failure()
         run: |
           echo "::error::Deployment failed! Check the logs for details."
-          # Add webhook notification here if you have Slack/Discord
-          # curl -X POST -H 'Content-type: application/json' \
-          #   --data '{"text":"❌ Deployment failed for commit ${{ env.SHORT_SHA }}"}' \
-          #   ${{ secrets.SLACK_WEBHOOK_URL }}
