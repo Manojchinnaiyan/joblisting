@@ -43,6 +43,14 @@ build-errors.log
 # Docker
 docker-compose.override.yml
 
+# SSL certificates (keep .gitkeep)
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# Backups (keep .gitkeep)
+backups/*
+!backups/.gitkeep
+
 # Node
 node_modules/
 .next/

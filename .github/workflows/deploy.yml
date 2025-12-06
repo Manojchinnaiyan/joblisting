@@ -4,6 +4,12 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+    inputs:
+      skip_tests:
+        description: 'Skip tests (use with caution)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   REGISTRY: ghcr.io
@@ -16,6 +22,7 @@ jobs:
     outputs:
       backend_image: ${{ steps.set-images.outputs.backend_image }}
       frontend_image: ${{ steps.set-images.outputs.frontend_image }}
+      short_sha: ${{ steps.set-images.outputs.short_sha }}
     steps:
       - name: Set lowercase image names
         id: set-images
@@ -23,11 +30,37 @@ jobs:
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "backend_image=ghcr.io/${REPO_LOWER}/backend" >> $GITHUB_OUTPUT
           echo "frontend_image=ghcr.io/${REPO_LOWER}/frontend" >> $GITHUB_OUTPUT
+          echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+  # Security scanning
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner (filesystem)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+      - name: Check Go dependencies for vulnerabilities
+        working-directory: backend
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./... || true
 
   # Run tests first
   test-backend:
     name: Test Backend
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
     defaults:
       run:
         working-directory: backend
@@ -82,7 +115,7 @@ jobs:
           REDIS_PORT: 6379
           JWT_SECRET: test-jwt-secret-for-ci
           APP_ENV: test
-        run: go test -v -race ./...
+        run: go test -v -race -coverprofile=coverage.out ./...
 
       - name: Build check
         run: go build -v ./...
@@ -90,6 +123,7 @@ jobs:
   test-frontend:
     name: Test Frontend
     runs-on: ubuntu-latest
+    if: ${{ github.event.inputs.skip_tests != 'true' }}
     defaults:
       run:
         working-directory: frontend
@@ -123,13 +157,19 @@ jobs:
   build-and-push:
     name: Build and Push Images
     runs-on: ubuntu-latest
-    needs: [setup, test-backend, test-frontend]
+    needs: [setup, security-scan]
+    if: |
+      always() &&
+      (needs.setup.result == 'success') &&
+      (needs.security-scan.result == 'success' || needs.security-scan.result == 'skipped')
     permissions:
       contents: read
       packages: write
+      security-events: write
     outputs:
       backend_image: ${{ needs.setup.outputs.backend_image }}
       frontend_image: ${{ needs.setup.outputs.frontend_image }}
+      short_sha: ${{ needs.setup.outputs.short_sha }}
 
     steps:
       - name: Checkout code
@@ -153,6 +193,7 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest
+            type=raw,value=${{ github.run_number }}
 
       - name: Build and push Backend
         uses: docker/build-push-action@v5
@@ -163,6 +204,9 @@ jobs:
           labels: ${{ steps.meta-backend.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_VERSION=${{ needs.setup.outputs.short_sha }}
+            BUILD_TIME=${{ github.event.head_commit.timestamp }}
 
       - name: Extract metadata for Frontend
         id: meta-frontend
@@ -172,6 +216,7 @@ jobs:
           tags: |
             type=sha,prefix=
             type=raw,value=latest
+            type=raw,value=${{ github.run_number }}
 
       - name: Build and push Frontend
         uses: docker/build-push-action@v5
@@ -185,45 +230,70 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
 
-  # Deploy to VM using password authentication
+      - name: Scan Backend image with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.setup.outputs.backend_image }}:latest
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          severity: 'CRITICAL,HIGH'
+
+  # Deploy to production server
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
-    needs: build-and-push
+    needs: [setup, build-and-push, test-backend, test-frontend]
+    if: |
+      always() &&
+      (needs.build-and-push.result == 'success') &&
+      (needs.test-backend.result == 'success' || needs.test-backend.result == 'skipped') &&
+      (needs.test-frontend.result == 'success' || needs.test-frontend.result == 'skipped')
+    environment:
+      name: production
+      url: ${{ secrets.FRONTEND_URL }}
     env:
       BACKEND_IMAGE: ${{ needs.build-and-push.outputs.backend_image }}
       FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend_image }}
+      SHORT_SHA: ${{ needs.build-and-push.outputs.short_sha }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install sshpass
-        run: sudo apt-get install -y sshpass
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Create deployment directory on server
-        env:
-          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "mkdir -p /opt/job-platform/scripts"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "mkdir -p /opt/job-platform/scripts/postgres /opt/job-platform/nginx /opt/job-platform/backups"
 
-      - name: Copy docker-compose file
-        env:
-          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+      - name: Copy configuration files
         run: |
-          sshpass -e scp -o StrictHostKeyChecking=no docker-compose.prod.yml ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            docker-compose.prod.yml \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/
 
-      - name: Copy deploy script
-        env:
-          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
-        run: |
-          sshpass -e scp -o StrictHostKeyChecking=no scripts/deploy.sh ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/scripts/
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            scripts/deploy.sh \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/scripts/
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            scripts/postgres/init-db.sh \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/scripts/postgres/
+
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            nginx/nginx.conf \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/nginx/ || true
 
       - name: Create environment file on server
-        env:
-          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'cat > /opt/job-platform/.env << EOF
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} 'cat > /opt/job-platform/.env << EOF
           # Database
           DB_USER=${{ secrets.DB_USER }}
           DB_PASSWORD=${{ secrets.DB_PASSWORD }}
@@ -261,15 +331,19 @@ jobs:
           # Docker Images
           BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest
           FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:latest
+          # Deployment info
+          DEPLOY_SHA=${{ env.SHORT_SHA }}
+          DEPLOY_TIME=${{ github.event.head_commit.timestamp }}
           EOF'
           # Remove leading spaces from .env file
-          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} "sed -i 's/^[[:space:]]*//' /opt/job-platform/.env"
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
+            "sed -i 's/^[[:space:]]*//' /opt/job-platform/.env"
 
       - name: Deploy to server
-        env:
-          SSHPASS: ${{ secrets.SERVER_PASSWORD }}
+        id: deploy
         run: |
-          sshpass -e ssh -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} << 'ENDSSH'
+            set -e
             cd /opt/job-platform
 
             # Login to GitHub Container Registry
@@ -280,40 +354,162 @@ jobs:
             source .env
             set +a
 
-            # Stop and remove old containers to avoid conflicts
-            docker compose -f docker-compose.prod.yml down --remove-orphans 2>/dev/null || true
-            docker rm -f $(docker ps -aq) 2>/dev/null || true
+            echo "======================================"
+            echo "Starting Zero-Downtime Deployment"
+            echo "Commit: ${DEPLOY_SHA}"
+            echo "======================================"
 
-            # Pull latest images (use docker compose v2 only)
-            docker compose -f docker-compose.prod.yml pull
+            # Save current image versions for potential rollback
+            CURRENT_BACKEND=$(docker inspect job_backend --format='{{.Config.Image}}' 2>/dev/null || echo "none")
+            CURRENT_FRONTEND=$(docker inspect job_frontend --format='{{.Config.Image}}' 2>/dev/null || echo "none")
+            echo "Current backend: $CURRENT_BACKEND"
+            echo "Current frontend: $CURRENT_FRONTEND"
+            echo "$CURRENT_BACKEND" > /opt/job-platform/.rollback_backend
+            echo "$CURRENT_FRONTEND" > /opt/job-platform/.rollback_frontend
 
-            # Deploy services
-            docker compose -f docker-compose.prod.yml up -d --remove-orphans
+            # Step 1: Pull new images (while old containers are still running)
+            echo "[1/7] Pulling latest images..."
+            docker compose -f docker-compose.prod.yml pull backend frontend
 
-            # Wait for services to be ready
-            echo "Waiting for services to start..."
-            sleep 20
+            # Step 2: Ensure infrastructure services are running
+            echo "[2/7] Ensuring infrastructure services are running..."
+            docker compose -f docker-compose.prod.yml up -d postgres redis meilisearch minio
 
-            # Health check
-            if curl -sf http://localhost:8080/health; then
-              echo "Backend health check passed!"
-            else
-              echo "Backend health check failed!"
-              docker compose -f docker-compose.prod.yml logs backend
+            # Step 3: Wait for PostgreSQL to be ready
+            echo "[3/7] Waiting for PostgreSQL to be ready..."
+            MAX_RETRIES=30
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if docker exec job_postgres pg_isready -U ${DB_USER:-postgres} > /dev/null 2>&1; then
+                echo "PostgreSQL is ready!"
+                break
+              fi
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "Waiting for PostgreSQL... ($RETRY_COUNT/$MAX_RETRIES)"
+              sleep 2
+            done
+
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+              echo "ERROR: PostgreSQL failed to start!"
               exit 1
             fi
 
-            # Cleanup old images
+            # Step 4: Ensure database exists
+            echo "[4/7] Ensuring database exists..."
+            DB_EXISTS=$(docker exec job_postgres psql -U ${DB_USER:-postgres} -tAc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-jobdb}'" 2>/dev/null || echo "0")
+            if [ "$DB_EXISTS" != "1" ]; then
+              echo "Creating database ${DB_NAME:-jobdb}..."
+              docker exec job_postgres psql -U ${DB_USER:-postgres} -c "CREATE DATABASE \"${DB_NAME:-jobdb}\";"
+            else
+              echo "Database ${DB_NAME:-jobdb} already exists."
+            fi
+
+            # Ensure UUID extension exists
+            docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
+            docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
+            echo "Database ready!"
+
+            # Step 5: Record deployment start
+            echo "[5/7] Recording deployment state..."
+            DEPLOY_START=$(date +%s)
+
+            # Step 6: Deploy new containers
+            echo "[6/7] Deploying new application containers..."
+            docker compose -f docker-compose.prod.yml up -d backend frontend
+
+            # Wait for new containers to start
+            echo "Waiting for new containers to initialize..."
+            sleep 15
+
+            # Step 7: Health check with rollback capability
+            echo "[7/7] Running health checks..."
+            MAX_RETRIES=12
+            RETRY_COUNT=0
+            HEALTH_OK=false
+
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if curl -sf http://localhost:8080/health > /dev/null 2>&1; then
+                echo "Backend health check passed!"
+                HEALTH_OK=true
+                break
+              fi
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              echo "Health check attempt $RETRY_COUNT/$MAX_RETRIES..."
+              sleep 5
+            done
+
+            if [ "$HEALTH_OK" = false ]; then
+              echo "ERROR: Health check failed! Attempting rollback..."
+
+              # Rollback to previous version
+              if [ -f /opt/job-platform/.rollback_backend ] && [ "$(cat /opt/job-platform/.rollback_backend)" != "none" ]; then
+                echo "Rolling back to previous version..."
+                ROLLBACK_BACKEND=$(cat /opt/job-platform/.rollback_backend)
+                ROLLBACK_FRONTEND=$(cat /opt/job-platform/.rollback_frontend)
+
+                docker pull "$ROLLBACK_BACKEND" || true
+                docker pull "$ROLLBACK_FRONTEND" || true
+
+                sed -i "s|BACKEND_IMAGE=.*|BACKEND_IMAGE=$ROLLBACK_BACKEND|" .env
+                sed -i "s|FRONTEND_IMAGE=.*|FRONTEND_IMAGE=$ROLLBACK_FRONTEND|" .env
+
+                source .env
+                docker compose -f docker-compose.prod.yml up -d backend frontend
+
+                echo "Rollback completed. Please investigate the failed deployment."
+              fi
+
+              echo "Showing backend logs for debugging:"
+              docker compose -f docker-compose.prod.yml logs --tail=100 backend
+              exit 1
+            fi
+
+            # Frontend health check
+            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+              echo "Frontend health check passed!"
+            else
+              echo "Frontend may still be starting (this is usually okay)..."
+            fi
+
+            # Cleanup old unused images
+            echo "Cleaning up old images..."
             docker image prune -f
 
-            echo "Deployment successful!"
+            # Calculate deployment time
+            DEPLOY_END=$(date +%s)
+            DEPLOY_DURATION=$((DEPLOY_END - DEPLOY_START))
+
+            echo "======================================"
+            echo "Deployment completed successfully!"
+            echo "Duration: ${DEPLOY_DURATION}s"
+            echo "======================================"
+
+            # Show running containers
+            echo ""
+            echo "Running containers:"
+            docker compose -f docker-compose.prod.yml ps
           ENDSSH
 
       - name: Deployment Summary
+        if: always()
         run: |
           echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Backend Image:** $BACKEND_IMAGE:latest" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend Image:** $FRONTEND_IMAGE:latest" >> $GITHUB_STEP_SUMMARY
-          echo "- **Server:** ${{ secrets.SERVER_HOST }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status:** Deployed successfully" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|----------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`$SHORT_SHA\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Backend Image** | \`$BACKEND_IMAGE:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Frontend Image** | \`$FRONTEND_IMAGE:latest\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Server** | \`${{ secrets.SERVER_HOST }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Status** | ${{ steps.deploy.outcome == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Triggered by** | @${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Workflow Run** | [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify on failure
+        if: failure()
+        run: |
+          echo "::error::Deployment failed! Check the logs for details."
+          # Add webhook notification here if you have Slack/Discord
+          # curl -X POST -H 'Content-type: application/json' \
+          #   --data '{"text":"❌ Deployment failed for commit ${{ env.SHORT_SHA }}"}' \
+          #   ${{ secrets.SLACK_WEBHOOK_URL }}

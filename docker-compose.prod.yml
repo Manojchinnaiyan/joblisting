@@ -8,20 +8,37 @@ services:
   postgres:
     image: postgres:17-alpine
     container_name: job_postgres
-    restart: always
+    restart: unless-stopped
+    # SECURITY: Only expose to localhost, not external network
+    # Use SSH tunnel for remote access: ssh -L 5432:localhost:5432 user@server
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_USER: ${DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME:-jobdb}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./scripts/postgres:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "5"
     networks:
       - job_network
 
@@ -29,10 +46,11 @@ services:
   redis:
     image: redis:7.4-alpine
     container_name: job_redis
-    restart: always
+    restart: unless-stopped
+    # SECURITY: Only expose to localhost
     ports:
-      - "6379:6379"
-    command: redis-server --appendonly yes
+      - "127.0.0.1:6379:6379"
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -40,6 +58,20 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - job_network
 
@@ -47,15 +79,35 @@ services:
   meilisearch:
     image: getmeili/meilisearch:v1.16
     container_name: job_meilisearch
-    restart: always
+    restart: unless-stopped
+    # SECURITY: Only expose to localhost
     ports:
-      - "7700:7700"
+      - "127.0.0.1:7700:7700"
     environment:
       MEILI_ENV: production
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY}
       MEILI_NO_ANALYTICS: "true"
     volumes:
       - meilisearch_data:/meili_data
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--spider", "http://localhost:7700/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - job_network
 
@@ -63,10 +115,11 @@ services:
   minio:
     image: minio/minio:RELEASE.2024-11-07T00-52-20Z
     container_name: job_minio
-    restart: always
+    restart: unless-stopped
+    # SECURITY: Only expose to localhost
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
@@ -78,6 +131,20 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
     networks:
       - job_network
 
@@ -85,7 +152,7 @@ services:
   backend:
     image: ${BACKEND_IMAGE:-ghcr.io/your-org/job-platform/backend:latest}
     container_name: job_backend
-    restart: always
+    restart: unless-stopped
     ports:
       - "8080:8080"
     environment:
@@ -100,7 +167,7 @@ services:
       DB_USER: ${DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       DB_NAME: ${DB_NAME:-jobdb}
-      DB_SSLMODE: ${DB_SSLMODE:-require}
+      DB_SSLMODE: ${DB_SSLMODE:-disable}
 
       # Redis
       REDIS_HOST: redis
@@ -150,13 +217,32 @@ services:
       ADMIN_FRONTEND_URL: ${ADMIN_FRONTEND_URL}
       EMAIL_VERIFICATION_URL: ${EMAIL_VERIFICATION_URL}
       PASSWORD_RESET_URL: ${PASSWORD_RESET_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
       meilisearch:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_healthy
     networks:
@@ -166,29 +252,67 @@ services:
   frontend:
     image: ${FRONTEND_IMAGE:-ghcr.io/your-org/job-platform/frontend:latest}
     container_name: job_frontend
-    restart: always
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://backend:8080/api/v1}
       NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
       NEXT_PUBLIC_APP_URL: ${FRONTEND_URL}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
     depends_on:
       - backend
     networks:
       - job_network
 
-  # Nginx Reverse Proxy (optional - for production with SSL)
+  # Nginx Reverse Proxy with SSL
   nginx:
     image: nginx:alpine
     container_name: job_nginx
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 128M
+        reservations:
+          cpus: '0.1'
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
     depends_on:
       - frontend
       - backend
@@ -196,6 +320,44 @@ services:
       - job_network
     profiles:
       - with-nginx
+
+  # PostgreSQL Backup Service
+  postgres-backup:
+    image: postgres:17-alpine
+    container_name: job_postgres_backup
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER:-postgres}
+      DB_NAME: ${DB_NAME:-jobdb}
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c 'while true; do
+        echo "Starting backup at $$(date)";
+        pg_dump -h postgres -U $${DB_USER} -d $${DB_NAME} | gzip > /backups/db_$$(date +%Y%m%d_%H%M%S).sql.gz;
+        echo "Backup completed. Cleaning old backups...";
+        find /backups -name "db_*.sql.gz" -mtime +7 -delete;
+        echo "Sleeping for 24 hours...";
+        sleep 86400;
+      done'
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "2"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - job_network
+    profiles:
+      - with-backup
 
 volumes:
   postgres_data:
