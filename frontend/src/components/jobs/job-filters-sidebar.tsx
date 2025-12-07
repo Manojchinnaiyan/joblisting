@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Collapsible,
   CollapsibleContent,
@@ -147,8 +146,7 @@ export function JobFiltersSidebar({ filters, onFiltersChange, className }: JobFi
         )}
       </div>
 
-      <ScrollArea className="h-[calc(100vh-280px)] pr-4">
-        <div className="space-y-1">
+      <div className="space-y-1">
           {/* Location Filter */}
           <FilterSection title="Location">
             <Input
@@ -236,7 +234,6 @@ export function JobFiltersSidebar({ filters, onFiltersChange, className }: JobFi
             </div>
           </FilterSection>
         </div>
-      </ScrollArea>
     </div>
   )
 }

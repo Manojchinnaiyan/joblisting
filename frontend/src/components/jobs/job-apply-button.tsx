@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
+import { ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
 import { ROUTES } from '@/lib/constants'
@@ -43,6 +44,26 @@ export function JobApplyButton({ job }: JobApplyButtonProps) {
     } finally {
       setIsApplying(false)
     }
+  }
+
+  // If job was scraped from external source, show "Apply at Source" button
+  if (job.original_url) {
+    return (
+      <Button
+        asChild
+        size="lg"
+        className="w-full"
+      >
+        <a
+          href={job.original_url}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Apply at {job.company_name}
+          <ExternalLink className="ml-2 h-4 w-4" />
+        </a>
+      </Button>
+    )
   }
 
   return (

@@ -205,6 +205,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	blogRepo := repository.NewBlogRepository(db)
 	blogService := service.NewBlogService(blogRepo)
 
+	// Scraper services
+	aiService := service.NewAIService()
+	scraperService := service.NewScraperService(aiService)
+
 	// Set notification service on application service (to avoid circular dependency)
 	applicationService.SetNotificationService(notificationService)
 
@@ -247,6 +251,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 
 	// Blog handler
 	blogHandler := handler.NewBlogHandler(blogService)
+
+	// Scraper handler
+	scraperHandler := handler.NewScraperHandler(scraperService, jobService)
 
 	// Initialize middleware
 	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
@@ -565,6 +572,12 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.POST("/:id/reject", adminJobHandler.RejectJob)
 			adminJobs.POST("/:id/feature", adminJobHandler.FeatureJob)
 			adminJobs.POST("/:id/unfeature", adminJobHandler.UnfeatureJob)
+
+			// Job scraping
+			adminJobs.POST("/scrape/preview", scraperHandler.PreviewJobFromURL)
+			adminJobs.POST("/scrape/create", scraperHandler.CreateJobFromScrapedData)
+			adminJobs.POST("/scrape/bulk", scraperHandler.BulkScrapeJobs)
+			adminJobs.POST("/scrape/test", scraperHandler.TestScrape)
 		}
 
 		// Admin - Application stats

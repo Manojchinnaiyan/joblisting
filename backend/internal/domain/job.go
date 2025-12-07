@@ -110,6 +110,11 @@ type Job struct {
 	ViewsCount        int `gorm:"default:0"`
 	ApplicationsCount int `gorm:"default:0"`
 
+	// Scraping
+	OriginalURL  *string `gorm:"size:1000"`
+	ScrapedData  *string `gorm:"type:jsonb"`
+	ScrapeStatus string  `gorm:"size:20;default:manual"`
+
 	// Dates
 	PublishedAt *time.Time
 	ExpiresAt   *time.Time

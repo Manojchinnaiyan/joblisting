@@ -24,6 +24,8 @@ export interface Job {
   created_at: string
   is_saved?: boolean
   has_applied?: boolean
+  original_url?: string
+  scrape_status?: string
 }
 
 export type JobType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP'

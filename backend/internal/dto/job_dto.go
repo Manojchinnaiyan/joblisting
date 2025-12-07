@@ -150,6 +150,67 @@ type RejectJobRequest struct {
 	Reason string `json:"reason" binding:"required,min=10"`
 }
 
+// ============================================================
+// SCRAPER DTOs
+// ============================================================
+
+// ScrapeJobRequest represents a request to scrape a job from URL
+type ScrapeJobRequest struct {
+	URL string `json:"url" binding:"required,url"`
+}
+
+// BulkScrapeRequest represents a request to scrape multiple jobs
+type BulkScrapeRequest struct {
+	URLs []string `json:"urls" binding:"required,min=1,max=10"`
+}
+
+// ScrapedJobResponse represents extracted job data from a URL
+type ScrapedJobResponse struct {
+	Title           string   `json:"title"`
+	Company         string   `json:"company"`
+	Location        string   `json:"location"`
+	Description     string   `json:"description"`
+	Requirements    string   `json:"requirements"`
+	Salary          string   `json:"salary"`
+	JobType         string   `json:"job_type"`
+	ExperienceLevel string   `json:"experience_level"`
+	Skills          []string `json:"skills"`
+	OriginalURL     string   `json:"original_url"`
+	City            string   `json:"city,omitempty"`
+	State           string   `json:"state,omitempty"`
+	Country         string   `json:"country,omitempty"`
+	Benefits        []string `json:"benefits,omitempty"`
+}
+
+// CreateFromScrapedRequest represents a request to create job from scraped data
+type CreateFromScrapedRequest struct {
+	ScrapedData ScrapedJobResponse     `json:"scraped_data" binding:"required"`
+	Edits       map[string]interface{} `json:"edits"`
+}
+
+// ScrapePreviewResponse represents the response for a scrape preview
+type ScrapePreviewResponse struct {
+	Success    bool               `json:"success"`
+	ScrapedJob ScrapedJobResponse `json:"scraped_job"`
+	Warnings   []string           `json:"warnings,omitempty"`
+}
+
+// BulkScrapeResponse represents the response for bulk scraping
+type BulkScrapeResponse struct {
+	Results []BulkScrapeResult `json:"results"`
+	Total   int                `json:"total"`
+	Success int                `json:"success"`
+	Failed  int                `json:"failed"`
+}
+
+// BulkScrapeResult represents a single result in bulk scraping
+type BulkScrapeResult struct {
+	URL        string              `json:"url"`
+	Success    bool                `json:"success"`
+	ScrapedJob *ScrapedJobResponse `json:"scraped_job,omitempty"`
+	Error      string              `json:"error,omitempty"`
+}
+
 // SearchJobsRequest represents a search jobs request
 type SearchJobsRequest struct {
 	Query          string   `json:"query"`
@@ -227,6 +288,8 @@ type JobResponse struct {
 	ApplicationsCount int               `json:"applications_count"`
 	ApplicationURL   string             `json:"application_url,omitempty"`
 	ApplicationEmail string             `json:"application_email,omitempty"`
+	OriginalURL      *string            `json:"original_url,omitempty"`
+	ScrapeStatus     string             `json:"scrape_status,omitempty"`
 	PublishedAt      *time.Time         `json:"published_at,omitempty"`
 	ExpiresAt        *time.Time         `json:"expires_at,omitempty"`
 	CreatedAt        time.Time          `json:"created_at"`
@@ -309,6 +372,8 @@ func ToJobResponse(job *domain.Job, userID *uuid.UUID) JobResponse {
 		ApplicationsCount: job.ApplicationsCount,
 		ApplicationURL:    job.ApplicationURL,
 		ApplicationEmail:  job.ApplicationEmail,
+		OriginalURL:       job.OriginalURL,
+		ScrapeStatus:      job.ScrapeStatus,
 		PublishedAt:       job.PublishedAt,
 		ExpiresAt:         job.ExpiresAt,
 		CreatedAt:         job.CreatedAt,

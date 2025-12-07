@@ -87,6 +87,10 @@ type AdminCreateJobInput struct {
 	CompanyName    string
 	CompanyLogoURL string
 	Status         string // Optional: ACTIVE, DRAFT, PENDING_APPROVAL
+	// Scraper fields
+	OriginalURL  *string
+	ScrapedData  *string
+	ScrapeStatus string // manual, scraped, failed
 }
 
 // UpdateJobInput represents input for updating a job
@@ -281,6 +285,12 @@ func (s *JobService) AdminCreateJob(adminID uuid.UUID, input AdminCreateJobInput
 	// Set expiry date
 	expiresAt := time.Now().AddDate(0, 0, s.config.DefaultExpiryDays)
 
+	// Determine scrape status
+	scrapeStatus := "manual"
+	if input.ScrapeStatus != "" {
+		scrapeStatus = input.ScrapeStatus
+	}
+
 	// Create job with admin-provided company info
 	job := &domain.Job{
 		ID:                 uuid.New(),
@@ -314,6 +324,10 @@ func (s *JobService) AdminCreateJob(adminID uuid.UUID, input AdminCreateJobInput
 		ApplicationEmail:   input.ApplicationEmail,
 		Status:             status,
 		ExpiresAt:          &expiresAt,
+		// Scraper fields
+		OriginalURL:  input.OriginalURL,
+		ScrapedData:  input.ScrapedData,
+		ScrapeStatus: scrapeStatus,
 	}
 
 	if status == domain.JobStatusActive {

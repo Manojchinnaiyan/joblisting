@@ -108,9 +108,10 @@ export function JobDetail({ job }: JobDetailProps) {
 
       <div className="overflow-hidden">
         <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Job Description</h2>
-        <div className="prose prose-sm sm:prose max-w-none text-muted-foreground overflow-hidden">
-          <p className="whitespace-pre-line text-sm sm:text-base break-words overflow-wrap-anywhere">{job.description}</p>
-        </div>
+        <div
+          className="prose prose-sm sm:prose max-w-none dark:prose-invert prose-headings:font-semibold prose-p:text-muted-foreground prose-li:text-muted-foreground prose-strong:text-foreground overflow-hidden break-words"
+          dangerouslySetInnerHTML={{ __html: job.description }}
+        />
       </div>
 
       {job.skills && job.skills.length > 0 && (

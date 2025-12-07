@@ -152,12 +152,13 @@ export default function JobsPage() {
       {/* Main Content with Sidebar */}
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left Sidebar - Filters (hidden on mobile) */}
-        <aside className="hidden lg:block w-72 shrink-0">
-          <JobFiltersSidebar
-            filters={{ ...filters, q: searchQuery || undefined }}
-            onFiltersChange={handleFiltersChange}
-            className="sticky top-24"
-          />
+        <aside className="hidden lg:block w-72 shrink-0 h-fit">
+          <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-thin">
+            <JobFiltersSidebar
+              filters={{ ...filters, q: searchQuery || undefined }}
+              onFiltersChange={handleFiltersChange}
+            />
+          </div>
         </aside>
 
         {/* Main Content */}
