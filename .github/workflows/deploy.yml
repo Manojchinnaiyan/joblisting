@@ -527,7 +527,9 @@ jobs:
               echo "Deploying infrastructure (nginx, netdata)..."
               # Nginx has ports 80/443, minimal downtime
               zero_downtime_deploy "nginx" "job_nginx" "80"
-              docker compose -f docker-compose.prod.yml up -d --force-recreate netdata
+              # Clean up any old netdata containers with prefixed names
+              docker ps -a --format '{{.Names}}' | grep -E 'netdata' | xargs -r docker rm -f 2>/dev/null || true
+              docker compose -f docker-compose.prod.yml up -d netdata
             fi
 
             # Wait for containers to start
