@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"job-platform/internal/middleware"
 	"job-platform/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -35,8 +36,7 @@ func NewNotificationHandler(notificationService *service.NotificationService) *N
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications [get]
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -91,8 +91,7 @@ func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications/unread [get]
 func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -132,8 +131,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications/{id}/read [put]
 func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -177,8 +175,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications/read-all [put]
 func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -215,8 +212,7 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications/{id} [delete]
 func (h *NotificationHandler) Delete(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -260,8 +256,7 @@ func (h *NotificationHandler) Delete(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notifications/clear [delete]
 func (h *NotificationHandler) ClearRead(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -295,8 +290,7 @@ func (h *NotificationHandler) ClearRead(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notification-preferences [get]
 func (h *NotificationHandler) GetPreferences(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
@@ -360,8 +354,7 @@ type UpdatePreferencesInput struct {
 // @Failure 500 {object} map[string]interface{}
 // @Router /me/notification-preferences [put]
 func (h *NotificationHandler) UpdatePreferences(c *gin.Context) {
-	userID := c.GetString("user_id")
-	uid, err := uuid.Parse(userID)
+	uid, err := middleware.GetUserIDFromContext(c)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{
 			"success": false,
