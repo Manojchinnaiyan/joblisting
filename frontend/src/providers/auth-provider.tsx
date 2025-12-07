@@ -1,42 +1,17 @@
 'use client'
 
-import { useEffect, useState, ReactNode } from 'react'
+import { useEffect, ReactNode } from 'react'
 import { useAuthStore } from '@/store/auth-store'
 import { authApi } from '@/lib/api/auth'
 
-function LoadingScreen() {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-primary border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" />
-        <p className="mt-2 text-sm text-muted-foreground">Loading...</p>
-      </div>
-    </div>
-  )
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const { setUser, setLoading, logout, accessToken, _hasHydrated, setHasHydrated } = useAuthStore()
-  const [isValidating, setIsValidating] = useState(true)
+  const { setUser, setLoading, logout, accessToken, setHasHydrated } = useAuthStore()
 
-  // Force hydration on mount - this ensures the store is ready
-  useEffect(() => {
-    // Give zustand a moment to hydrate, then force it if needed
-    const timer = setTimeout(() => {
-      const state = useAuthStore.getState()
-      if (!state._hasHydrated) {
-        state.setHasHydrated(true)
-        state.setLoading(false)
-      }
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [])
-
+  // Force hydration on mount and validate auth
   useEffect(() => {
     const initAuth = async () => {
-      // Wait for hydration before validating
-      if (!_hasHydrated) return
+      // Mark as hydrated immediately on client
+      setHasHydrated(true)
 
       if (accessToken) {
         try {
@@ -48,16 +23,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       setLoading(false)
-      setIsValidating(false)
     }
 
     initAuth()
-  }, [accessToken, setUser, setLoading, logout, _hasHydrated])
+  }, [accessToken, setUser, setLoading, logout, setHasHydrated])
 
-  // Show loading screen while hydrating or validating auth
-  if (!_hasHydrated || isValidating) {
-    return <LoadingScreen />
-  }
-
+  // Always render children - don't block on auth
   return <>{children}</>
 }
