@@ -170,14 +170,12 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 	// Start transaction
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		// Check if user exists
-		existingUser, err := s.userRepo.GetByEmail(userInfo.Email)
-		if err != nil && err != domain.ErrUserNotFound {
-			return err
-		}
+		var existingUser domain.User
+		result := tx.Where("email = ? AND deleted_at IS NULL", userInfo.Email).First(&existingUser)
 
-		if existingUser != nil {
+		if result.Error == nil {
 			// User exists - update Google ID if needed
-			user = existingUser
+			user = &existingUser
 
 			// Check if account is suspended
 			if user.Status == domain.StatusSuspended {
@@ -187,11 +185,26 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 			// Update Google ID if not set
 			if user.GoogleID == nil {
 				user.GoogleID = &userInfo.ID
-				if err := s.userRepo.Update(user); err != nil {
+				if err := tx.Save(user).Error; err != nil {
 					return err
 				}
 			}
-		} else {
+
+			// Check if profile exists, create if not
+			var existingProfile domain.UserProfile
+			if err := tx.Where("user_id = ?", user.ID).First(&existingProfile).Error; err != nil {
+				// Profile doesn't exist, create it
+				profile := &domain.UserProfile{
+					ID:                  uuid.New(),
+					UserID:              user.ID,
+					Visibility:          domain.VisibilityEmployersOnly,
+					OpenToOpportunities: true,
+				}
+				if err := tx.Create(profile).Error; err != nil {
+					return fmt.Errorf("failed to create profile for existing user: %w", err)
+				}
+			}
+		} else if result.Error == gorm.ErrRecordNotFound {
 			// Create new user
 			isNewUser = true
 			user = &domain.User{
@@ -211,23 +224,30 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 				}(),
 			}
 
-			if err := s.userRepo.Create(user); err != nil {
-				return err
+			if err := tx.Create(user).Error; err != nil {
+				return fmt.Errorf("failed to create user: %w", err)
 			}
 
-			// Create user profile
+			// Create user profile with proper defaults
 			profile := &domain.UserProfile{
-				ID:     uuid.New(),
-				UserID: user.ID,
+				ID:                  uuid.New(),
+				UserID:              user.ID,
+				Visibility:          domain.VisibilityEmployersOnly,
+				OpenToOpportunities: true,
 			}
 
-			if err := s.profileRepo.Create(profile); err != nil {
-				return err
+			if err := tx.Create(profile).Error; err != nil {
+				return fmt.Errorf("failed to create profile: %w", err)
 			}
+		} else {
+			return result.Error
 		}
 
 		// Update last login
-		if err := s.userRepo.UpdateLastLogin(user.ID, ipAddress); err != nil {
+		if err := tx.Model(&domain.User{}).Where("id = ?", user.ID).Updates(map[string]interface{}{
+			"last_login_at": time.Now(),
+			"last_login_ip": ipAddress,
+		}).Error; err != nil {
 			return err
 		}
 
@@ -241,7 +261,7 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 			UserAgent: &userAgent,
 		}
 
-		if err := s.loginHistoryRepo.Create(loginHistory); err != nil {
+		if err := tx.Create(loginHistory).Error; err != nil {
 			return err
 		}
 
