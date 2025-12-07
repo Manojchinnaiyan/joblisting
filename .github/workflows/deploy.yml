@@ -479,16 +479,21 @@ jobs:
 
             if [ "$BACKEND_CHANGED" = "true" ]; then
               echo "Deploying backend..."
+              # Remove any conflicting containers first
+              docker rm -f job_backend backend 2>/dev/null || true
               docker compose -f docker-compose.prod.yml up -d backend
             fi
 
             if [ "$FRONTEND_CHANGED" = "true" ]; then
               echo "Deploying frontend..."
+              # Remove any conflicting containers first (handles port conflicts)
+              docker rm -f job_frontend frontend 2>/dev/null || true
               docker compose -f docker-compose.prod.yml up -d frontend
             fi
 
             if [ "$INFRA_CHANGED" = "true" ]; then
               echo "Deploying infrastructure (nginx, netdata)..."
+              docker rm -f job_nginx nginx job_netdata netdata 2>/dev/null || true
               docker compose -f docker-compose.prod.yml up -d nginx netdata
             fi
 
