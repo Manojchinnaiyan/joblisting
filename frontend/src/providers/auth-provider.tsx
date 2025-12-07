@@ -18,21 +18,20 @@ function LoadingScreen() {
 export function AuthProvider({ children }: { children: ReactNode }) {
   const { setUser, setLoading, logout, accessToken, _hasHydrated, setHasHydrated } = useAuthStore()
   const [isValidating, setIsValidating] = useState(true)
-  const [mounted, setMounted] = useState(false)
 
-  // Handle client-side mounting
+  // Force hydration on mount - this ensures the store is ready
   useEffect(() => {
-    setMounted(true)
-
-    // Force hydration after mount if not already hydrated
+    // Give zustand a moment to hydrate, then force it if needed
     const timer = setTimeout(() => {
-      if (!useAuthStore.getState()._hasHydrated) {
-        setHasHydrated(true)
+      const state = useAuthStore.getState()
+      if (!state._hasHydrated) {
+        state.setHasHydrated(true)
+        state.setLoading(false)
       }
-    }, 50)
+    }, 100)
 
     return () => clearTimeout(timer)
-  }, [setHasHydrated])
+  }, [])
 
   useEffect(() => {
     const initAuth = async () => {
@@ -55,13 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth()
   }, [accessToken, setUser, setLoading, logout, _hasHydrated])
 
-  // During SSR or before mount, render children to avoid flash
-  // This prevents the loading screen from showing during SSR
-  if (!mounted) {
-    return <>{children}</>
-  }
-
-  // Show loading screen only on client while validating auth
+  // Show loading screen while hydrating or validating auth
   if (!_hasHydrated || isValidating) {
     return <LoadingScreen />
   }
