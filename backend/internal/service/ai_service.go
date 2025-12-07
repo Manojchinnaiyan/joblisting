@@ -168,7 +168,7 @@ Rules:
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Claude API error (status %d): %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("claude API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
 	var claudeResp ClaudeResponse

@@ -442,10 +442,14 @@ jobs:
 
             # Step 3: Wait for PostgreSQL to be ready
             echo "[3/5] Waiting for PostgreSQL to be ready..."
+            # Find postgres container (handles both naming conventions)
+            POSTGRES_CONTAINER=$(docker ps --format '{{.Names}}' | grep -E '(^job_postgres$|_job_postgres$|postgres)' | head -1)
+            echo "Found PostgreSQL container: $POSTGRES_CONTAINER"
+
             MAX_RETRIES=30
             RETRY_COUNT=0
             while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-              if docker exec job_postgres pg_isready -U ${DB_USER:-postgres} > /dev/null 2>&1; then
+              if docker exec $POSTGRES_CONTAINER pg_isready -U ${DB_USER:-postgres} > /dev/null 2>&1; then
                 echo "PostgreSQL is ready!"
                 break
               fi
@@ -456,17 +460,18 @@ jobs:
 
             if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
               echo "ERROR: PostgreSQL failed to start!"
+              docker ps -a
               exit 1
             fi
 
             # Ensure database exists
-            DB_EXISTS=$(docker exec job_postgres psql -U ${DB_USER:-postgres} -tAc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-jobdb}'" 2>/dev/null || echo "0")
+            DB_EXISTS=$(docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -tAc "SELECT 1 FROM pg_database WHERE datname = '${DB_NAME:-jobdb}'" 2>/dev/null || echo "0")
             if [ "$DB_EXISTS" != "1" ]; then
               echo "Creating database ${DB_NAME:-jobdb}..."
-              docker exec job_postgres psql -U ${DB_USER:-postgres} -c "CREATE DATABASE \"${DB_NAME:-jobdb}\";"
+              docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -c "CREATE DATABASE \"${DB_NAME:-jobdb}\";"
             fi
-            docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
-            docker exec job_postgres psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
+            docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
+            docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
 
             # Step 4: Deploy only changed containers
             echo "[4/5] Deploying changed containers..."
