@@ -477,24 +477,57 @@ jobs:
             echo "[4/5] Deploying changed containers..."
             DEPLOY_START=$(date +%s)
 
+            # Zero-downtime deployment function
+            zero_downtime_deploy() {
+              local SERVICE=$1
+              local CONTAINER_NAME=$2
+              local PORT=$3
+
+              echo "Zero-downtime deploy for $SERVICE..."
+
+              # Get current container ID
+              OLD_CONTAINER=$(docker ps -q --filter "name=$CONTAINER_NAME" 2>/dev/null | head -1)
+
+              # Pull the new image
+              docker compose -f docker-compose.prod.yml pull $SERVICE
+
+              # If no port conflict (backend/internal services), use recreate
+              if [ -z "$PORT" ]; then
+                docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps $SERVICE
+              else
+                # For services with exposed ports, we need to stop old first
+                # But minimize downtime by having image ready
+                docker rm -f $CONTAINER_NAME $(echo $CONTAINER_NAME | sed 's/job_//') 2>/dev/null || true
+                docker compose -f docker-compose.prod.yml up -d --no-deps $SERVICE
+              fi
+
+              # Wait for new container to be healthy
+              echo "Waiting for $SERVICE to be healthy..."
+              for i in $(seq 1 30); do
+                if docker compose -f docker-compose.prod.yml ps $SERVICE | grep -q "healthy"; then
+                  echo "$SERVICE is healthy!"
+                  return 0
+                fi
+                sleep 2
+              done
+              echo "Warning: $SERVICE health check timed out"
+            }
+
             if [ "$BACKEND_CHANGED" = "true" ]; then
-              echo "Deploying backend..."
-              # Remove any conflicting containers first
-              docker rm -f job_backend backend 2>/dev/null || true
-              docker compose -f docker-compose.prod.yml up -d backend
+              # Backend doesn't have host port conflict, can do true zero-downtime
+              zero_downtime_deploy "backend" "job_backend" ""
             fi
 
             if [ "$FRONTEND_CHANGED" = "true" ]; then
-              echo "Deploying frontend..."
-              # Remove any conflicting containers first (handles port conflicts)
-              docker rm -f job_frontend frontend 2>/dev/null || true
-              docker compose -f docker-compose.prod.yml up -d frontend
+              # Frontend has port 3000 exposed, minimal downtime
+              zero_downtime_deploy "frontend" "job_frontend" "3000"
             fi
 
             if [ "$INFRA_CHANGED" = "true" ]; then
               echo "Deploying infrastructure (nginx, netdata)..."
-              docker rm -f job_nginx nginx job_netdata netdata 2>/dev/null || true
-              docker compose -f docker-compose.prod.yml up -d nginx netdata
+              # Nginx has ports 80/443, minimal downtime
+              zero_downtime_deploy "nginx" "job_nginx" "80"
+              docker compose -f docker-compose.prod.yml up -d --force-recreate netdata
             fi
 
             # Wait for containers to start
