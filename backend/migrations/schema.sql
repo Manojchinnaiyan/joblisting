@@ -341,6 +341,22 @@ CREATE INDEX IF NOT EXISTS idx_applications_applicant_id ON applications(applica
 CREATE INDEX IF NOT EXISTS idx_applications_status ON applications(status);
 
 -- =====================================================
+-- 7B. APPLICATION STATUS HISTORY TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS application_status_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    from_status VARCHAR(20),
+    to_status VARCHAR(20) NOT NULL,
+    changed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_app_status_history_application_id ON application_status_history(application_id);
+CREATE INDEX IF NOT EXISTS idx_app_status_history_created_at ON application_status_history(created_at);
+
+-- =====================================================
 -- 8. SAVED JOBS TABLE
 -- =====================================================
 CREATE TABLE IF NOT EXISTS saved_jobs (
@@ -370,7 +386,7 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     willing_to_relocate BOOLEAN DEFAULT FALSE,
     current_title VARCHAR(255),
     current_company VARCHAR(255),
-    total_experience_years DECIMAL(3,1) DEFAULT 0,
+    total_experience_years DECIMAL(5,2) DEFAULT 0,
     expected_salary_min INTEGER,
     expected_salary_max INTEGER,
     expected_salary_currency VARCHAR(3) DEFAULT 'USD',
@@ -379,14 +395,16 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     open_to_opportunities BOOLEAN DEFAULT TRUE,
     preferred_job_types TEXT[],
     preferred_workplace_types TEXT[],
-    linkedin_url VARCHAR(255),
-    github_url VARCHAR(255),
-    portfolio_url VARCHAR(255),
-    website_url VARCHAR(255),
+    linkedin_url VARCHAR(500),
+    github_url VARCHAR(500),
+    portfolio_url VARCHAR(500),
+    website_url VARCHAR(500),
     visibility profile_visibility DEFAULT 'EMPLOYERS_ONLY',
     show_email BOOLEAN DEFAULT FALSE,
     show_phone BOOLEAN DEFAULT FALSE,
     completeness_score INTEGER DEFAULT 0,
+    last_active TIMESTAMP,
+    profile_views INTEGER DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -643,25 +661,39 @@ CREATE TABLE IF NOT EXISTS notifications (
     type VARCHAR(50) NOT NULL,
     title VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
+    link VARCHAR(500),
     data JSONB,
-    read BOOLEAN DEFAULT FALSE,
+    is_read BOOLEAN DEFAULT FALSE,
     read_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(user_id, read);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(user_id, is_read);
 
 CREATE TABLE IF NOT EXISTS notification_preferences (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID UNIQUE NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    email_job_alerts BOOLEAN DEFAULT TRUE,
-    email_application_updates BOOLEAN DEFAULT TRUE,
-    email_messages BOOLEAN DEFAULT TRUE,
-    email_marketing BOOLEAN DEFAULT FALSE,
-    push_job_alerts BOOLEAN DEFAULT TRUE,
-    push_application_updates BOOLEAN DEFAULT TRUE,
-    push_messages BOOLEAN DEFAULT TRUE,
+    -- Email notification preferences
+    email_application_status BOOLEAN DEFAULT TRUE,
+    email_new_application BOOLEAN DEFAULT TRUE,
+    email_new_job BOOLEAN DEFAULT TRUE,
+    email_job_expiring BOOLEAN DEFAULT TRUE,
+    email_profile_viewed BOOLEAN DEFAULT FALSE,
+    email_company_review BOOLEAN DEFAULT TRUE,
+    email_team_invitation BOOLEAN DEFAULT TRUE,
+    email_job_moderation BOOLEAN DEFAULT TRUE,
+    email_company_verification BOOLEAN DEFAULT TRUE,
+    -- In-app notification preferences
+    app_application_status BOOLEAN DEFAULT TRUE,
+    app_new_application BOOLEAN DEFAULT TRUE,
+    app_new_job BOOLEAN DEFAULT TRUE,
+    app_job_expiring BOOLEAN DEFAULT TRUE,
+    app_profile_viewed BOOLEAN DEFAULT TRUE,
+    app_company_review BOOLEAN DEFAULT TRUE,
+    app_team_invitation BOOLEAN DEFAULT TRUE,
+    app_job_moderation BOOLEAN DEFAULT TRUE,
+    app_company_verification BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -692,6 +724,37 @@ CREATE TABLE IF NOT EXISTS saved_candidates (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(employer_id, candidate_id)
 );
+
+-- =====================================================
+-- 20. JOB VIEWS TABLE (Analytics)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS job_views (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    referrer TEXT,
+    viewed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_job_views_job_id ON job_views(job_id);
+CREATE INDEX IF NOT EXISTS idx_job_views_user_id ON job_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_job_views_viewed_at ON job_views(viewed_at);
+
+-- =====================================================
+-- 21. REVIEW HELPFUL VOTES TABLE
+-- =====================================================
+CREATE TABLE IF NOT EXISTS review_helpful_votes (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    review_id UUID NOT NULL REFERENCES company_reviews(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(review_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_review_helpful_votes_review_id ON review_helpful_votes(review_id);
+CREATE INDEX IF NOT EXISTS idx_review_helpful_votes_user_id ON review_helpful_votes(user_id);
 
 -- =====================================================
 -- SEED DATA - Default Categories

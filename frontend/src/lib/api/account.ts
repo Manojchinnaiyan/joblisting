@@ -11,7 +11,7 @@ export interface DeleteAccountRequest {
 
 export const accountApi = {
   changePassword: async (data: ChangePasswordRequest): Promise<void> => {
-    await apiClient.put('/auth/change-password', data)
+    await apiClient.post('/auth/change-password', data)
   },
 
   deleteAccount: async (data: DeleteAccountRequest): Promise<void> => {
