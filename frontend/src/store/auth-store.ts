@@ -64,10 +64,27 @@ export const useAuthStore = create<AuthState>()(
         refreshToken: state.refreshToken,
         isAuthenticated: state.isAuthenticated,
       }),
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (state, error) => {
+        // Always mark as hydrated, even on error or first visit
+        if (error) {
+          console.warn('Auth store hydration error:', error)
+        }
         state?.setHasHydrated(true)
         state?.setLoading(false)
       },
     }
   )
 )
+
+// Ensure hydration happens on client side - fallback for edge cases
+if (typeof window !== 'undefined') {
+  // Set a timeout to force hydration if it hasn't happened
+  setTimeout(() => {
+    const state = useAuthStore.getState()
+    if (!state._hasHydrated) {
+      console.warn('Forcing auth store hydration')
+      state.setHasHydrated(true)
+      state.setLoading(false)
+    }
+  }, 100)
+}
