@@ -1,6 +1,6 @@
 #!/bin/bash
 # SSL Certificate Setup Script for jobsworld.in
-# This script should be run on the production server
+# Run this script on the production server after DNS is pointing to this server
 
 set -e
 
@@ -24,14 +24,16 @@ if ! command -v certbot &> /dev/null; then
   apt-get install -y certbot
 fi
 
-# Create webroot directory for ACME challenge
+# Create directories
 mkdir -p /var/www/certbot
+mkdir -p /etc/nginx/conf.d
 
 # Stop nginx temporarily to free port 80
-echo "Stopping nginx..."
+echo "Stopping nginx container..."
+cd /opt/job-platform
 docker stop job_nginx 2>/dev/null || true
 
-# Obtain certificate using standalone mode (no webroot needed initially)
+# Obtain certificate
 echo "Obtaining SSL certificate for $DOMAIN and www.$DOMAIN..."
 certbot certonly \
   --standalone \
@@ -48,25 +50,45 @@ if [ -f "/etc/letsencrypt/live/$DOMAIN/fullchain.pem" ]; then
   ls -la /etc/letsencrypt/live/$DOMAIN/
 else
   echo "ERROR: Certificate not found!"
+  docker start job_nginx
   exit 1
 fi
 
-# Restart nginx
+# Copy SSL config to nginx conf.d
+echo "Enabling SSL configuration..."
+if [ -f "/opt/job-platform/nginx/ssl.conf" ]; then
+  cp /opt/job-platform/nginx/ssl.conf /opt/job-platform/nginx/conf.d/ssl.conf
+  echo "SSL config enabled"
+fi
+
+# Update docker-compose to mount conf.d directory
+# This is handled by updating nginx volumes
+
+# Start nginx
 echo "Starting nginx..."
 docker start job_nginx 2>/dev/null || docker compose -f /opt/job-platform/docker-compose.prod.yml up -d nginx
 
+# Test nginx config
+sleep 3
+if docker exec job_nginx nginx -t 2>/dev/null; then
+  echo "Nginx configuration is valid"
+  docker exec job_nginx nginx -s reload
+else
+  echo "Warning: Nginx config test failed, checking logs..."
+  docker logs job_nginx --tail=20
+fi
+
 # Set up auto-renewal cron job
 echo "Setting up auto-renewal..."
-CRON_JOB="0 3 * * * /usr/bin/certbot renew --quiet --post-hook 'docker restart job_nginx'"
+CRON_JOB="0 3 * * * /usr/bin/certbot renew --quiet --post-hook 'docker exec job_nginx nginx -s reload'"
 (crontab -l 2>/dev/null | grep -v "certbot renew"; echo "$CRON_JOB") | crontab -
 
 echo "========================================"
 echo "SSL Setup Complete!"
 echo "========================================"
-echo "Certificate location: /etc/letsencrypt/live/$DOMAIN/"
-echo "Auto-renewal: Configured (runs daily at 3 AM)"
 echo ""
-echo "Next steps:"
-echo "1. Update DNS A records to point to this server"
-echo "2. Update GitHub secrets for the new domain URLs"
-echo "3. Push the nginx config changes to trigger deployment"
+echo "Your site should now be accessible at:"
+echo "  https://$DOMAIN"
+echo "  https://www.$DOMAIN (redirects to non-www)"
+echo ""
+echo "Auto-renewal: Configured (runs daily at 3 AM)"
