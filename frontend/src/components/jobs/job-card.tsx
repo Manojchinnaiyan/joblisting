@@ -1,11 +1,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { MapPin, Clock, Bookmark } from 'lucide-react'
+import { MapPin, Bookmark } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SalaryDisplay } from './salary-display'
-import { formatRelativeTime } from '@/lib/utils'
 import type { Job } from '@/types/job'
 import type { ViewMode } from './job-list'
 
@@ -125,7 +124,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
 
 function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
   return (
-    <Card className="hover:shadow-md transition-shadow group">
+    <Card className="hover:shadow-md transition-shadow group min-h-[220px]">
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start gap-3 sm:gap-4">
           {/* Company Logo */}

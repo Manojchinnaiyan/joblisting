@@ -12,7 +12,7 @@ interface CompanyCardProps {
 export function CompanyCard({ company }: CompanyCardProps) {
   return (
     <Link href={`/companies/${company.slug}`}>
-      <Card className="hover:shadow-md transition-shadow h-full group">
+      <Card className="hover:shadow-md transition-shadow h-full group min-h-[200px]">
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
             {/* Company Logo */}

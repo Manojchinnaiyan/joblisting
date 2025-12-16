@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import Image from 'next/image'
 import { Briefcase, FileText, Bookmark, TrendingUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatsCard } from '@/components/dashboard/stats-card'
@@ -97,12 +98,20 @@ export default function DashboardPage() {
                       href={`/applications/${application.id}`}
                       className="flex items-start gap-4 p-4 rounded-lg border hover:bg-accent transition-colors"
                     >
-                      {application.job?.company_logo_url && (
-                        <img
+                      {application.job?.company_logo_url ? (
+                        <Image
                           src={application.job.company_logo_url}
                           alt={application.job.company_name}
+                          width={48}
+                          height={48}
                           className="h-12 w-12 rounded-lg object-cover"
                         />
+                      ) : (
+                        <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <span className="text-lg font-bold text-primary">
+                            {application.job?.company_name?.charAt(0).toUpperCase() || 'J'}
+                          </span>
+                        </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold truncate">

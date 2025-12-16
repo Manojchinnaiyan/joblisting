@@ -64,7 +64,7 @@ export function JobCategories() {
         {isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
             {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="h-32 bg-muted animate-pulse rounded-lg" />
+              <div key={i} className="min-h-[140px] bg-muted animate-pulse rounded-lg" />
             ))}
           </div>
         ) : (
@@ -73,7 +73,7 @@ export function JobCategories() {
               const Icon = iconMap[category.slug] || Briefcase
               return (
                 <Link key={category.slug} href={`/jobs?category=${category.slug}`}>
-                  <Card className="hover:shadow-md transition-shadow h-full">
+                  <Card className="hover:shadow-md transition-shadow h-full min-h-[140px]">
                     <CardContent className="pt-6">
                       <div className="flex flex-col items-center text-center">
                         <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">

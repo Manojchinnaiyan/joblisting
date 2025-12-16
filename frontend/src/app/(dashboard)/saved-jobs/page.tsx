@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { Bookmark, MapPin, Briefcase, DollarSign, Clock, Trash2 } from 'lucide-react'
+import Image from 'next/image'
+import { Bookmark, MapPin, Briefcase, DollarSign, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -65,9 +66,11 @@ export default function SavedJobsPage() {
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row items-start gap-4">
                     {job.company_logo_url ? (
-                      <img
+                      <Image
                         src={job.company_logo_url}
                         alt={job.company_name}
+                        width={48}
+                        height={48}
                         className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
                       />
                     ) : (

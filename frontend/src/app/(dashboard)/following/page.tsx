@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { Building2, MapPin, Users, Briefcase, ExternalLink, UserMinus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -63,12 +64,20 @@ export default function FollowingPage() {
               <Card key={company.id} className="hover:bg-accent transition-colors">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    {company.logo_url && (
-                      <img
+                    {company.logo_url ? (
+                      <Image
                         src={company.logo_url}
                         alt={company.name}
+                        width={64}
+                        height={64}
                         className="h-16 w-16 rounded-lg object-cover flex-shrink-0"
                       />
+                    ) : (
+                      <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-xl font-bold text-primary">
+                          {company.name.charAt(0).toUpperCase()}
+                        </span>
+                      </div>
                     )}
 
                     <div className="flex-1 min-w-0">

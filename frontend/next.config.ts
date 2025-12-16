@@ -12,6 +12,16 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'jobsworld.in',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.jobsworld.in',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
         hostname: 'lh3.googleusercontent.com',
         pathname: '/**',
       },
