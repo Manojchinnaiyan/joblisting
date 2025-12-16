@@ -375,7 +375,7 @@ jobs:
           EMAIL_PROVIDER=RESEND
           RESEND_API_KEY=${{ secrets.RESEND_API_KEY }}
           RESEND_FROM_EMAIL=${{ secrets.RESEND_FROM_EMAIL }}
-          RESEND_FROM_NAME=JobPlatform
+          RESEND_FROM_NAME=JobsWorld
           # AI Service (Anthropic)
           ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
           # URLs

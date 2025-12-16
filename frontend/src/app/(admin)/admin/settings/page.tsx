@@ -185,7 +185,7 @@ export default function SettingsPage() {
                       <FormItem>
                         <FormLabel>Site Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Job Platform" {...field} />
+                          <Input placeholder="JobsWorld" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -679,7 +679,7 @@ export default function SettingsPage() {
                         <FormItem>
                           <FormLabel>From Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="Job Platform" {...field} />
+                            <Input placeholder="JobsWorld" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>

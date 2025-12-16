@@ -1,5 +1,5 @@
-export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'JobPlatform'
-export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || 'Find your dream job'
+export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || 'JobsWorld'
+export const APP_DESCRIPTION = process.env.NEXT_PUBLIC_APP_DESCRIPTION || 'Find Remote Jobs, International Jobs & Career Opportunities Worldwide - Your Global Job Search Platform'
 export const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
 

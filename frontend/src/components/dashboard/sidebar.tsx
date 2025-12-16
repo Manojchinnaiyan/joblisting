@@ -78,7 +78,7 @@ export function Sidebar() {
       {/* Logo and Notifications */}
       <div className="flex h-16 items-center justify-between border-b px-6">
         <Link href="/" className="text-xl font-bold">
-          JobPlatform
+          JobsWorld
         </Link>
         <NotificationBell notificationsHref="/notifications" />
       </div>

@@ -58,7 +58,7 @@ export function MobileNav() {
       {/* Mobile Header */}
       <div className="fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b bg-background px-4 lg:hidden">
         <Link href="/" className="text-xl font-bold">
-          JobPlatform
+          JobsWorld
         </Link>
         <div className="flex items-center gap-2">
           <NotificationBell notificationsHref="/notifications" />
