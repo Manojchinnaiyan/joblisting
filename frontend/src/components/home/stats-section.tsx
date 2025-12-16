@@ -39,7 +39,7 @@ export function StatsSection() {
                   </div>
                 </div>
                 <div className="text-4xl font-bold mb-2">{stat.value}</div>
-                <div className="text-primary-foreground/80">{stat.label}</div>
+                <div className="text-primary-foreground">{stat.label}</div>
               </div>
             )
           })}

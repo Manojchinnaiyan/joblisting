@@ -1,0 +1,10 @@
+{
+  "name": "JobsWorld - Find Remote Jobs & Career Opportunities",
+  "short_name": "JobsWorld",
+  "description": "Discover thousands of remote jobs, international opportunities, and career openings across all industries.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary"
+}

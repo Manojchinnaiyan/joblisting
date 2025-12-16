@@ -47,51 +47,59 @@ export function JobCategories() {
     fetchCategories()
   }, [])
 
-  if (!isLoading && categories.length === 0) {
-    return null
-  }
+  // Always render the section with fixed height to prevent CLS
+  // Hide content visually when no categories but maintain layout
+  const showSkeleton = isLoading
+  const isEmpty = !isLoading && categories.length === 0
 
   return (
-    <section className="py-16 md:py-24">
-      <Container>
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold">Browse by Category</h2>
-          <p className="text-muted-foreground mt-2">
-            Find the perfect role in your field of expertise
-          </p>
-        </div>
+    <section
+      className="py-16 md:py-24"
+      style={{
+        minHeight: isEmpty ? 0 : '500px',
+        transition: 'min-height 0.3s ease-out'
+      }}
+      aria-hidden={isEmpty}
+    >
+      {!isEmpty && (
+        <Container>
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold">Browse by Category</h2>
+            <p className="text-muted-foreground mt-2">
+              Find the perfect role in your field of expertise
+            </p>
+          </div>
 
-        {isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="min-h-[140px] bg-muted animate-pulse rounded-lg" />
-            ))}
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
-            {categories.slice(0, 8).map((category) => {
-              const Icon = iconMap[category.slug] || Briefcase
-              return (
-                <Link key={category.slug} href={`/jobs?category=${category.slug}`}>
-                  <Card className="hover:shadow-md transition-shadow h-full min-h-[140px]">
-                    <CardContent className="pt-6">
-                      <div className="flex flex-col items-center text-center">
-                        <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
-                          <Icon className="h-6 w-6 text-primary" />
+            {showSkeleton ? (
+              Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="min-h-[140px] bg-muted animate-pulse rounded-lg" />
+              ))
+            ) : (
+              categories.slice(0, 8).map((category) => {
+                const Icon = iconMap[category.slug] || Briefcase
+                return (
+                  <Link key={category.slug} href={`/jobs?category=${category.slug}`}>
+                    <Card className="hover:shadow-md transition-shadow h-full min-h-[140px]">
+                      <CardContent className="pt-6">
+                        <div className="flex flex-col items-center text-center">
+                          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center mb-4">
+                            <Icon className="h-6 w-6 text-primary" />
+                          </div>
+                          <h3 className="font-semibold">{category.name}</h3>
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {category.count} jobs
+                          </p>
                         </div>
-                        <h3 className="font-semibold">{category.name}</h3>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          {category.count} jobs
-                        </p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              )
-            })}
+                      </CardContent>
+                    </Card>
+                  </Link>
+                )
+              })
+            )}
           </div>
-        )}
-      </Container>
+        </Container>
+      )}
     </section>
   )
 }
