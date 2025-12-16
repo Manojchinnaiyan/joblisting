@@ -63,7 +63,7 @@ export function JobCategories() {
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4" style={{ minHeight: '312px' }}>
+        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="h-[140px] bg-muted animate-pulse rounded-lg" />
