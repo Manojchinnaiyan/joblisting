@@ -210,6 +210,9 @@ services:
       RESEND_FROM_EMAIL: ${RESEND_FROM_EMAIL}
       RESEND_FROM_NAME: ${RESEND_FROM_NAME:-Job Platform}
 
+      # AI Service (Anthropic)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
       # Frontend URLs
       FRONTEND_URL: ${FRONTEND_URL}
       ADMIN_FRONTEND_URL: ${ADMIN_FRONTEND_URL}
