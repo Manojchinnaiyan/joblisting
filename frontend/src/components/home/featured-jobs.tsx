@@ -6,9 +6,7 @@ import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/layout/container'
 import { JobCard } from '@/components/jobs/job-card'
-import { JobSkeletonList } from '@/components/jobs/job-skeleton'
 import { jobsApi } from '@/lib/api/jobs'
-import { toast } from 'sonner'
 import type { Job } from '@/types/job'
 
 export function FeaturedJobs() {
@@ -21,7 +19,7 @@ export function FeaturedJobs() {
         const data = await jobsApi.getFeaturedJobs(6)
         setJobs(data)
       } catch (error) {
-        toast.error('Failed to load featured jobs')
+        // Silently fail - don't show error toast for featured jobs
       } finally {
         setIsLoading(false)
       }
@@ -30,7 +28,9 @@ export function FeaturedJobs() {
     fetchFeaturedJobs()
   }, [])
 
-  if (!isLoading && jobs.length === 0) {
+  // Don't render anything until we know if there are jobs
+  // This prevents the flickering skeleton
+  if (isLoading || jobs.length === 0) {
     return null
   }
 
@@ -52,15 +52,11 @@ export function FeaturedJobs() {
           </Button>
         </div>
 
-        {isLoading ? (
-          <JobSkeletonList count={6} />
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {jobs.map((job) => (
-              <JobCard key={job.id} job={job} />
-            ))}
-          </div>
-        )}
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {jobs.map((job) => (
+            <JobCard key={job.id} job={job} />
+          ))}
+        </div>
       </Container>
     </section>
   )
