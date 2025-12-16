@@ -54,10 +54,10 @@
     @apply border-border;
   }
   html {
-    @apply h-full;
+    @apply h-full overflow-x-hidden;
   }
   body {
-    @apply h-full bg-background text-foreground font-sans;
+    @apply h-full bg-background text-foreground font-sans overflow-x-hidden;
   }
 }
 
