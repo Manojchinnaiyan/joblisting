@@ -525,6 +525,35 @@ jobs:
 
             if [ "$INFRA_CHANGED" = "true" ]; then
               echo "Deploying infrastructure (nginx, netdata)..."
+
+              # Check if SSL certificate exists for jobsworld.in
+              if [ ! -f /etc/letsencrypt/live/jobsworld.in/fullchain.pem ]; then
+                echo "SSL certificate not found, obtaining new certificate..."
+
+                # Stop nginx to free port 80
+                docker stop job_nginx 2>/dev/null || true
+
+                # Install certbot if not installed
+                if ! command -v certbot &> /dev/null; then
+                  apt-get update && apt-get install -y certbot
+                fi
+
+                # Create certbot directory
+                mkdir -p /var/www/certbot
+
+                # Get SSL certificate
+                certbot certonly --standalone --non-interactive --agree-tos \
+                  --email admin@jobsworld.in \
+                  -d jobsworld.in -d www.jobsworld.in || true
+
+                echo "SSL certificate obtained!"
+              else
+                echo "SSL certificate already exists"
+              fi
+
+              # Create nginx conf.d directory
+              mkdir -p /opt/job-platform/nginx/conf.d
+
               # Nginx has ports 80/443, minimal downtime
               zero_downtime_deploy "nginx" "job_nginx" "80"
               # Clean up any old netdata containers with prefixed names
