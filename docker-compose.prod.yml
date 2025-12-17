@@ -1,5 +1,6 @@
 # Production Docker Compose configuration
 # Usage: docker-compose -f docker-compose.prod.yml up -d
+# Updated: Domain migration to jobsworld.in
 
 services:
   # PostgreSQL Database
