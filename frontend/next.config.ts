@@ -3,44 +3,41 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   output: 'standalone',
   images: {
+    // Allow images from any domain for scraped job company logos
     remotePatterns: [
       {
         protocol: 'http',
-        hostname: 'localhost',
-        port: '9000',
-        pathname: '/**',
+        hostname: '**',
       },
       {
         protocol: 'https',
-        hostname: 'jobsworld.in',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'www.jobsworld.in',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 'lh3.googleusercontent.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: 's3.ap-south-1.amazonaws.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.s3.amazonaws.com',
-        pathname: '/**',
-      },
-      {
-        protocol: 'https',
-        hostname: '*.s3.*.amazonaws.com',
-        pathname: '/**',
+        hostname: '**',
       },
     ],
+  },
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://accounts.google.com https://apis.google.com",
+              "script-src-elem 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://accounts.google.com https://apis.google.com",
+              "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+              "font-src 'self' https://fonts.gstatic.com data:",
+              "img-src 'self' data: blob: https: http:",
+              "connect-src 'self' https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://*.jobsworld.in wss://*.jobsworld.in",
+              "frame-src 'self' https://www.googletagmanager.com https://accounts.google.com",
+              "object-src 'none'",
+              "base-uri 'self'",
+            ].join('; '),
+          },
+        ],
+      },
+    ]
   },
   async rewrites() {
     return [
