@@ -143,7 +143,7 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=your-google-client-id
 
 # App Metadata
-NEXT_PUBLIC_APP_NAME=JobPlatform
+NEXT_PUBLIC_APP_NAME=jobsworld
 NEXT_PUBLIC_APP_DESCRIPTION=Find your dream job
 ```
 

@@ -164,8 +164,8 @@ services:
       RESEND_FROM_NAME: Job Platform
 
       # Admin
-      ADMIN_EMAIL_DOMAIN: "@admin.jobplatform.com"
-      SUPER_ADMIN_EMAIL: superadmin@admin.jobplatform.com
+      ADMIN_EMAIL_DOMAIN: "@admin.jobsworld.com"
+      SUPER_ADMIN_EMAIL: superadmin@admin.jobsworld.com
 
       # Frontend URLs
       FRONTEND_URL: http://localhost:3000
