@@ -36,14 +36,19 @@ export const useAdminAuthStore = create<AdminAuthState>()(
 
       clearTempToken: () => set({ tempToken: null }),
 
-      logout: () =>
+      logout: () => {
+        // Clear the persisted storage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('admin-auth-storage')
+        }
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           tempToken: null,
           isAuthenticated: false,
-        }),
+        })
+      },
 
       setHasHydrated: (hasHydrated) => set({ _hasHydrated: hasHydrated }),
     }),

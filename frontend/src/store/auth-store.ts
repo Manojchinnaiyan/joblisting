@@ -42,14 +42,19 @@ export const useAuthStore = create<AuthState>()(
           isLoading: false,
         }),
 
-      logout: () =>
+      logout: () => {
+        // Clear the persisted storage
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('auth-storage')
+        }
         set({
           user: null,
           accessToken: null,
           refreshToken: null,
           isAuthenticated: false,
           isLoading: false,
-        }),
+        })
+      },
 
       setLoading: (loading) => set({ isLoading: loading }),
 
