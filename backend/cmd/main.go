@@ -1,3 +1,5 @@
+// Job Platform Backend Server
+// Build: 2025-12-17
 package main
 
 import (
