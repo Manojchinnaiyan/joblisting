@@ -12,9 +12,13 @@ interface JobCardProps {
   job: Job
   onSave?: (jobId: string) => void
   viewMode?: ViewMode
+  compact?: boolean
 }
 
-export function JobCard({ job, onSave, viewMode = 'grid' }: JobCardProps) {
+export function JobCard({ job, onSave, viewMode = 'grid', compact = false }: JobCardProps) {
+  if (compact) {
+    return <JobCardCompact job={job} />
+  }
   if (viewMode === 'list') {
     return <JobCardListView job={job} onSave={onSave} />
   }
@@ -216,6 +220,59 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
                 )}
               </div>
             )}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function JobCardCompact({ job }: { job: Job }) {
+  return (
+    <Card className="hover:shadow-md transition-shadow group">
+      <CardContent className="p-4">
+        <div className="flex items-start gap-3">
+          {/* Company Logo */}
+          {job.company_logo_url ? (
+            <Image
+              src={job.company_logo_url}
+              alt={job.company_name}
+              width={40}
+              height={40}
+              className="rounded-lg object-contain shrink-0 w-10 h-10"
+            />
+          ) : (
+            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <span className="text-sm font-bold text-primary">
+                {job.company_name.charAt(0).toUpperCase()}
+              </span>
+            </div>
+          )}
+
+          {/* Job Info */}
+          <div className="flex-1 min-w-0">
+            <Link href={`/jobs/${job.slug}`}>
+              <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-1">
+                {job.title}
+              </h3>
+            </Link>
+            <p className="text-xs text-muted-foreground truncate">{job.company_name}</p>
+
+            {/* Location & Salary */}
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{job.location}</span>
+              </div>
+              <SalaryDisplay salary={job.salary} className="text-xs" />
+            </div>
+
+            {/* Job Type Badge */}
+            <div className="mt-2">
+              <Badge variant="secondary" className="text-[10px] font-normal px-1.5">
+                {job.job_type.replace('_', ' ')}
+              </Badge>
+            </div>
           </div>
         </div>
       </CardContent>
