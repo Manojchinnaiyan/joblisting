@@ -50,10 +50,28 @@ func RunMigrations(db *gorm.DB) error {
 		}
 	}
 
-	// Step 1: Run schema.sql first (base schema)
+	// Check if database already has tables (existing database)
+	var tableCount int64
+	db.Raw("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_type = 'BASE TABLE' AND table_name != 'schema_migrations'").Scan(&tableCount)
+	existingDatabase := tableCount > 0
+	log.Printf("📊 Existing database: %v (found %d tables)", existingDatabase, tableCount)
+
+	// Step 1: For NEW databases, run schema.sql first
+	// For EXISTING databases, skip schema.sql and just run numbered migrations
 	schemaPath := filepath.Join(migrationsDir, "schema.sql")
-	if err := runMigrationFile(db, schemaPath, "schema.sql"); err != nil {
-		return err
+	if !existingDatabase {
+		if err := runMigrationFile(db, schemaPath, "schema.sql"); err != nil {
+			return err
+		}
+	} else {
+		// Mark schema.sql as applied if not already (existing DB was created from it)
+		var existing MigrationRecord
+		if db.Where("name = ?", "schema.sql").First(&existing).Error != nil {
+			log.Printf("📝 Marking schema.sql as applied (existing database)")
+			db.Create(&MigrationRecord{Name: "schema.sql"})
+		} else {
+			log.Printf("⏭️  Skipping schema.sql (already applied)")
+		}
 	}
 
 	// Step 2: Find and run all numbered migration files
