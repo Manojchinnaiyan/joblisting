@@ -222,6 +222,9 @@ func (h *ScraperHandler) applyEdits(data *dto.ScrapedJobResponse, edits map[stri
 	if company, ok := edits["company"].(string); ok && company != "" {
 		data.Company = company
 	}
+	if companyLogo, ok := edits["company_logo"].(string); ok {
+		data.CompanyLogo = companyLogo
+	}
 	if location, ok := edits["location"].(string); ok && location != "" {
 		data.Location = location
 	}

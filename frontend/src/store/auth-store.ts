@@ -43,9 +43,9 @@ export const useAuthStore = create<AuthState>()(
         }),
 
       logout: () => {
-        // Clear the persisted storage
+        // Clear all localStorage on logout
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('auth-storage')
+          localStorage.clear()
         }
         set({
           user: null,

@@ -37,9 +37,9 @@ export const useAdminAuthStore = create<AdminAuthState>()(
       clearTempToken: () => set({ tempToken: null }),
 
       logout: () => {
-        // Clear the persisted storage
+        // Clear all localStorage on logout
         if (typeof window !== 'undefined') {
-          localStorage.removeItem('admin-auth-storage')
+          localStorage.clear()
         }
         set({
           user: null,
