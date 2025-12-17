@@ -39,6 +39,17 @@ func RunMigrations(db *gorm.DB) error {
 
 	log.Printf("📁 Using migrations directory: %s", migrationsDir)
 
+	// List all files in migrations directory for debugging
+	entries, err := os.ReadDir(migrationsDir)
+	if err != nil {
+		log.Printf("⚠️  Warning: could not list migrations directory: %v", err)
+	} else {
+		log.Printf("📂 Files in migrations directory:")
+		for _, entry := range entries {
+			log.Printf("   - %s", entry.Name())
+		}
+	}
+
 	// Step 1: Run schema.sql first (base schema)
 	schemaPath := filepath.Join(migrationsDir, "schema.sql")
 	if err := runMigrationFile(db, schemaPath, "schema.sql"); err != nil {
@@ -50,6 +61,8 @@ func RunMigrations(db *gorm.DB) error {
 	if err != nil {
 		return fmt.Errorf("failed to find migration files: %w", err)
 	}
+
+	log.Printf("📋 Found %d numbered migration files: %v", len(migrationFiles), migrationFiles)
 
 	// Run each migration in order
 	for _, migFile := range migrationFiles {

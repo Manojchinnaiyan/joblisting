@@ -44,7 +44,7 @@ func main() {
 
 	// Run database migrations
 	if err := database.RunMigrations(db); err != nil {
-		log.Printf("⚠️  Warning: Migration failed: %v", err)
+		log.Fatalf("❌ Migration failed: %v", err)
 	}
 
 	// Initialize Redis
