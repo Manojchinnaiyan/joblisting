@@ -14,6 +14,7 @@ import {
   CheckCircle,
   XCircle,
   X,
+  RefreshCw,
 } from 'lucide-react'
 import { Blog, BlogStatus, adminBlogApi, blogApi, BlogCategory } from '@/lib/api/blog'
 import { BlogStatusBadge } from '@/components/blog/BlogStatusBadge'
@@ -60,6 +61,7 @@ export default function AdminBlogsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [previewBlog, setPreviewBlog] = useState<Blog | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const pageSize = 20
 
@@ -91,6 +93,12 @@ export default function AdminBlogsPage() {
   useEffect(() => {
     loadBlogs()
   }, [loadBlogs])
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    await loadBlogs()
+    setIsRefreshing(false)
+  }
 
   useEffect(() => {
     async function loadCategories() {
@@ -178,12 +186,23 @@ export default function AdminBlogsPage() {
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Blog Management</h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">Manage your blog posts</p>
         </div>
-        <Button asChild>
-          <Link href="/admin/blogs/new">
-            <Plus className="h-4 w-4 mr-2" />
-            New Blog Post
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing || loading}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
+          <Button asChild>
+            <Link href="/admin/blogs/new">
+              <Plus className="h-4 w-4 mr-2" />
+              New Blog Post
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

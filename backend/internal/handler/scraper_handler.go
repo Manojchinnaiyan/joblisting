@@ -341,8 +341,9 @@ func (h *ScraperHandler) scrapedDataToInput(data *dto.ScrapedJobResponse) servic
 			Skills:           data.Skills,
 			Benefits:         data.Benefits,
 		},
-		CompanyName: data.Company,
-		Status:      "ACTIVE",
+		CompanyName:    data.Company,
+		CompanyLogoURL: data.CompanyLogo,
+		Status:         "ACTIVE",
 	}
 }
 

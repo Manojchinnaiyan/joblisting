@@ -87,6 +87,7 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 	response := &dto.ScrapedJobResponse{
 		Title:           extractedJob.Title,
 		Company:         extractedJob.Company,
+		CompanyLogo:     extractedJob.CompanyLogo,
 		Location:        extractedJob.Location,
 		City:            extractedJob.City,
 		State:           extractedJob.State,

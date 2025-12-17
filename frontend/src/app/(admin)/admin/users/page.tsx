@@ -57,7 +57,7 @@ export default function UsersPage() {
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
   const [actionDialog, setActionDialog] = useState<'suspend' | 'activate' | 'delete' | null>(null)
 
-  const { data, isLoading } = useAdminUsers({ search: search || undefined }, { page, limit })
+  const { data, isLoading, refetch, isFetching } = useAdminUsers({ search: search || undefined }, { page, limit })
   const suspendUser = useSuspendUser()
   const activateUser = useActivateUser()
   const deleteUser = useDeleteUser()
@@ -332,6 +332,8 @@ export default function UsersPage() {
         onExport={() => {
           console.log('Export users')
         }}
+        onRefresh={() => refetch()}
+        isRefreshing={isFetching && !isLoading}
       />
 
       {/* Suspend Dialog */}

@@ -63,7 +63,7 @@ export default function CategoriesPage() {
   const [selectedCategory, setSelectedCategory] = useState<Category | null>(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
-  const { data, isLoading, isFetching } = useAdminCategories({ page, limit })
+  const { data, isLoading, isFetching, refetch } = useAdminCategories({ page, limit })
   const showLoading = isLoading || (!data && isFetching)
   const deleteCategory = useDeleteCategory()
 
@@ -270,6 +270,8 @@ export default function CategoriesPage() {
           pagination={pagination}
           onPageChange={setPage}
           onLimitChange={setLimit}
+          onRefresh={() => refetch()}
+          isRefreshing={isFetching && !isLoading}
         />
       )}
 

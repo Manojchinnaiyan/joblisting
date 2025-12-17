@@ -38,6 +38,7 @@ import {
   Settings2,
   Download,
   Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import {
   Select,
@@ -67,6 +68,8 @@ interface DataTableProps<TData, TValue> {
   bulkActions?: React.ReactNode
   enableExport?: boolean
   onExport?: () => void
+  onRefresh?: () => void
+  isRefreshing?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -84,6 +87,8 @@ export function DataTable<TData, TValue>({
   bulkActions,
   enableExport,
   onExport,
+  onRefresh,
+  isRefreshing = false,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
@@ -178,6 +183,17 @@ export function DataTable<TData, TValue>({
           )}
         </div>
         <div className="flex items-center gap-2">
+          {onRefresh && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onRefresh}
+              disabled={isRefreshing || isLoading}
+            >
+              <RefreshCw className={`mr-2 h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          )}
           {enableExport && onExport && (
             <Button variant="outline" size="sm" onClick={onExport}>
               <Download className="mr-2 h-4 w-4" />

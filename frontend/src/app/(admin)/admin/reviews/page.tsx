@@ -54,7 +54,7 @@ export default function ReviewsPage() {
   const [selectedReview, setSelectedReview] = useState<Review | null>(null)
   const [actionDialog, setActionDialog] = useState<'approve' | 'reject' | 'delete' | null>(null)
 
-  const { data, isLoading } = useAdminReviews({ search: search || undefined }, { page, limit })
+  const { data, isLoading, refetch, isFetching } = useAdminReviews({ search: search || undefined }, { page, limit })
   const approveReview = useApproveReview()
   const rejectReview = useRejectReview()
   const deleteReview = useDeleteReview()
@@ -280,6 +280,8 @@ export default function ReviewsPage() {
         pagination={pagination}
         onPageChange={setPage}
         onLimitChange={setLimit}
+        onRefresh={() => refetch()}
+        isRefreshing={isFetching && !isLoading}
       />
 
       {/* Approve Dialog */}

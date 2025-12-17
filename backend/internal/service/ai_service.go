@@ -34,6 +34,7 @@ func NewAIService() *AIService {
 type ExtractedJob struct {
 	Title           string   `json:"title"`
 	Company         string   `json:"company"`
+	CompanyLogo     string   `json:"company_logo"`
 	Location        string   `json:"location"`
 	City            string   `json:"city"`
 	State           string   `json:"state"`
@@ -101,6 +102,7 @@ Extract and return a JSON object with these exact fields:
 {
   "title": "Job title",
   "company": "Company name",
+  "company_logo": "URL of company logo image (look for img tags with src containing logo, company name, or in header/nav areas)",
   "location": "Full location string (city, state, country or remote)",
   "city": "City name only",
   "state": "State/Province name only",
@@ -116,9 +118,14 @@ Extract and return a JSON object with these exact fields:
 
 Rules:
 1. If a field is not found, use empty string "" or empty array []
-2. For job_type, map common terms: "full-time" -> "FULL_TIME", "part-time" -> "PART_TIME", etc.
-3. For experience_level, infer from years required or job level mentioned
-4. For skills, extract ONLY specific, concrete skills such as:
+2. For company_logo, look for image URLs that contain the company logo. Check:
+   - <img> tags with "logo" in class, id, alt, or src attributes
+   - Images in the header, nav, or company info sections
+   - Open Graph meta tags (og:image) that might contain company branding
+   - Return the full absolute URL (starting with http:// or https://)
+3. For job_type, map common terms: "full-time" -> "FULL_TIME", "part-time" -> "PART_TIME", etc.
+4. For experience_level, infer from years required or job level mentioned
+5. For skills, extract ONLY specific, concrete skills such as:
    - Technical tools and software (e.g., "Excel", "Power BI", "SAP", "AutoCAD")
    - Programming languages (e.g., "Python", "JavaScript", "SQL")
    - Frameworks and platforms (e.g., "React", "AWS", "Kubernetes")
@@ -127,9 +134,9 @@ Rules:
    - Methodologies (e.g., "Agile", "Scrum", "Lean")
    DO NOT include generic soft skills like "communication", "teamwork", "leadership", "problem-solving", "written", "verbal", etc.
    Keep skills concise (1-3 words each), capitalize properly
-5. Keep the description in HTML format if it was HTML
-6. Be thorough and extract all relevant information
-7. Return ONLY valid JSON, no markdown formatting or extra text`, url, cleanedHTML)
+6. Keep the description in HTML format if it was HTML
+7. Be thorough and extract all relevant information
+8. Return ONLY valid JSON, no markdown formatting or extra text`, url, cleanedHTML)
 
 	request := ClaudeRequest{
 		Model:     "claude-3-haiku-20240307",

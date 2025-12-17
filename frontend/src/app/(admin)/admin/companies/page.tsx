@@ -60,7 +60,7 @@ export default function CompaniesPage() {
     'verify' | 'feature' | 'unfeature' | 'suspend' | 'delete' | null
   >(null)
 
-  const { data, isLoading } = useAdminCompanies({ search: search || undefined }, { page, limit })
+  const { data, isLoading, refetch, isFetching } = useAdminCompanies({ search: search || undefined }, { page, limit })
   const verifyCompany = useVerifyCompany()
   const featureCompany = useFeatureCompany()
   const unfeatureCompany = useUnfeatureCompany()
@@ -353,6 +353,8 @@ export default function CompaniesPage() {
         onLimitChange={setLimit}
         enableExport
         onExport={() => console.log('Export companies')}
+        onRefresh={() => refetch()}
+        isRefreshing={isFetching && !isLoading}
       />
 
       {/* Verify Dialog */}

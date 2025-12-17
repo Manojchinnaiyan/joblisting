@@ -64,7 +64,7 @@ export default function JobsPage() {
     'approve' | 'reject' | 'feature' | 'unfeature' | 'delete' | null
   >(null)
 
-  const { data, isLoading } = useAdminJobs({ search: search || undefined }, { page, limit })
+  const { data, isLoading, refetch, isFetching } = useAdminJobs({ search: search || undefined }, { page, limit })
   const approveJob = useApproveJob()
   const rejectJob = useRejectJob()
   const featureJob = useFeatureJob()
@@ -363,6 +363,8 @@ export default function JobsPage() {
         onLimitChange={setLimit}
         enableExport
         onExport={() => console.log('Export jobs')}
+        onRefresh={() => refetch()}
+        isRefreshing={isFetching && !isLoading}
       />
 
       {/* Approve Dialog */}

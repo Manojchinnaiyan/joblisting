@@ -168,6 +168,7 @@ type BulkScrapeRequest struct {
 type ScrapedJobResponse struct {
 	Title           string   `json:"title"`
 	Company         string   `json:"company"`
+	CompanyLogo     string   `json:"company_logo,omitempty"`
 	Location        string   `json:"location"`
 	Description     string   `json:"description"`
 	Requirements    string   `json:"requirements"`

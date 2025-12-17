@@ -28,6 +28,7 @@ scraperClient.interceptors.request.use(
 export interface ScrapedJob {
   title: string
   company: string
+  company_logo?: string
   location: string
   description: string
   requirements: string
