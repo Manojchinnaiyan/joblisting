@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { Container } from '@/components/layout/container'
 import { JobDetail } from '@/components/jobs/job-detail'
-import { JobApplyButton } from '@/components/jobs/job-apply-button'
+import { JobSidebar } from '@/components/jobs/job-sidebar'
 import { BackButton } from '@/components/shared/back-button'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { jobsApi } from '@/lib/api/jobs'
@@ -33,9 +33,9 @@ export default async function JobDetailPage({
         <BackButton fallbackHref="/jobs" label="Back to Jobs" />
       </div>
 
-      {/* Mobile: Apply button at top */}
+      {/* Mobile: Apply button and share at top */}
       <div className="lg:hidden mb-4">
-        <JobApplyButton job={job} />
+        <JobSidebar job={job} />
       </div>
 
       <div className="grid gap-6 sm:gap-8 lg:grid-cols-3">
@@ -45,11 +45,9 @@ export default async function JobDetailPage({
           </Suspense>
         </div>
 
-        {/* Desktop: Apply button in sidebar */}
+        {/* Desktop: Apply button and share in sidebar */}
         <div className="hidden lg:block lg:col-span-1">
-          <div className="sticky top-20 space-y-4">
-            <JobApplyButton job={job} />
-          </div>
+          <JobSidebar job={job} className="sticky top-20" />
         </div>
       </div>
     </Container>
