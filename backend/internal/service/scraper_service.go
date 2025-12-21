@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chromedp/chromedp"
 	"github.com/gocolly/colly/v2"
 )
 
@@ -105,8 +106,95 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 	return response, warnings, nil
 }
 
-// scrapeHTML fetches the HTML content from a URL using colly
+// scrapeHTML fetches the HTML content from a URL
+// It first tries with colly (fast), then falls back to chromedp for JS-heavy pages
 func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string, error) {
+	// First try with colly (faster for static pages)
+	html, err := s.scrapeWithColly(ctx, jobURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Check if the page content looks like it needs JavaScript rendering
+	// Common indicators: empty body, placeholder widgets, or very short content
+	if s.needsJavaScriptRendering(html) {
+		// Fall back to headless browser
+		jsHTML, jsErr := s.scrapeWithChromedp(ctx, jobURL)
+		if jsErr != nil {
+			// If chromedp fails, return the original HTML (better than nothing)
+			return html, nil
+		}
+		return jsHTML, nil
+	}
+
+	return html, nil
+}
+
+// needsJavaScriptRendering checks if the HTML content indicates JS rendering is needed
+func (s *ScraperService) needsJavaScriptRendering(html string) bool {
+	lowerHTML := strings.ToLower(html)
+
+	// Check for common SPA/ATS indicators
+	indicators := []string{
+		"data-func-widget",      // Workday/Phenom
+		"loading...",            // Generic loading states
+		"please wait",           // Loading states
+		"app-root",              // Angular apps
+		"__next",                // Next.js apps
+		"root\"></div></body>",  // Empty React root
+		"phenom",                // Phenom People ATS
+		"workday",               // Workday ATS
+		"greenhouse",            // Greenhouse ATS
+		"lever.co",              // Lever ATS
+		"icims",                 // iCIMS ATS
+		"taleo",                 // Taleo ATS
+		"successfactors",        // SAP SuccessFactors
+	}
+
+	for _, indicator := range indicators {
+		if strings.Contains(lowerHTML, indicator) {
+			return true
+		}
+	}
+
+	// Check if body content is suspiciously short (less than 2KB of actual content)
+	// This often indicates JS-rendered content
+	bodyStart := strings.Index(lowerHTML, "<body")
+	bodyEnd := strings.Index(lowerHTML, "</body>")
+	if bodyStart > 0 && bodyEnd > bodyStart {
+		bodyContent := html[bodyStart:bodyEnd]
+		// Remove script and style tags content for size check
+		bodyContent = removeTagContent(bodyContent, "script")
+		bodyContent = removeTagContent(bodyContent, "style")
+		if len(bodyContent) < 2000 {
+			return true
+		}
+	}
+
+	return false
+}
+
+// removeTagContent removes content between specified tags
+func removeTagContent(html, tagName string) string {
+	result := html
+	for {
+		startTag := "<" + tagName
+		endTag := "</" + tagName + ">"
+		start := strings.Index(strings.ToLower(result), startTag)
+		if start == -1 {
+			break
+		}
+		end := strings.Index(strings.ToLower(result[start:]), endTag)
+		if end == -1 {
+			break
+		}
+		result = result[:start] + result[start+end+len(endTag):]
+	}
+	return result
+}
+
+// scrapeWithColly fetches HTML using colly (fast, no JS)
+func (s *ScraperService) scrapeWithColly(ctx context.Context, jobURL string) (string, error) {
 	var html string
 	var scrapeErr error
 
@@ -146,6 +234,50 @@ func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string,
 
 	if scrapeErr != nil {
 		return "", scrapeErr
+	}
+
+	return html, nil
+}
+
+// scrapeWithChromedp fetches HTML using headless Chrome (handles JavaScript)
+func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) (string, error) {
+	// Create a new context with timeout
+	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx,
+		append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.Flag("headless", true),
+			chromedp.Flag("disable-gpu", true),
+			chromedp.Flag("no-sandbox", true),
+			chromedp.Flag("disable-dev-shm-usage", true),
+			chromedp.Flag("disable-extensions", true),
+			chromedp.Flag("disable-background-networking", true),
+			chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+		)...,
+	)
+	defer allocCancel()
+
+	// Create browser context with timeout
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+	defer browserCancel()
+
+	// Set overall timeout
+	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, 45*time.Second)
+	defer timeoutCancel()
+
+	var html string
+
+	// Navigate and wait for content to load
+	err := chromedp.Run(timeoutCtx,
+		chromedp.Navigate(jobURL),
+		// Wait for the page to be fully loaded
+		chromedp.WaitReady("body"),
+		// Additional wait for dynamic content to load
+		chromedp.Sleep(3*time.Second),
+		// Get the full HTML
+		chromedp.OuterHTML("html", &html),
+	)
+
+	if err != nil {
+		return "", fmt.Errorf("chromedp failed: %w", err)
 	}
 
 	return html, nil
