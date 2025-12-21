@@ -21,7 +21,7 @@ export function HeroSection() {
   }
 
   return (
-    <section className="relative bg-gradient-to-b from-primary/10 to-background py-20 md:py-32">
+    <section className="relative bg-gradient-to-b from-primary/10 to-background py-16 md:py-24">
       <Container>
         <div className="mx-auto max-w-3xl text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl">

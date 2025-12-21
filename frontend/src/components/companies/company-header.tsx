@@ -1,5 +1,5 @@
 import Image from 'next/image'
-import { BadgeCheck, MapPin, Users, Calendar, Globe } from 'lucide-react'
+import { BadgeCheck, MapPin, Users, Calendar, Globe, Briefcase } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
@@ -35,10 +35,8 @@ export function CompanyHeader({ company, children }: CompanyHeaderProps) {
               className="rounded object-contain border"
             />
           ) : (
-            <div className="h-24 w-24 rounded bg-muted flex items-center justify-center border">
-              <span className="text-3xl font-bold text-muted-foreground">
-                {company.name.charAt(0)}
-              </span>
+            <div className="h-24 w-24 rounded-lg bg-primary flex items-center justify-center">
+              <Briefcase className="h-12 w-12 text-primary-foreground" />
             </div>
           )}
 

@@ -2,13 +2,15 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, Briefcase, Building2, Info, Home, BookOpen } from 'lucide-react'
+import { Menu, Briefcase, Building2, Info, Home, BookOpen, Users, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
+import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
 import { ROUTES, APP_NAME } from '@/lib/constants'
 import { useState, useEffect, useRef } from 'react'
+import { useAuthStore } from '@/store/auth-store'
 
 const navItems = [
   { href: ROUTES.HOME, label: 'Home', icon: Home },
@@ -22,6 +24,7 @@ export function MobileNav() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const prevPathRef = useRef(pathname)
+  const { isAuthenticated } = useAuthStore()
 
   // Close sheet when pathname changes (after navigation completes)
   useEffect(() => {
@@ -71,6 +74,26 @@ export function MobileNav() {
                   </Link>
                 )
               })}
+
+              {!isAuthenticated && (
+                <>
+                  <Separator className="my-4" />
+                  <Link
+                    href="/register?role=employer"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Users className="h-5 w-5" />
+                    Hire Talent
+                  </Link>
+                  <Link
+                    href={ROUTES.JOBS}
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
+                  >
+                    <Search className="h-5 w-5" />
+                    Find a Job
+                  </Link>
+                </>
+              )}
             </nav>
           </div>
         </SheetContent>

@@ -1,12 +1,30 @@
 import Link from 'next/link'
 import Image from 'next/image'
-import { MapPin, Bookmark } from 'lucide-react'
+import { MapPin, Bookmark, Briefcase } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SalaryDisplay } from './salary-display'
 import type { Job } from '@/types/job'
 import type { ViewMode } from './job-list'
+
+function DefaultLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+  const sizeClasses = {
+    sm: 'h-10 w-10',
+    md: 'h-10 w-10 sm:h-12 sm:w-12',
+    lg: 'h-16 w-16',
+  }
+  const iconSizes = {
+    sm: 'h-5 w-5',
+    md: 'h-5 w-5 sm:h-6 sm:w-6',
+    lg: 'h-8 w-8',
+  }
+  return (
+    <div className={`${sizeClasses[size]} rounded-lg bg-primary flex items-center justify-center shrink-0`}>
+      <Briefcase className={`${iconSizes[size]} text-primary-foreground`} />
+    </div>
+  )
+}
 
 interface JobCardProps {
   job: Job
@@ -40,11 +58,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
               className="rounded-xl object-contain shrink-0 w-16 h-16"
             />
           ) : (
-            <div className="h-16 w-16 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-2xl font-bold text-primary">
-                {job.company_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            <DefaultLogo size="lg" />
           )}
 
           {/* Main Content */}
@@ -141,11 +155,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
               className="rounded-lg object-contain shrink-0 w-10 h-10 sm:w-12 sm:h-12"
             />
           ) : (
-            <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-base sm:text-lg font-bold text-primary">
-                {job.company_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            <DefaultLogo size="md" />
           )}
 
           {/* Job Info */}
@@ -242,11 +252,7 @@ function JobCardCompact({ job }: { job: Job }) {
               className="rounded-lg object-contain shrink-0 w-10 h-10"
             />
           ) : (
-            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold text-primary">
-                {job.company_name.charAt(0).toUpperCase()}
-              </span>
-            </div>
+            <DefaultLogo size="sm" />
           )}
 
           {/* Job Info */}

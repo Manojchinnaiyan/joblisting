@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -24,8 +24,12 @@ import { ROUTES } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/utils'
 
 export function RegisterForm() {
+  const searchParams = useSearchParams()
+  const roleParam = searchParams.get('role')
+  const initialRole = roleParam === 'employer' ? 'EMPLOYER' : 'JOB_SEEKER'
+
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedRole, setSelectedRole] = useState<'JOB_SEEKER' | 'EMPLOYER'>('JOB_SEEKER')
+  const [selectedRole, setSelectedRole] = useState<'JOB_SEEKER' | 'EMPLOYER'>(initialRole)
   const router = useRouter()
 
   const {
@@ -36,9 +40,13 @@ export function RegisterForm() {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
-      role: 'JOB_SEEKER',
+      role: initialRole,
     },
   })
+
+  useEffect(() => {
+    setValue('role', initialRole)
+  }, [initialRole, setValue])
 
   const handleRoleChange = (value: 'JOB_SEEKER' | 'EMPLOYER') => {
     setSelectedRole(value)
@@ -65,7 +73,7 @@ export function RegisterForm() {
         <Label>I want to</Label>
         <Select
           onValueChange={(value) => handleRoleChange(value as 'JOB_SEEKER' | 'EMPLOYER')}
-          defaultValue="JOB_SEEKER"
+          value={selectedRole}
         >
           <SelectTrigger>
             <SelectValue />

@@ -25,10 +25,8 @@ export function CompanyCard({ company }: CompanyCardProps) {
                 className="rounded-lg object-contain shrink-0"
               />
             ) : (
-              <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-                <span className="text-xl font-bold text-primary">
-                  {company.name.charAt(0).toUpperCase()}
-                </span>
+              <div className="h-14 w-14 rounded-lg bg-primary flex items-center justify-center shrink-0">
+                <Briefcase className="h-7 w-7 text-primary-foreground" />
               </div>
             )}
 

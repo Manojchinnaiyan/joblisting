@@ -26,7 +26,7 @@ const stats = [
 
 export function StatsSection() {
   return (
-    <section className="py-16 md:py-24 bg-primary text-primary-foreground">
+    <section className="py-10 md:py-14 bg-primary text-primary-foreground">
       <Container>
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {stats.map((stat) => {

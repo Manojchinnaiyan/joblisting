@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" fill="none">
+  <!-- Background -->
+  <rect width="1200" height="630" fill="#2563eb"/>
+
+  <!-- Briefcase Icon (centered, larger) -->
+  <g transform="translate(500, 200)">
+    <rect x="20" y="60" width="160" height="120" rx="16" stroke="white" stroke-width="8" fill="none"/>
+    <path d="M60 60V40C60 28 70 18 82 18H118C130 18 140 28 140 40V60" stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- JobsWorld Text -->
+  <text x="600" y="450" text-anchor="middle" fill="white" font-family="system-ui, -apple-system, sans-serif" font-size="72" font-weight="700">JobsWorld</text>
+
+  <!-- Tagline -->
+  <text x="600" y="520" text-anchor="middle" fill="rgba(255,255,255,0.8)" font-family="system-ui, -apple-system, sans-serif" font-size="32" font-weight="400">Find Your Dream Job</text>
+</svg>

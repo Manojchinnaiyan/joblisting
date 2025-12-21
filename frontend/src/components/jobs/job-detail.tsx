@@ -25,10 +25,8 @@ export function JobDetail({ job }: JobDetailProps) {
             className="rounded object-contain w-16 h-16 sm:w-20 sm:h-20"
           />
         ) : (
-          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded bg-muted flex items-center justify-center shrink-0">
-            <span className="text-xl sm:text-2xl font-bold text-muted-foreground">
-              {job.company_name.charAt(0)}
-            </span>
+          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-lg bg-primary flex items-center justify-center shrink-0">
+            <Briefcase className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
           </div>
         )}
         <div className="flex-1 min-w-0">

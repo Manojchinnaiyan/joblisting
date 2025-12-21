@@ -35,27 +35,28 @@ export function FeaturedJobs() {
   }
 
   return (
-    <section className="py-16 md:py-24">
+    <section className="py-10 md:py-14">
       <Container>
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-bold">Featured Jobs</h2>
-            <p className="text-muted-foreground mt-2">
-              Handpicked opportunities from top companies
-            </p>
-          </div>
-          <Button variant="outline" asChild>
-            <Link href="/jobs">
-              View all jobs
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
+        <div className="text-center mb-6">
+          <h2 className="text-3xl font-bold">Featured Jobs</h2>
+          <p className="text-muted-foreground mt-2">
+            Handpicked opportunities from top companies
+          </p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {jobs.map((job) => (
             <JobCard key={job.id} job={job} compact />
           ))}
+        </div>
+
+        <div className="text-center mt-6">
+          <Button variant="outline" asChild>
+            <Link href="/jobs">
+              View all jobs
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
         </div>
       </Container>
     </section>

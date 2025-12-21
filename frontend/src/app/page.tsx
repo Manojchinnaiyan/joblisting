@@ -11,6 +11,7 @@ import { JobCategories } from '@/components/home/job-categories'
 import { StatsSection } from '@/components/home/stats-section'
 import { HowItWorks } from '@/components/home/how-it-works'
 import { CTASection } from '@/components/home/cta-section'
+import { AnnouncementBanner } from '@/components/shared/announcement-banner'
 import { useAuthStore } from '@/store/auth-store'
 import { ROUTES } from '@/lib/constants'
 
@@ -33,6 +34,7 @@ export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
+      <AnnouncementBanner />
       <main className="flex-1">
         <HeroSection />
         <FeaturedJobs />

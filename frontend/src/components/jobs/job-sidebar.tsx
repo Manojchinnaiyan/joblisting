@@ -23,7 +23,7 @@ export function JobSidebar({ job, className }: JobSidebarProps) {
 
   return (
     <div className={className}>
-      <div className="space-y-3">
+      <div className="space-y-6">
         <JobApplyButton job={job} />
         {jobUrl && (
           <SocialShare

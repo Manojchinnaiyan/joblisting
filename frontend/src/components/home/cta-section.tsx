@@ -6,7 +6,7 @@ import { ROUTES } from '@/lib/constants'
 
 export function CTASection() {
   return (
-    <section className="py-16 md:py-24 bg-muted/50">
+    <section className="py-10 md:py-14 bg-muted/50">
       <Container>
         <div className="mx-auto max-w-3xl text-center">
           <h2 className="text-3xl font-bold md:text-4xl">

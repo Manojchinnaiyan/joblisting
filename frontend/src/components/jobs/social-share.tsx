@@ -1,14 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { Twitter, Linkedin, Facebook, Link2, Check, Share2, MessageCircle } from 'lucide-react'
+import { Twitter, Linkedin, Facebook, Link2, Check, MessageCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { useToast } from '@/hooks/use-toast'
 
 interface SocialShareProps {
@@ -23,7 +17,6 @@ export function SocialShare({ title, url, description }: SocialShareProps) {
 
   const encodedUrl = encodeURIComponent(url)
   const encodedTitle = encodeURIComponent(title)
-  const encodedDescription = encodeURIComponent(description || '')
 
   const shareLinks = {
     twitter: `https://twitter.com/intent/tweet?text=${encodedTitle}&url=${encodedUrl}`,
@@ -55,39 +48,59 @@ export function SocialShare({ title, url, description }: SocialShareProps) {
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Share2 className="h-4 w-4" />
-          <span className="hidden sm:inline">Share</span>
+    <div className="space-y-3">
+      <p className="text-sm font-medium text-muted-foreground">Share this job</p>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => handleShare('twitter')}
+          className="h-10 w-10"
+          title="Share on X"
+        >
+          <Twitter className="h-4 w-4" />
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={() => handleShare('twitter')}>
-          <Twitter className="mr-2 h-4 w-4" />
-          Share on X
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleShare('linkedin')}>
-          <Linkedin className="mr-2 h-4 w-4" />
-          Share on LinkedIn
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleShare('facebook')}>
-          <Facebook className="mr-2 h-4 w-4" />
-          Share on Facebook
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleShare('whatsapp')}>
-          <MessageCircle className="mr-2 h-4 w-4" />
-          Share on WhatsApp
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={handleCopyLink}>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => handleShare('linkedin')}
+          className="h-10 w-10"
+          title="Share on LinkedIn"
+        >
+          <Linkedin className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => handleShare('facebook')}
+          className="h-10 w-10"
+          title="Share on Facebook"
+        >
+          <Facebook className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => handleShare('whatsapp')}
+          className="h-10 w-10"
+          title="Share on WhatsApp"
+        >
+          <MessageCircle className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={handleCopyLink}
+          className="h-10 w-10"
+          title={copied ? 'Copied!' : 'Copy link'}
+        >
           {copied ? (
-            <Check className="mr-2 h-4 w-4 text-green-600" />
+            <Check className="h-4 w-4 text-green-600" />
           ) : (
-            <Link2 className="mr-2 h-4 w-4" />
+            <Link2 className="h-4 w-4" />
           )}
-          {copied ? 'Copied!' : 'Copy link'}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </Button>
+      </div>
+    </div>
   )
 }

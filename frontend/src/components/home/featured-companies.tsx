@@ -34,7 +34,7 @@ export function FeaturedCompanies() {
   }
 
   return (
-    <section className="py-16 md:py-24 bg-muted/50">
+    <section className="py-10 md:py-14 bg-muted/50">
       <Container>
         <div className="flex items-center justify-between mb-8">
           <div>

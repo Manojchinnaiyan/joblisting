@@ -55,6 +55,16 @@ export function Header() {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
+            {!isAuthenticated && (
+              <div className="hidden sm:flex items-center gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href="/register?role=employer">Hire Talent</Link>
+                </Button>
+                <Button variant="ghost" size="sm" asChild>
+                  <Link href={ROUTES.JOBS}>Find a Job</Link>
+                </Button>
+              </div>
+            )}
             {isAuthenticated && user ? (
               <>
                 <NotificationBell notificationsHref="/notifications" />
