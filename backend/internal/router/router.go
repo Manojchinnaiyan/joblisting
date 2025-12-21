@@ -255,6 +255,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Scraper handler
 	scraperHandler := handler.NewScraperHandler(scraperService, jobService)
 
+	// Import queue service and handler
+	importQueueService := service.NewImportQueueService(scraperService, jobService)
+	importQueueHandler := handler.NewImportQueueHandler(importQueueService)
+
 	// Initialize middleware
 	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
 	companyMiddleware := handlerMiddleware.NewCompanyMiddleware(companyService, teamService)
@@ -578,6 +582,15 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.POST("/scrape/create", scraperHandler.CreateJobFromScrapedData)
 			adminJobs.POST("/scrape/bulk", scraperHandler.BulkScrapeJobs)
 			adminJobs.POST("/scrape/test", scraperHandler.TestScrape)
+			adminJobs.POST("/scrape/extract-links", scraperHandler.ExtractJobLinks)
+
+			// Import queue endpoints
+			adminJobs.POST("/import-queue", importQueueHandler.CreateQueue)
+			adminJobs.GET("/import-queue", importQueueHandler.GetAllQueues)
+			adminJobs.GET("/import-queue/:id", importQueueHandler.GetQueue)
+			adminJobs.POST("/import-queue/:id/cancel", importQueueHandler.CancelQueue)
+			adminJobs.POST("/import-queue/:id/cancel-job", importQueueHandler.CancelJob)
+			adminJobs.DELETE("/import-queue/:id", importQueueHandler.DeleteQueue)
 		}
 
 		// Admin - Application stats

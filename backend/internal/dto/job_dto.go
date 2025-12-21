@@ -212,6 +212,26 @@ type BulkScrapeResult struct {
 	Error      string              `json:"error,omitempty"`
 }
 
+// ExtractLinksRequest represents a request to extract job links from a listing page
+type ExtractLinksRequest struct {
+	URL string `json:"url" binding:"required,url"`
+}
+
+// ExtractedJobLink represents a single extracted job link
+type ExtractedJobLink struct {
+	URL   string `json:"url"`
+	Title string `json:"title,omitempty"`
+}
+
+// ExtractLinksResponse represents the response for extracting job links
+type ExtractLinksResponse struct {
+	Success   bool               `json:"success"`
+	SourceURL string             `json:"source_url"`
+	Links     []ExtractedJobLink `json:"links"`
+	Total     int                `json:"total"`
+	Message   string             `json:"message,omitempty"`
+}
+
 // SearchJobsRequest represents a search jobs request
 type SearchJobsRequest struct {
 	Query          string   `json:"query"`

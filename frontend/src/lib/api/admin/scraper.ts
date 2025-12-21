@@ -9,7 +9,7 @@ const scraperClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 120000, // 2 minutes for scraping operations
+  timeout: 600000, // 10 minutes for scraping operations (bulk can take a while)
 })
 
 // Add auth interceptor
@@ -63,9 +63,65 @@ export interface BulkScrapeResponse {
   failed: number
 }
 
+export interface ExtractedJobLink {
+  url: string
+  title?: string
+}
+
+export interface ExtractLinksResponse {
+  success: boolean
+  source_url: string
+  links: ExtractedJobLink[]
+  total: number
+  message?: string
+  error?: string
+}
+
 export interface CreateFromScrapedData {
   scraped_data: ScrapedJob
   edits?: Partial<ScrapedJob>
+}
+
+// Import Queue Types
+export type ImportJobStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled'
+
+export interface ImportJob {
+  id: string
+  url: string
+  title: string
+  status: ImportJobStatus
+  error?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ImportQueue {
+  id: string
+  status: ImportJobStatus
+  jobs: ImportJob[]
+  total_jobs: number
+  completed: number
+  failed: number
+  cancelled: number
+  created_at: string
+  updated_at: string
+  source_url: string
+}
+
+export interface CreateQueueRequest {
+  source_url: string
+  urls: string[]
+  titles: string[]
+}
+
+export interface QueueResponse {
+  success: boolean
+  queue: ImportQueue
+}
+
+export interface AllQueuesResponse {
+  success: boolean
+  queues: ImportQueue[]
 }
 
 export const scraperApi = {
@@ -98,6 +154,64 @@ export const scraperApi = {
    */
   async testScrape(url: string): Promise<ScrapePreviewResponse & { error?: string }> {
     const response = await scraperClient.post('/admin/jobs/scrape/test', { url })
+    return response.data
+  },
+
+  /**
+   * Extract job links from a listing page URL
+   */
+  async extractLinks(url: string): Promise<ExtractLinksResponse> {
+    const response = await scraperClient.post('/admin/jobs/scrape/extract-links', { url })
+    return response.data
+  },
+
+  // Import Queue APIs
+
+  /**
+   * Create an import queue and start processing in background
+   */
+  async createImportQueue(data: CreateQueueRequest): Promise<QueueResponse> {
+    const response = await scraperClient.post('/admin/jobs/import-queue', data)
+    return response.data
+  },
+
+  /**
+   * Get all import queues
+   */
+  async getAllQueues(): Promise<AllQueuesResponse> {
+    const response = await scraperClient.get('/admin/jobs/import-queue')
+    return response.data
+  },
+
+  /**
+   * Get a specific import queue by ID
+   */
+  async getQueue(queueId: string): Promise<QueueResponse> {
+    const response = await scraperClient.get(`/admin/jobs/import-queue/${queueId}`)
+    return response.data
+  },
+
+  /**
+   * Cancel an import queue
+   */
+  async cancelQueue(queueId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.post(`/admin/jobs/import-queue/${queueId}/cancel`)
+    return response.data
+  },
+
+  /**
+   * Cancel a specific job in a queue
+   */
+  async cancelJob(queueId: string, jobId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.post(`/admin/jobs/import-queue/${queueId}/cancel-job`, { job_id: jobId })
+    return response.data
+  },
+
+  /**
+   * Delete an import queue
+   */
+  async deleteQueue(queueId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.delete(`/admin/jobs/import-queue/${queueId}`)
     return response.data
   },
 }

@@ -179,6 +179,43 @@ func (h *ScraperHandler) BulkScrapeJobs(c *gin.Context) {
 	response.OK(c, "Bulk scraping completed", results)
 }
 
+// ExtractJobLinks handles POST /admin/jobs/scrape/extract-links
+// @Summary Extract job links from a listing page
+// @Description Scrape a job listing page and extract all individual job links
+// @Tags Admin Jobs
+// @Accept json
+// @Produce json
+// @Param request body dto.ExtractLinksRequest true "Extract links request"
+// @Success 200 {object} dto.ExtractLinksResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /admin/jobs/scrape/extract-links [post]
+func (h *ScraperHandler) ExtractJobLinks(c *gin.Context) {
+	var req dto.ExtractLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Invalid request: "+err.Error()))
+		return
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: URL must start with http:// or https://"))
+		return
+	}
+
+	// Extract job links
+	result, err := h.scraperService.ExtractJobLinks(c.Request.Context(), req.URL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
 // TestScrape handles POST /admin/jobs/scrape/test
 // @Summary Test scraping a URL
 // @Description Test scraping a URL without saving

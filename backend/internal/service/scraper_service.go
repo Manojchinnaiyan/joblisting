@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"job-platform/internal/dto"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/chromedp/chromedp"
 	"github.com/gocolly/colly/v2"
+	"golang.org/x/net/html"
 )
 
 // ScraperService handles web scraping for job postings
@@ -280,7 +282,7 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 		// Wait for the page to be fully loaded
 		chromedp.WaitReady("body"),
 		// Additional wait for dynamic content to load
-		chromedp.Sleep(3*time.Second),
+		chromedp.Sleep(2*time.Second),
 		// Get the full HTML
 		chromedp.OuterHTML("html", &html),
 	)
@@ -340,6 +342,384 @@ func (s *ScraperService) mapExperienceLevel(level string) string {
 	}
 }
 
+// ExtractJobLinks extracts job links from a listing page with pagination support
+func (s *ScraperService) ExtractJobLinks(ctx context.Context, listingURL string) (result *dto.ExtractLinksResponse, err error) {
+	// Panic recovery
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("❌ PANIC in ExtractJobLinks: %v", r)
+			err = fmt.Errorf("panic during extraction: %v", r)
+		}
+	}()
+
+	log.Printf("📋 ExtractJobLinks: Starting for URL: %s", listingURL)
+
+	// Parse the base URL to construct absolute URLs
+	parsedURL, err := url.Parse(listingURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid URL: %w", err)
+	}
+	baseURL := fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host)
+
+	// Collect all job links across pages
+	allLinks := make(map[string]dto.ExtractedJobLink) // Use map for deduplication
+	maxPages := 10                                     // Limit to prevent infinite loops
+	currentURL := listingURL
+
+	for page := 1; page <= maxPages; page++ {
+		log.Printf("🌐 Scraping page %d: %s", page, currentURL)
+
+		// Scrape the current page
+		html, scrapeErr := s.scrapeListingPageWithPagination(ctx, currentURL, page)
+		if scrapeErr != nil {
+			if page == 1 {
+				// First page failed, try fallbacks
+				log.Printf("⚠️ scrapeListingPage failed: %v, trying chromedp...", scrapeErr)
+				html, scrapeErr = s.scrapeWithChromedp(ctx, currentURL)
+				if scrapeErr != nil {
+					log.Printf("⚠️ scrapeWithChromedp failed: %v, trying colly...", scrapeErr)
+					html, scrapeErr = s.scrapeWithColly(ctx, currentURL)
+					if scrapeErr != nil {
+						return nil, fmt.Errorf("failed to scrape listing page: %w", scrapeErr)
+					}
+				}
+			} else {
+				// Non-first page failed, just stop pagination
+				log.Printf("⚠️ Page %d scrape failed, stopping: %v", page, scrapeErr)
+				break
+			}
+		}
+
+		log.Printf("✅ Page %d scraped, HTML size: %d bytes", page, len(html))
+
+		// Extract job links from this page
+		links, extractErr := s.aiService.ExtractJobLinksFromHTML(ctx, html, baseURL)
+		if extractErr != nil {
+			log.Printf("⚠️ Failed to extract links from page %d: %v", page, extractErr)
+			if page == 1 {
+				return nil, fmt.Errorf("failed to extract job links: %w", extractErr)
+			}
+			break
+		}
+
+		// Add new links to our collection
+		newLinksCount := 0
+		for _, link := range links {
+			if _, exists := allLinks[link.URL]; !exists {
+				allLinks[link.URL] = link
+				newLinksCount++
+			}
+		}
+		log.Printf("📊 Page %d: found %d links (%d new)", page, len(links), newLinksCount)
+
+		// If we found no new links, we've probably reached the end
+		if newLinksCount == 0 && page > 1 {
+			log.Printf("🛑 No new links found on page %d, stopping pagination", page)
+			break
+		}
+
+		// Try to find next page URL
+		nextURL := s.findNextPageURL(html, currentURL, baseURL, page)
+		if nextURL == "" {
+			log.Printf("🛑 No next page found after page %d", page)
+			break
+		}
+
+		currentURL = nextURL
+		// Small delay between pages to be respectful
+		time.Sleep(1 * time.Second)
+	}
+
+	// Convert map to slice
+	var finalLinks []dto.ExtractedJobLink
+	for _, link := range allLinks {
+		finalLinks = append(finalLinks, link)
+	}
+
+	log.Printf("✅ ExtractJobLinks completed: found %d total unique links", len(finalLinks))
+
+	return &dto.ExtractLinksResponse{
+		Success:   true,
+		SourceURL: listingURL,
+		Links:     finalLinks,
+		Total:     len(finalLinks),
+	}, nil
+}
+
+// findNextPageURL tries to find the URL for the next page of results
+func (s *ScraperService) findNextPageURL(htmlContent string, currentURL string, baseURL string, currentPage int) string {
+	parsedCurrent, _ := url.Parse(currentURL)
+	q := parsedCurrent.Query()
+
+	// Strategy 1: Handle common offset/from patterns first (most reliable)
+	// Many modern sites use ?from=0, ?from=10, ?from=20 pattern
+	if q.Has("from") {
+		currentFrom := 0
+		fmt.Sscanf(q.Get("from"), "%d", &currentFrom)
+		// Assume 10 items per page (common default)
+		q.Set("from", fmt.Sprintf("%d", currentFrom+10))
+		parsedCurrent.RawQuery = q.Encode()
+		log.Printf("📄 Next page URL (from pattern): %s", parsedCurrent.String())
+		return parsedCurrent.String()
+	}
+
+	// Strategy 2: Handle offset parameter
+	if q.Has("offset") {
+		currentOffset := 0
+		fmt.Sscanf(q.Get("offset"), "%d", &currentOffset)
+		q.Set("offset", fmt.Sprintf("%d", currentOffset+10))
+		parsedCurrent.RawQuery = q.Encode()
+		log.Printf("📄 Next page URL (offset pattern): %s", parsedCurrent.String())
+		return parsedCurrent.String()
+	}
+
+	// Strategy 3: Handle page number parameter
+	pageParams := []string{"page", "p", "pg", "pageNumber", "pageNo"}
+	for _, param := range pageParams {
+		if q.Has(param) {
+			currentPage := 1
+			fmt.Sscanf(q.Get(param), "%d", &currentPage)
+			q.Set(param, fmt.Sprintf("%d", currentPage+1))
+			parsedCurrent.RawQuery = q.Encode()
+			log.Printf("📄 Next page URL (page pattern): %s", parsedCurrent.String())
+			return parsedCurrent.String()
+		}
+	}
+
+	// Strategy 4: Handle start parameter (some sites use start=0, start=10, etc.)
+	if q.Has("start") {
+		currentStart := 0
+		fmt.Sscanf(q.Get("start"), "%d", &currentStart)
+		q.Set("start", fmt.Sprintf("%d", currentStart+10))
+		parsedCurrent.RawQuery = q.Encode()
+		log.Printf("📄 Next page URL (start pattern): %s", parsedCurrent.String())
+		return parsedCurrent.String()
+	}
+
+	// Strategy 5: Parse HTML to find actual next page links
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		return ""
+	}
+
+	// Look for pagination links with href containing page/from/offset patterns
+	var findPaginationLink func(*html.Node) string
+	findPaginationLink = func(n *html.Node) string {
+		if n.Type == html.ElementNode && n.Data == "a" {
+			href := ""
+			text := strings.TrimSpace(getHTMLNodeText(n))
+			ariaLabel := ""
+
+			for _, attr := range n.Attr {
+				switch attr.Key {
+				case "href":
+					href = attr.Val
+				case "aria-label":
+					ariaLabel = strings.ToLower(attr.Val)
+				}
+			}
+
+			// Skip empty or javascript hrefs
+			if href == "" || href == "#" || strings.HasPrefix(href, "javascript:") {
+				goto next
+			}
+
+			// Check for "next page" aria-label (common accessibility pattern)
+			if strings.Contains(ariaLabel, "next") && strings.Contains(ariaLabel, "page") {
+				resolved := resolveURLString(href, baseURL)
+				log.Printf("📄 Found next page link (aria-label): %s", resolved)
+				return resolved
+			}
+
+			// Check if link text is exactly the next page number
+			nextPageStr := fmt.Sprintf("%d", currentPage+1)
+			if text == nextPageStr {
+				resolved := resolveURLString(href, baseURL)
+				log.Printf("📄 Found page %d link: %s", currentPage+1, resolved)
+				return resolved
+			}
+		}
+
+	next:
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			if result := findPaginationLink(c); result != "" {
+				return result
+			}
+		}
+		return ""
+	}
+
+	if pageURL := findPaginationLink(doc); pageURL != "" {
+		return pageURL
+	}
+
+	// Strategy 6: If no pagination params exist, try adding common ones for first pagination
+	if currentPage == 1 {
+		// Try adding ?from=10 (common pattern for page 2)
+		q.Set("from", "10")
+		parsedCurrent.RawQuery = q.Encode()
+		log.Printf("📄 Trying first pagination with from=10: %s", parsedCurrent.String())
+		return parsedCurrent.String()
+	}
+
+	log.Printf("📄 No pagination pattern found for page %d", currentPage+1)
+	return ""
+}
+
+// getHTMLNodeText extracts text content from an HTML node
+func getHTMLNodeText(n *html.Node) string {
+	var text strings.Builder
+	var traverse func(*html.Node)
+	traverse = func(node *html.Node) {
+		if node.Type == html.TextNode {
+			text.WriteString(node.Data)
+		}
+		for c := node.FirstChild; c != nil; c = c.NextSibling {
+			traverse(c)
+		}
+	}
+	traverse(n)
+	return text.String()
+}
+
+// resolveURLString resolves a relative URL against a base URL
+func resolveURLString(href string, baseURL string) string {
+	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
+		return href
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+	ref, err := url.Parse(href)
+	if err != nil {
+		return ""
+	}
+	return base.ResolveReference(ref).String()
+}
+
+// scrapeListingPageWithPagination scrapes a listing page with scroll and click behavior
+func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, listingURL string, pageNum int) (string, error) {
+	// Build allocator options
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-software-rasterizer", true),
+		chromedp.Flag("disable-setuid-sandbox", true),
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+	)
+
+	// Check for custom Chrome path (for Docker/Alpine)
+	if chromePath := os.Getenv("CHROME_BIN"); chromePath != "" {
+		opts = append(opts, chromedp.ExecPath(chromePath))
+	}
+
+	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
+	defer allocCancel()
+
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+	defer browserCancel()
+
+	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
+	defer timeoutCancel()
+
+	var htmlContent string
+
+	// Navigate and scroll to load lazy content
+	err := chromedp.Run(timeoutCtx,
+		chromedp.Navigate(listingURL),
+		chromedp.WaitReady("body"),
+		chromedp.Sleep(2*time.Second),
+		// Scroll to load lazy content
+		chromedp.Evaluate(`
+			(async () => {
+				const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+				for (let i = 0; i < 5; i++) {
+					window.scrollTo(0, document.body.scrollHeight * (i + 1) / 5);
+					await delay(500);
+				}
+				window.scrollTo(0, 0);
+			})()
+		`, nil),
+		chromedp.Sleep(2*time.Second),
+		chromedp.OuterHTML("html", &htmlContent),
+	)
+
+	if err != nil {
+		return "", fmt.Errorf("chromedp pagination scrape failed: %w", err)
+	}
+
+	return htmlContent, nil
+}
+
+// scrapeListingPage is optimized for job listing pages - waits longer and scrolls to load more jobs
+func (s *ScraperService) scrapeListingPage(ctx context.Context, listingURL string) (string, error) {
+	// Build allocator options
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-software-rasterizer", true),
+		chromedp.Flag("disable-setuid-sandbox", true),
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+	)
+
+	// Check for custom Chrome path (for Docker/Alpine)
+	if chromePath := os.Getenv("CHROME_BIN"); chromePath != "" {
+		opts = append(opts, chromedp.ExecPath(chromePath))
+	}
+
+	// Create a new context with timeout
+	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
+	defer allocCancel()
+
+	// Create browser context with timeout
+	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
+	defer browserCancel()
+
+	// Set longer timeout for listing pages
+	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, 90*time.Second)
+	defer timeoutCancel()
+
+	var html string
+
+	// Navigate and wait for content to load, then scroll to trigger lazy loading
+	err := chromedp.Run(timeoutCtx,
+		chromedp.Navigate(listingURL),
+		// Wait for the page to be fully loaded
+		chromedp.WaitReady("body"),
+		// Initial wait for JS to execute
+		chromedp.Sleep(3*time.Second),
+		// Scroll down to trigger lazy loading (multiple scrolls)
+		chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight / 4)`, nil),
+		chromedp.Sleep(1*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight / 2)`, nil),
+		chromedp.Sleep(1*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight * 3 / 4)`, nil),
+		chromedp.Sleep(1*time.Second),
+		chromedp.Evaluate(`window.scrollTo(0, document.body.scrollHeight)`, nil),
+		chromedp.Sleep(2*time.Second),
+		// Scroll back to top and wait
+		chromedp.Evaluate(`window.scrollTo(0, 0)`, nil),
+		chromedp.Sleep(1*time.Second),
+		// Get the full HTML
+		chromedp.OuterHTML("html", &html),
+	)
+
+	if err != nil {
+		return "", fmt.Errorf("chromedp listing scrape failed: %w", err)
+	}
+
+	return html, nil
+}
+
 // BulkScrapeJobs scrapes multiple job URLs and returns results
 func (s *ScraperService) BulkScrapeJobs(ctx context.Context, urls []string) *dto.BulkScrapeResponse {
 	results := make([]dto.BulkScrapeResult, len(urls))
@@ -364,9 +744,9 @@ func (s *ScraperService) BulkScrapeJobs(ctx context.Context, urls []string) *dto
 			successCount++
 		}
 
-		// Add delay between requests to be respectful
+		// Add small delay between requests to be respectful
 		if i < len(urls)-1 {
-			time.Sleep(2 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 		}
 	}
 
