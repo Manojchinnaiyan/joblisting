@@ -240,7 +240,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
 function JobCardCompact({ job }: { job: Job }) {
   return (
     <Card className="hover:shadow-md transition-shadow group">
-      <CardContent className="p-4">
+      <CardContent className="p-3 sm:p-4">
         <div className="flex items-start gap-3">
           {/* Company Logo */}
           {job.company_logo_url ? (
@@ -249,26 +249,26 @@ function JobCardCompact({ job }: { job: Job }) {
               alt={job.company_name}
               width={40}
               height={40}
-              className="rounded-lg object-contain shrink-0 w-10 h-10"
+              className="rounded-lg object-contain shrink-0 w-9 h-9 sm:w-10 sm:h-10"
             />
           ) : (
             <DefaultLogo size="sm" />
           )}
 
           {/* Job Info */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 overflow-hidden">
             <Link href={`/jobs/${job.slug}`}>
-              <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-1">
+              <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-2">
                 {job.title}
               </h3>
             </Link>
             <p className="text-xs text-muted-foreground truncate">{job.company_name}</p>
 
             {/* Location & Salary */}
-            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1 min-w-0">
                 <MapPin className="h-3 w-3 shrink-0" />
-                <span className="truncate">{job.location}</span>
+                <span className="truncate max-w-[120px] sm:max-w-none">{job.location}</span>
               </div>
               <SalaryDisplay salary={job.salary} className="text-xs" />
             </div>
