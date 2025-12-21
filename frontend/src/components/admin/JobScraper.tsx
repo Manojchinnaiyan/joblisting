@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { scraperApi, ScrapedJob, ExtractedJobLink, ImportQueue, ImportJob } from '@/lib/api/admin/scraper'
+import { scraperApi, ScrapedJob, ExtractedJobLink, ImportQueue, ImportJob, LinkExtractionTask } from '@/lib/api/admin/scraper'
 import { adminJobsKeys } from '@/hooks/admin/use-admin-jobs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -58,6 +58,9 @@ export function JobScraper() {
   const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set())
   const [extractError, setExtractError] = useState<string | null>(null)
   const [startingImport, setStartingImport] = useState(false)
+
+  // Background extraction task state
+  const [activeExtractionTask, setActiveExtractionTask] = useState<LinkExtractionTask | null>(null)
 
   // Import queue state
   const [activeQueues, setActiveQueues] = useState<ImportQueue[]>([])
@@ -144,7 +147,7 @@ export function JobScraper() {
     }
   }
 
-  // Extract links handlers
+  // Extract links handlers - now uses background extraction
   const handleExtractLinks = async () => {
     if (!listingUrl.trim()) {
       setExtractError('Please enter a listing page URL')
@@ -160,27 +163,69 @@ export function JobScraper() {
     setExtractError(null)
     setExtractedLinks([])
     setSelectedLinks(new Set())
+    setActiveExtractionTask(null)
 
     try {
-      const response = await scraperApi.extractLinks(listingUrl)
-      if (response.success && response.links?.length > 0) {
-        setExtractedLinks(response.links)
-        // Select all by default
-        setSelectedLinks(new Set(response.links.map(l => l.url)))
+      // Start background extraction
+      const response = await scraperApi.startExtraction(listingUrl)
+      if (response.success && response.task) {
+        setActiveExtractionTask(response.task)
         toast({
-          title: 'Links Extracted',
-          description: `Found ${response.links.length} job links`,
+          title: 'Extraction Started',
+          description: 'Extracting job links in background. This may take a minute...',
         })
       } else {
-        setExtractError(response.error || 'No job links found on this page')
+        setExtractError('Failed to start extraction')
+        setExtractingLinks(false)
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to extract links'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start extraction'
       setExtractError(errorMessage)
-    } finally {
       setExtractingLinks(false)
     }
   }
+
+  // Poll for extraction task completion
+  useEffect(() => {
+    if (!activeExtractionTask || activeExtractionTask.status === 'completed' || activeExtractionTask.status === 'failed') {
+      return
+    }
+
+    const pollTask = async () => {
+      try {
+        const response = await scraperApi.getExtractionTask(activeExtractionTask.id)
+        if (response.success && response.task) {
+          setActiveExtractionTask(response.task)
+
+          if (response.task.status === 'completed') {
+            // Extraction finished successfully
+            if (response.task.links && response.task.links.length > 0) {
+              setExtractedLinks(response.task.links)
+              setSelectedLinks(new Set(response.task.links.map(l => l.url)))
+              toast({
+                title: 'Links Extracted',
+                description: `Found ${response.task.links.length} job links`,
+              })
+            } else {
+              setExtractError('No job links found on this page')
+            }
+            setExtractingLinks(false)
+            setActiveExtractionTask(null)
+          } else if (response.task.status === 'failed') {
+            setExtractError(response.task.error || 'Extraction failed')
+            setExtractingLinks(false)
+            setActiveExtractionTask(null)
+          }
+        }
+      } catch (err) {
+        console.error('Failed to poll extraction task:', err)
+      }
+    }
+
+    // Poll every 2 seconds while extraction is in progress
+    const interval = setInterval(pollTask, 2000)
+    return () => clearInterval(interval)
+  }, [activeExtractionTask, toast])
 
   const toggleLinkSelection = (url: string) => {
     const newSelected = new Set(selectedLinks)
@@ -205,6 +250,8 @@ export function JobScraper() {
     setExtractedLinks([])
     setSelectedLinks(new Set())
     setExtractError(null)
+    setActiveExtractionTask(null)
+    setExtractingLinks(false)
   }
 
   // Fetch active queues
@@ -909,6 +956,17 @@ export function JobScraper() {
                   )}
                 </Button>
               </div>
+
+              {/* Extraction in progress indicator */}
+              {extractingLinks && activeExtractionTask && (
+                <Alert className="mt-4">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <AlertTitle>Extracting Links</AlertTitle>
+                  <AlertDescription>
+                    Scanning page and extracting job links. This runs in the background and may take up to a minute for large job boards...
+                  </AlertDescription>
+                </Alert>
+              )}
 
               {extractError && (
                 <Alert variant="destructive" className="mt-4">

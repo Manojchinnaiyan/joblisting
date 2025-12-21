@@ -128,6 +128,18 @@ const (
 	ImportStatusCancelled  ImportJobStatus = "cancelled"
 )
 
+// LinkExtractionTask represents a background link extraction task
+type LinkExtractionTask struct {
+	ID        string                   `json:"id"`
+	SourceURL string                   `json:"source_url"`
+	Status    ImportJobStatus          `json:"status"`
+	Links     []dto.ExtractedJobLink   `json:"links,omitempty"`
+	Total     int                      `json:"total"`
+	Error     string                   `json:"error,omitempty"`
+	CreatedAt time.Time                `json:"created_at"`
+	UpdatedAt time.Time                `json:"updated_at"`
+}
+
 // ImportJob represents a single job to be imported
 type ImportJob struct {
 	ID        string          `json:"id"`
@@ -156,20 +168,22 @@ type ImportQueue struct {
 
 // ImportQueueService manages background job imports
 type ImportQueueService struct {
-	scraperService *ScraperService
-	jobService     *JobService
-	queues         map[string]*ImportQueue
-	mu             sync.RWMutex
-	cancelChans    map[string]chan struct{}
+	scraperService    *ScraperService
+	jobService        *JobService
+	queues            map[string]*ImportQueue
+	extractionTasks   map[string]*LinkExtractionTask
+	mu                sync.RWMutex
+	cancelChans       map[string]chan struct{}
 }
 
 // NewImportQueueService creates a new import queue service
 func NewImportQueueService(scraperService *ScraperService, jobService *JobService) *ImportQueueService {
 	return &ImportQueueService{
-		scraperService: scraperService,
-		jobService:     jobService,
-		queues:         make(map[string]*ImportQueue),
-		cancelChans:    make(map[string]chan struct{}),
+		scraperService:  scraperService,
+		jobService:      jobService,
+		queues:          make(map[string]*ImportQueue),
+		extractionTasks: make(map[string]*LinkExtractionTask),
+		cancelChans:     make(map[string]chan struct{}),
 	}
 }
 
@@ -436,4 +450,102 @@ func (s *ImportQueueService) CleanupOldQueues(maxAge time.Duration) {
 			delete(s.cancelChans, id)
 		}
 	}
+	// Also cleanup old extraction tasks
+	for id, task := range s.extractionTasks {
+		if task.Status != ImportStatusProcessing && task.UpdatedAt.Before(cutoff) {
+			delete(s.extractionTasks, id)
+		}
+	}
+}
+
+// StartLinkExtraction starts a background link extraction task
+func (s *ImportQueueService) StartLinkExtraction(sourceURL string) *LinkExtractionTask {
+	s.mu.Lock()
+	taskID := uuid.New().String()
+	now := time.Now()
+
+	task := &LinkExtractionTask{
+		ID:        taskID,
+		SourceURL: sourceURL,
+		Status:    ImportStatusPending,
+		Links:     []dto.ExtractedJobLink{},
+		Total:     0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	s.extractionTasks[taskID] = task
+	s.mu.Unlock()
+
+	// Start extraction in background
+	go s.processLinkExtraction(task)
+
+	return task
+}
+
+// processLinkExtraction runs the actual link extraction in background
+func (s *ImportQueueService) processLinkExtraction(task *LinkExtractionTask) {
+	s.mu.Lock()
+	task.Status = ImportStatusProcessing
+	task.UpdatedAt = time.Now()
+	s.mu.Unlock()
+
+	log.Printf("🔗 Starting link extraction for: %s", task.SourceURL)
+
+	ctx := context.Background()
+	result, err := s.scraperService.ExtractJobLinks(ctx, task.SourceURL)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err != nil {
+		task.Status = ImportStatusFailed
+		task.Error = err.Error()
+		task.UpdatedAt = time.Now()
+		log.Printf("❌ Link extraction failed for %s: %v", task.SourceURL, err)
+		return
+	}
+
+	task.Status = ImportStatusCompleted
+	task.Links = result.Links
+	task.Total = result.Total
+	task.UpdatedAt = time.Now()
+	log.Printf("✅ Link extraction completed for %s: found %d links", task.SourceURL, result.Total)
+}
+
+// GetExtractionTask returns an extraction task by ID
+func (s *ImportQueueService) GetExtractionTask(taskID string) *LinkExtractionTask {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.extractionTasks[taskID]
+}
+
+// GetAllExtractionTasks returns all extraction tasks
+func (s *ImportQueueService) GetAllExtractionTasks() []*LinkExtractionTask {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	tasks := make([]*LinkExtractionTask, 0, len(s.extractionTasks))
+	for _, t := range s.extractionTasks {
+		tasks = append(tasks, t)
+	}
+	return tasks
+}
+
+// DeleteExtractionTask removes an extraction task
+func (s *ImportQueueService) DeleteExtractionTask(taskID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, exists := s.extractionTasks[taskID]
+	if !exists {
+		return false
+	}
+
+	if task.Status == ImportStatusProcessing {
+		return false
+	}
+
+	delete(s.extractionTasks, taskID)
+	return true
 }

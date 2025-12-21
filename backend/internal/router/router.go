@@ -591,6 +591,12 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.POST("/import-queue/:id/cancel", importQueueHandler.CancelQueue)
 			adminJobs.POST("/import-queue/:id/cancel-job", importQueueHandler.CancelJob)
 			adminJobs.DELETE("/import-queue/:id", importQueueHandler.DeleteQueue)
+
+			// Background link extraction endpoints
+			adminJobs.POST("/extract-links", importQueueHandler.StartExtraction)
+			adminJobs.GET("/extract-links", importQueueHandler.GetAllExtractionTasks)
+			adminJobs.GET("/extract-links/:id", importQueueHandler.GetExtractionTask)
+			adminJobs.DELETE("/extract-links/:id", importQueueHandler.DeleteExtractionTask)
 		}
 
 		// Admin - Application stats

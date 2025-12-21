@@ -124,6 +124,28 @@ export interface AllQueuesResponse {
   queues: ImportQueue[]
 }
 
+// Link Extraction Task Types
+export interface LinkExtractionTask {
+  id: string
+  source_url: string
+  status: ImportJobStatus
+  links: ExtractedJobLink[]
+  total: number
+  error?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ExtractionTaskResponse {
+  success: boolean
+  task: LinkExtractionTask
+}
+
+export interface AllExtractionTasksResponse {
+  success: boolean
+  tasks: LinkExtractionTask[]
+}
+
 export const scraperApi = {
   /**
    * Preview job data from a URL without saving
@@ -212,6 +234,40 @@ export const scraperApi = {
    */
   async deleteQueue(queueId: string): Promise<{ success: boolean; message: string }> {
     const response = await scraperClient.delete(`/admin/jobs/import-queue/${queueId}`)
+    return response.data
+  },
+
+  // Background Link Extraction APIs
+
+  /**
+   * Start a background link extraction task
+   */
+  async startExtraction(url: string): Promise<ExtractionTaskResponse> {
+    const response = await scraperClient.post('/admin/jobs/extract-links', { url })
+    return response.data
+  },
+
+  /**
+   * Get all extraction tasks
+   */
+  async getAllExtractionTasks(): Promise<AllExtractionTasksResponse> {
+    const response = await scraperClient.get('/admin/jobs/extract-links')
+    return response.data
+  },
+
+  /**
+   * Get a specific extraction task by ID
+   */
+  async getExtractionTask(taskId: string): Promise<ExtractionTaskResponse> {
+    const response = await scraperClient.get(`/admin/jobs/extract-links/${taskId}`)
+    return response.data
+  },
+
+  /**
+   * Delete an extraction task
+   */
+  async deleteExtractionTask(taskId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.delete(`/admin/jobs/extract-links/${taskId}`)
     return response.data
   },
 }

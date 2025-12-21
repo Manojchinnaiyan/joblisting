@@ -167,3 +167,79 @@ func (h *ImportQueueHandler) DeleteQueue(c *gin.Context) {
 		})
 	}
 }
+
+// StartExtractionRequest represents the request to start link extraction
+type StartExtractionRequest struct {
+	URL string `json:"url" binding:"required"`
+}
+
+// StartExtraction starts a background link extraction task
+func (h *ImportQueueHandler) StartExtraction(c *gin.Context) {
+	var req StartExtractionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	if req.URL == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "URL is required"})
+		return
+	}
+
+	// Start extraction in background
+	task := h.importQueueService.StartLinkExtraction(req.URL)
+
+	c.JSON(http.StatusCreated, gin.H{
+		"success": true,
+		"task":    task,
+	})
+}
+
+// GetExtractionTask returns a specific extraction task by ID
+func (h *ImportQueueHandler) GetExtractionTask(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID required"})
+		return
+	}
+
+	task := h.importQueueService.GetExtractionTask(taskID)
+	if task == nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Task not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"task":    task,
+	})
+}
+
+// GetAllExtractionTasks returns all extraction tasks
+func (h *ImportQueueHandler) GetAllExtractionTasks(c *gin.Context) {
+	tasks := h.importQueueService.GetAllExtractionTasks()
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"tasks":   tasks,
+	})
+}
+
+// DeleteExtractionTask removes an extraction task
+func (h *ImportQueueHandler) DeleteExtractionTask(c *gin.Context) {
+	taskID := c.Param("id")
+	if taskID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Task ID required"})
+		return
+	}
+
+	if h.importQueueService.DeleteExtractionTask(taskID) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Task deleted",
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot delete task (not found or still processing)",
+		})
+	}
+}
