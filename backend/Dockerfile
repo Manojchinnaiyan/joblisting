@@ -39,8 +39,13 @@ LABEL org.opencontainers.image.vendor="Job Platform"
 # - ca-certificates: for HTTPS connections
 # - tzdata: for timezone support
 # - curl: for health checks (smaller than wget)
-RUN apk --no-cache add ca-certificates tzdata curl && \
+# - chromium: for headless browser scraping (JS-rendered pages)
+RUN apk --no-cache add ca-certificates tzdata curl chromium && \
     rm -rf /var/cache/apk/*
+
+# Set Chrome path for chromedp
+ENV CHROME_BIN=/usr/bin/chromium-browser \
+    CHROME_PATH=/usr/lib/chromium/
 
 # Create non-root user for security
 RUN addgroup -g 1001 -S appgroup && \

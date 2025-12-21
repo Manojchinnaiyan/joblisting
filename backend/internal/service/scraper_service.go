@@ -6,6 +6,7 @@ import (
 	"job-platform/internal/dto"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -241,18 +242,26 @@ func (s *ScraperService) scrapeWithColly(ctx context.Context, jobURL string) (st
 
 // scrapeWithChromedp fetches HTML using headless Chrome (handles JavaScript)
 func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) (string, error) {
-	// Create a new context with timeout
-	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx,
-		append(chromedp.DefaultExecAllocatorOptions[:],
-			chromedp.Flag("headless", true),
-			chromedp.Flag("disable-gpu", true),
-			chromedp.Flag("no-sandbox", true),
-			chromedp.Flag("disable-dev-shm-usage", true),
-			chromedp.Flag("disable-extensions", true),
-			chromedp.Flag("disable-background-networking", true),
-			chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
-		)...,
+	// Build allocator options
+	opts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("disable-extensions", true),
+		chromedp.Flag("disable-background-networking", true),
+		chromedp.Flag("disable-software-rasterizer", true),
+		chromedp.Flag("disable-setuid-sandbox", true),
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
 	)
+
+	// Check for custom Chrome path (for Docker/Alpine)
+	if chromePath := os.Getenv("CHROME_BIN"); chromePath != "" {
+		opts = append(opts, chromedp.ExecPath(chromePath))
+	}
+
+	// Create a new context with timeout
+	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
 	defer allocCancel()
 
 	// Create browser context with timeout
