@@ -9,9 +9,10 @@ import type { Job } from '@/types/job'
 
 interface JobDetailProps {
   job: Job
+  mobileActions?: React.ReactNode
 }
 
-export function JobDetail({ job }: JobDetailProps) {
+export function JobDetail({ job, mobileActions }: JobDetailProps) {
   return (
     <div className="space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}
@@ -35,6 +36,13 @@ export function JobDetail({ job }: JobDetailProps) {
         </div>
       </div>
 
+      {/* Mobile Actions - Apply button right after title */}
+      {mobileActions && (
+        <div className="lg:hidden">
+          {mobileActions}
+        </div>
+      )}
+
       {/* Tags */}
       <div className="flex flex-wrap gap-1.5 sm:gap-2">
         <Badge variant="secondary" className="text-xs sm:text-sm">{job.job_type.replace('_', ' ')}</Badge>
@@ -49,9 +57,9 @@ export function JobDetail({ job }: JobDetailProps) {
           <CardContent className="p-2.5 sm:p-4">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <MapPin className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Location</p>
-                <p className="font-medium text-[11px] sm:text-sm truncate">{job.location}</p>
+                <p className="font-medium text-[11px] sm:text-sm break-words">{job.location}</p>
               </div>
             </div>
           </CardContent>
@@ -61,9 +69,9 @@ export function JobDetail({ job }: JobDetailProps) {
           <CardContent className="p-2.5 sm:p-4">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <Briefcase className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Job Type</p>
-                <p className="font-medium text-[11px] sm:text-sm truncate">{job.job_type.replace('_', ' ')}</p>
+                <p className="font-medium text-[11px] sm:text-sm break-words">{job.job_type.replace('_', ' ')}</p>
               </div>
             </div>
           </CardContent>
@@ -73,9 +81,9 @@ export function JobDetail({ job }: JobDetailProps) {
           <CardContent className="p-2.5 sm:p-4">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <Users className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Experience</p>
-                <p className="font-medium text-[11px] sm:text-sm truncate">{job.experience_level}</p>
+                <p className="font-medium text-[11px] sm:text-sm break-words">{job.experience_level}</p>
               </div>
             </div>
           </CardContent>
@@ -85,9 +93,9 @@ export function JobDetail({ job }: JobDetailProps) {
           <CardContent className="p-2.5 sm:p-4">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <Clock className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-muted-foreground shrink-0" />
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <p className="text-[10px] sm:text-xs text-muted-foreground leading-tight">Posted</p>
-                <p className="font-medium text-[11px] sm:text-sm truncate">{formatRelativeTime(job.created_at)}</p>
+                <p className="font-medium text-[11px] sm:text-sm break-words">{formatRelativeTime(job.created_at)}</p>
               </div>
             </div>
           </CardContent>
@@ -104,29 +112,30 @@ export function JobDetail({ job }: JobDetailProps) {
 
       <Separator />
 
-      <div className="overflow-hidden">
-        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Job Description</h2>
-        <div
-          className="prose prose-sm sm:prose max-w-none dark:prose-invert prose-headings:font-semibold prose-p:text-muted-foreground prose-li:text-muted-foreground prose-strong:text-foreground overflow-hidden break-words"
-          dangerouslySetInnerHTML={{ __html: job.description }}
-        />
-      </div>
-
+      {/* Required Skills - Show before description for better visibility */}
       {job.skills && job.skills.length > 0 && (
         <>
-          <Separator />
           <div>
             <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Required Skills</h2>
             <div className="flex flex-wrap gap-1.5 sm:gap-2">
               {job.skills.map((skill) => (
-                <Badge key={skill} variant="outline" className="text-xs sm:text-sm">
+                <Badge key={skill} variant="outline" className="text-xs sm:text-sm whitespace-normal break-words">
                   {skill}
                 </Badge>
               ))}
             </div>
           </div>
+          <Separator />
         </>
       )}
+
+      <div className="overflow-hidden">
+        <h2 className="text-lg sm:text-xl font-semibold mb-3 sm:mb-4">Job Description</h2>
+        <div
+          className="prose prose-sm sm:prose max-w-none dark:prose-invert prose-headings:font-semibold prose-p:text-muted-foreground prose-li:text-muted-foreground prose-strong:text-foreground overflow-hidden break-words [&_*]:break-words [&_*]:overflow-wrap-anywhere"
+          dangerouslySetInnerHTML={{ __html: job.description }}
+        />
+      </div>
 
       {job.benefits && job.benefits.length > 0 && (
         <>

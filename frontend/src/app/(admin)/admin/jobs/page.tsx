@@ -20,6 +20,7 @@ import {
   DollarSign,
   Plus,
   Link2,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -60,9 +61,11 @@ export default function JobsPage() {
   const [limit, setLimit] = useState(20)
   const [search, setSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState<Job | null>(null)
+  const [selectedJobs, setSelectedJobs] = useState<Job[]>([])
   const [actionDialog, setActionDialog] = useState<
-    'approve' | 'reject' | 'feature' | 'unfeature' | 'delete' | null
+    'approve' | 'reject' | 'feature' | 'unfeature' | 'delete' | 'bulk-feature' | 'bulk-unfeature' | 'bulk-delete' | null
   >(null)
+  const [featuringJobId, setFeaturingJobId] = useState<string | null>(null)
 
   const { data, isLoading, refetch, isFetching } = useAdminJobs({ search: search || undefined }, { page, limit })
   const approveJob = useApproveJob()
@@ -72,29 +75,60 @@ export default function JobsPage() {
   const deleteJob = useDeleteJob()
 
   const handleAction = async () => {
-    if (!selectedJob) return
-
     try {
       switch (actionDialog) {
         case 'approve':
-          await approveJob.mutateAsync(selectedJob.id)
+          if (selectedJob) await approveJob.mutateAsync(selectedJob.id)
           break
         case 'reject':
-          await rejectJob.mutateAsync({ id: selectedJob.id, reason: 'Rejected by admin' })
+          if (selectedJob) await rejectJob.mutateAsync({ id: selectedJob.id, reason: 'Rejected by admin' })
           break
         case 'feature':
-          await featureJob.mutateAsync({ id: selectedJob.id })
+          if (selectedJob) await featureJob.mutateAsync({ id: selectedJob.id })
           break
         case 'unfeature':
-          await unfeatureJob.mutateAsync(selectedJob.id)
+          if (selectedJob) await unfeatureJob.mutateAsync(selectedJob.id)
           break
         case 'delete':
-          await deleteJob.mutateAsync(selectedJob.id)
+          if (selectedJob) await deleteJob.mutateAsync(selectedJob.id)
+          break
+        case 'bulk-feature':
+          for (const job of selectedJobs) {
+            if (!job.is_featured) {
+              await featureJob.mutateAsync({ id: job.id })
+            }
+          }
+          break
+        case 'bulk-unfeature':
+          for (const job of selectedJobs) {
+            if (job.is_featured) {
+              await unfeatureJob.mutateAsync(job.id)
+            }
+          }
+          break
+        case 'bulk-delete':
+          for (const job of selectedJobs) {
+            await deleteJob.mutateAsync(job.id)
+          }
           break
       }
     } finally {
       setActionDialog(null)
       setSelectedJob(null)
+      setSelectedJobs([])
+    }
+  }
+
+  const handleQuickFeatureToggle = async (job: Job) => {
+    setFeaturingJobId(job.id)
+    try {
+      if (job.is_featured) {
+        await unfeatureJob.mutateAsync(job.id)
+      } else {
+        await featureJob.mutateAsync({ id: job.id })
+      }
+    } finally {
+      setFeaturingJobId(null)
     }
   }
 
@@ -214,6 +248,32 @@ export default function JobsPage() {
         } catch {
           return '-'
         }
+      },
+    },
+    {
+      id: 'featured',
+      header: 'Featured',
+      cell: ({ row }) => {
+        const job = row.original
+        const isLoading = featuringJobId === job.id
+        return (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            onClick={() => handleQuickFeatureToggle(job)}
+            disabled={isLoading}
+            title={job.is_featured ? 'Remove featured' : 'Mark as featured'}
+          >
+            {isLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : job.is_featured ? (
+              <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
+            ) : (
+              <StarOff className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
+        )
       },
     },
     {
@@ -365,6 +425,37 @@ export default function JobsPage() {
         onExport={() => console.log('Export jobs')}
         onRefresh={() => refetch()}
         isRefreshing={isFetching && !isLoading}
+        onSelectionChange={setSelectedJobs}
+        bulkActions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActionDialog('bulk-feature')}
+              className="text-yellow-600 hover:text-yellow-700"
+            >
+              <Star className="mr-2 h-4 w-4" />
+              Feature
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActionDialog('bulk-unfeature')}
+            >
+              <StarOff className="mr-2 h-4 w-4" />
+              Unfeature
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setActionDialog('bulk-delete')}
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete
+            </Button>
+          </>
+        }
       />
 
       {/* Approve Dialog */}
@@ -466,6 +557,68 @@ export default function JobsPage() {
               className="bg-destructive hover:bg-destructive/90"
             >
               Delete Job
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Feature Dialog */}
+      <AlertDialog open={actionDialog === 'bulk-feature'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Feature Selected Jobs</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to feature {selectedJobs.length} selected job(s)?
+              Featured jobs appear prominently in search results.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAction}
+              className="bg-yellow-600 hover:bg-yellow-700"
+            >
+              Feature {selectedJobs.length} Jobs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Unfeature Dialog */}
+      <AlertDialog open={actionDialog === 'bulk-unfeature'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove Featured Status</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove the featured status from {selectedJobs.length} selected job(s)?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAction}>
+              Remove Featured from {selectedJobs.length} Jobs
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk Delete Dialog */}
+      <AlertDialog open={actionDialog === 'bulk-delete'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Selected Jobs</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete {selectedJobs.length} selected job(s)?
+              This action cannot be undone. All applications for these jobs will also be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAction}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              Delete {selectedJobs.length} Jobs
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

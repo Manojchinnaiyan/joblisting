@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Container } from '@/components/layout/container'
+import { NewsletterSubscription } from '@/components/shared/newsletter-subscription'
 import { ROUTES } from '@/lib/constants'
 
 export function CTASection() {
@@ -26,6 +27,17 @@ export function CTASection() {
             <Button size="lg" variant="outline" asChild>
               <Link href={ROUTES.JOBS}>Browse Jobs</Link>
             </Button>
+          </div>
+
+          {/* Newsletter Subscription */}
+          <div className="mt-12 pt-8 border-t">
+            <h3 className="text-xl font-semibold mb-2">Stay in the Loop</h3>
+            <p className="text-muted-foreground mb-4">
+              Get the latest job opportunities delivered straight to your inbox.
+            </p>
+            <div className="max-w-md mx-auto">
+              <NewsletterSubscription variant="inline" />
+            </div>
           </div>
         </div>
       </Container>

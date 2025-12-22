@@ -148,6 +148,58 @@ func (h *ImportQueueHandler) CancelJob(c *gin.Context) {
 	}
 }
 
+// RetryJobRequest represents the request to retry a specific job
+type RetryJobRequest struct {
+	JobID string `json:"job_id" binding:"required"`
+}
+
+// RetryJob retries a specific failed job
+func (h *ImportQueueHandler) RetryJob(c *gin.Context) {
+	queueID := c.Param("id")
+	if queueID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Queue ID required"})
+		return
+	}
+
+	var req RetryJobRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
+		return
+	}
+
+	if h.importQueueService.RetryJob(queueID, req.JobID) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Job queued for retry",
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot retry job (not found or not failed)",
+		})
+	}
+}
+
+// RetryFailedJobs retries all failed jobs in a queue
+func (h *ImportQueueHandler) RetryFailedJobs(c *gin.Context) {
+	queueID := c.Param("id")
+	if queueID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Queue ID required"})
+		return
+	}
+
+	ctx := context.Background()
+	if h.importQueueService.RetryFailedJobs(ctx, queueID) {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"message": "Failed jobs queued for retry",
+		})
+	} else {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "Cannot retry jobs (queue not found, still processing, or no failed jobs)",
+		})
+	}
+}
+
 // DeleteQueue removes a completed/cancelled queue
 func (h *ImportQueueHandler) DeleteQueue(c *gin.Context) {
 	queueID := c.Param("id")

@@ -230,6 +230,22 @@ export const scraperApi = {
   },
 
   /**
+   * Retry a specific failed job in a queue
+   */
+  async retryJob(queueId: string, jobId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.post(`/admin/jobs/import-queue/${queueId}/retry-job`, { job_id: jobId })
+    return response.data
+  },
+
+  /**
+   * Retry all failed jobs in a queue
+   */
+  async retryFailedJobs(queueId: string): Promise<{ success: boolean; message: string }> {
+    const response = await scraperClient.post(`/admin/jobs/import-queue/${queueId}/retry-failed`)
+    return response.data
+  },
+
+  /**
    * Delete an import queue
    */
   async deleteQueue(queueId: string): Promise<{ success: boolean; message: string }> {

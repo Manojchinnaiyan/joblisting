@@ -154,6 +154,15 @@ export function DataTable<TData, TValue>({
 
   const selectedRows = table.getFilteredSelectedRowModel().rows.map((row) => row.original)
 
+  // Call onSelectionChange when selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      const rows = table.getFilteredSelectedRowModel().rows.map((row) => row.original)
+      onSelectionChange(rows)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rowSelection])
+
   return (
     <div className="space-y-4">
       {/* Toolbar */}

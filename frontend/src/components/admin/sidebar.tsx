@@ -68,6 +68,7 @@ const navItems: NavItem[] = [
       { title: 'All Jobs', href: '/admin/jobs' },
       { title: 'Pending Approval', href: '/admin/jobs/pending' },
       { title: 'Featured', href: '/admin/jobs/featured' },
+      { title: 'Import from URL', href: '/admin/jobs/scrape' },
     ],
   },
   {

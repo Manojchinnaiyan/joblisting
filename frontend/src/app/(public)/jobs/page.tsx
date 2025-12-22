@@ -37,11 +37,45 @@ export default function JobsPage() {
   const [categoryName, setCategoryName] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
-  const [filters, setFilters] = useState<JobFiltersType>({
-    location: searchParams.get('location') || undefined,
-    category: searchParams.get('category') || undefined,
-  })
+  // Parse URL params for filters
+  const getInitialFilters = useCallback((): JobFiltersType => {
+    const initialFilters: JobFiltersType = {
+      location: searchParams.get('location') || undefined,
+      category: searchParams.get('category') || undefined,
+    }
+
+    // Parse experience_level from URL (can be single value or comma-separated)
+    const experienceLevel = searchParams.get('experience_level')
+    if (experienceLevel) {
+      initialFilters.experience_level = experienceLevel.split(',') as any[]
+    }
+
+    // Parse job_type from URL (can be single value or comma-separated)
+    const jobType = searchParams.get('job_type')
+    if (jobType) {
+      initialFilters.job_type = jobType.split(',') as any[]
+    }
+
+    // Parse workplace_type from URL
+    const workplaceType = searchParams.get('workplace_type')
+    if (workplaceType) {
+      initialFilters.workplace_type = workplaceType.split(',') as any[]
+    }
+
+    return initialFilters
+  }, [searchParams])
+
+  const [filters, setFilters] = useState<JobFiltersType>(getInitialFilters)
   const [mobileFilters, setMobileFilters] = useState<JobFiltersType>(filters)
+
+  // Update filters when URL params change (e.g., clicking Fresher Jobs or Internships)
+  useEffect(() => {
+    const newFilters = getInitialFilters()
+    setFilters(newFilters)
+    setMobileFilters(newFilters)
+    setSearchQuery(searchParams.get('q') || '')
+    setCurrentPage(1)
+  }, [searchParams, getInitialFilters])
 
   // Count active filters
   const activeFilterCount =
@@ -144,7 +178,13 @@ export default function JobsPage() {
         )}
 
         <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">
-          {categoryName ? `${categoryName} Jobs` : 'Find Your Next Job'}
+          {categoryName
+            ? `${categoryName} Jobs`
+            : filters.experience_level?.includes('ENTRY' as any)
+              ? 'Fresher Jobs'
+              : filters.job_type?.includes('INTERNSHIP' as any)
+                ? 'Internship Jobs'
+                : 'Find Your Next Job'}
         </h1>
         <JobSearch defaultValue={searchQuery} onSearch={handleSearch} />
       </div>

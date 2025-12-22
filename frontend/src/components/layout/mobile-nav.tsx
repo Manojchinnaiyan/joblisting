@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, Briefcase, Building2, Info, Home, BookOpen, Users, Search } from 'lucide-react'
+import { Menu, Briefcase, Building2, Info, Home, BookOpen, Users, Search, GraduationCap, UserCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
@@ -15,6 +15,8 @@ import { useAuthStore } from '@/store/auth-store'
 const navItems = [
   { href: ROUTES.HOME, label: 'Home', icon: Home },
   { href: ROUTES.JOBS, label: 'Jobs', icon: Briefcase },
+  { href: ROUTES.FRESHER_JOBS, label: 'Fresher Jobs', icon: GraduationCap },
+  { href: ROUTES.INTERNSHIPS, label: 'Internships', icon: UserCheck },
   { href: ROUTES.COMPANIES, label: 'Companies', icon: Building2 },
   { href: '/blogs', label: 'Blog', icon: BookOpen },
   { href: ROUTES.ABOUT, label: 'About', icon: Info },
@@ -42,13 +44,13 @@ export function MobileNav() {
             <Menu className="h-5 w-5" />
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0" aria-describedby={undefined}>
+        <SheetContent side="right" className="w-64 p-0" aria-describedby={undefined}>
           <VisuallyHidden>
             <SheetTitle>Navigation Menu</SheetTitle>
           </VisuallyHidden>
           <div className="flex h-full flex-col">
             <div className="flex h-16 items-center border-b px-6">
-              <Link href={ROUTES.HOME} className="text-xl font-bold">
+              <Link href={ROUTES.HOME} onClick={() => setOpen(false)} className="text-xl font-bold">
                 {APP_NAME}
               </Link>
             </div>
@@ -62,6 +64,7 @@ export function MobileNav() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={() => setOpen(false)}
                     className={cn(
                       'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                       isActive
@@ -80,6 +83,7 @@ export function MobileNav() {
                   <Separator className="my-4" />
                   <Link
                     href="/register?role=employer"
+                    onClick={() => setOpen(false)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <Users className="h-5 w-5" />
@@ -87,6 +91,7 @@ export function MobileNav() {
                   </Link>
                   <Link
                     href={ROUTES.JOBS}
+                    onClick={() => setOpen(false)}
                     className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors text-muted-foreground hover:bg-muted hover:text-foreground"
                   >
                     <Search className="h-5 w-5" />

@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, Link2, AlertTriangle, Check, ExternalLink, X, Edit2, Save, Building2, List, LinkIcon, Clock, CheckCircle2, XCircle, Pause, Play, Trash2, RefreshCw } from 'lucide-react'
+import { Loader2, Link2, AlertTriangle, Check, ExternalLink, X, Edit2, Save, Building2, List, LinkIcon, Clock, CheckCircle2, XCircle, Pause, Play, Trash2, RefreshCw, RotateCcw } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 const JOB_TYPES = [
@@ -279,10 +279,31 @@ export function JobScraper() {
   // Check if there are active (processing/pending) queues
   const hasActiveQueues = activeQueues.some(q => q.status === 'processing' || q.status === 'pending')
 
+  // Fetch active extraction tasks on mount to restore state
+  const fetchActiveExtractionTask = useCallback(async () => {
+    try {
+      const response = await scraperApi.getAllExtractionTasks()
+      if (response.success && response.tasks && response.tasks.length > 0) {
+        // Find any processing or pending extraction task
+        const activeTask = response.tasks.find(
+          t => t.status === 'processing' || t.status === 'pending'
+        )
+        if (activeTask) {
+          setActiveExtractionTask(activeTask)
+          setExtractingLinks(true)
+          setListingUrl(activeTask.source_url)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch extraction tasks:', err)
+    }
+  }, [])
+
   // Initial fetch on mount only
   useEffect(() => {
     fetchQueues()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchActiveExtractionTask()
+    // eslint-disable-next-line react-hooks-deps
   }, [])
 
   // Poll only when there are active queues
@@ -413,6 +434,44 @@ export function JobScraper() {
       await fetchQueues()
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to delete queue'
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Retry a specific failed job
+  const handleRetryJob = async (queueId: string, jobId: string) => {
+    try {
+      await scraperApi.retryJob(queueId, jobId)
+      toast({
+        title: 'Job Queued',
+        description: 'The job has been queued for retry.',
+      })
+      await fetchQueues()
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to retry job'
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // Retry all failed jobs in a queue
+  const handleRetryFailedJobs = async (queueId: string) => {
+    try {
+      await scraperApi.retryFailedJobs(queueId)
+      toast({
+        title: 'Retry Started',
+        description: 'All failed jobs have been queued for retry.',
+      })
+      await fetchQueues()
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to retry jobs'
       toast({
         title: 'Error',
         description: errorMessage,
@@ -848,6 +907,17 @@ export function JobScraper() {
                             Cancel
                           </Button>
                         )}
+                        {queue.failed > 0 && queue.status !== 'processing' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRetryFailedJobs(queue.id)}
+                            className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                          >
+                            <RotateCcw className="h-4 w-4 mr-1" />
+                            Retry Failed ({queue.failed})
+                          </Button>
+                        )}
                         {(queue.status === 'completed' || queue.status === 'failed' || queue.status === 'cancelled') && (
                           <Button
                             variant="ghost"
@@ -903,6 +973,17 @@ export function JobScraper() {
                                     onClick={() => handleCancelJob(queue.id, job.id)}
                                   >
                                     <X className="h-3 w-3" />
+                                  </Button>
+                                )}
+                                {job.status === 'failed' && queue.status !== 'processing' && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => handleRetryJob(queue.id, job.id)}
+                                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                                    title="Retry this job"
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
                                   </Button>
                                 )}
                                 {job.error && (

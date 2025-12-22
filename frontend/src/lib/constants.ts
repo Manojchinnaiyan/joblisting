@@ -49,6 +49,8 @@ export const BENEFIT_CATEGORIES = [
 export const ROUTES = {
   HOME: '/',
   JOBS: '/jobs',
+  FRESHER_JOBS: '/jobs?experience_level=ENTRY',
+  INTERNSHIPS: '/jobs?job_type=INTERNSHIP',
   COMPANIES: '/companies',
   ABOUT: '/about',
   LOGIN: '/login',
