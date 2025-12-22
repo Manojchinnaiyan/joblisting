@@ -419,16 +419,24 @@ func (s *ImportQueueService) CancelJob(queueID, jobID string) bool {
 	return false
 }
 
-// RetryJob retries a failed job by resetting its status to pending
-func (s *ImportQueueService) RetryJob(queueID, jobID string) bool {
+// RetryJob retries a failed job by resetting its status to pending and restarting the queue
+func (s *ImportQueueService) RetryJob(ctx context.Context, queueID, jobID string) bool {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 
 	queue, exists := s.queues[queueID]
 	if !exists {
+		s.mu.Unlock()
 		return false
 	}
 
+	// Check if queue is already processing
+	if queue.Status == ImportStatusProcessing {
+		s.mu.Unlock()
+		return false
+	}
+
+	// Find and reset the failed job
+	var foundJob *ImportJob
 	for _, job := range queue.Jobs {
 		if job.ID == jobID && job.Status == ImportStatusFailed {
 			job.Status = ImportStatusPending
@@ -436,11 +444,27 @@ func (s *ImportQueueService) RetryJob(queueID, jobID string) bool {
 			job.UpdatedAt = time.Now()
 			queue.Failed--
 			queue.UpdatedAt = time.Now()
-			return true
+			foundJob = job
+			break
 		}
 	}
 
-	return false
+	if foundJob == nil {
+		s.mu.Unlock()
+		return false
+	}
+
+	// Reset queue status and create new cancel channel to restart processing
+	queue.Status = ImportStatusPending
+	queue.UpdatedAt = time.Now()
+	s.cancelChans[queueID] = make(chan struct{})
+	cancelChan := s.cancelChans[queueID]
+	s.mu.Unlock()
+
+	// Restart processing in background
+	go s.processQueue(ctx, queue, cancelChan)
+
+	return true
 }
 
 // RetryFailedJobs retries all failed jobs in a queue and restarts processing

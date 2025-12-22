@@ -167,14 +167,15 @@ func (h *ImportQueueHandler) RetryJob(c *gin.Context) {
 		return
 	}
 
-	if h.importQueueService.RetryJob(queueID, req.JobID) {
+	ctx := context.Background()
+	if h.importQueueService.RetryJob(ctx, queueID, req.JobID) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"message": "Job queued for retry",
 		})
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{
-			"error": "Cannot retry job (not found or not failed)",
+			"error": "Cannot retry job (not found, not failed, or queue still processing)",
 		})
 	}
 }
