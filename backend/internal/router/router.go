@@ -352,12 +352,14 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 		adminUsers.Use(authMiddleware, adminMiddleware)
 		{
 			adminUsers.GET("", adminUserHandler.ListUsers)
+			// Static routes must come BEFORE dynamic :id routes
+			adminUsers.POST("/create-admin", adminUserHandler.CreateAdmin)
+			// Dynamic :id routes
 			adminUsers.GET("/:id", adminUserHandler.GetUser)
 			adminUsers.PUT("/:id", adminUserHandler.UpdateUser)
 			adminUsers.DELETE("/:id", adminUserHandler.DeleteUser)
 			adminUsers.POST("/:id/suspend", adminUserHandler.SuspendUser)
 			adminUsers.POST("/:id/activate", adminUserHandler.ActivateUser)
-			adminUsers.POST("/create-admin", adminUserHandler.CreateAdmin)
 			adminUsers.GET("/:id/login-history", adminUserHandler.GetLoginHistory)
 			adminUsers.POST("/:id/revoke-sessions", adminUserHandler.RevokeSessions)
 		}
