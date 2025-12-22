@@ -11,7 +11,7 @@ import {
   Briefcase,
   Star,
   Edit,
-  Image,
+  Image as ImageIcon,
   Gift,
   BadgeCheck,
   ExternalLink,
@@ -60,6 +60,7 @@ export default function CompanyProfilePage() {
       {/* Header with Cover and Logo */}
       <div className="relative">
         {company.cover_image_url ? (
+          /* eslint-disable-next-line @next/next/no-img-element */
           <img
             src={company.cover_image_url}
             alt="Company cover"
@@ -71,7 +72,7 @@ export default function CompanyProfilePage() {
         <div className="absolute right-4 top-4 flex gap-2">
           <Button variant="secondary" size="sm" asChild>
             <Link href="/company/branding">
-              <Image className="mr-2 h-4 w-4" />
+              <ImageIcon className="mr-2 h-4 w-4" />
               Edit Branding
             </Link>
           </Button>
@@ -295,7 +296,7 @@ export default function CompanyProfilePage() {
             </Button>
             <Button variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
               <Link href="/company/branding">
-                <Image className="h-6 w-6" />
+                <ImageIcon className="h-6 w-6" />
                 <span>Branding</span>
               </Link>
             </Button>
@@ -313,7 +314,7 @@ export default function CompanyProfilePage() {
             </Button>
             <Button variant="outline" className="h-auto flex-col gap-2 py-4" asChild>
               <Link href="/company/media">
-                <Image className="h-6 w-6" />
+                <ImageIcon className="h-6 w-6" />
                 <span>Media Gallery</span>
               </Link>
             </Button>

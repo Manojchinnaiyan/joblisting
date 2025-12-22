@@ -77,6 +77,7 @@ export default function ApplicationDetailPage({
       <div className="flex items-start justify-between">
         <div className="flex gap-4">
           {application.job?.company_logo_url && (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={application.job.company_logo_url}
               alt={application.job.company_name}

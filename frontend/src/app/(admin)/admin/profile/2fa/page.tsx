@@ -156,6 +156,7 @@ export default function TwoFactorPage() {
                   Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                 </p>
                 <div className="flex justify-center">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={setupData.qr_code}
                     alt="2FA QR Code"

@@ -457,6 +457,7 @@ export default function CompanySetupPage() {
           <CardContent className="space-y-6">
             <div className="flex flex-col items-center gap-4">
               {logoPreview ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={logoPreview}
                   alt="Logo preview"

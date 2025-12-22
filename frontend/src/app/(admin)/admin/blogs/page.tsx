@@ -491,6 +491,7 @@ export default function AdminBlogsPage() {
               {/* Featured Image */}
               {previewBlog.featured_image && (
                 <div className="mb-6 rounded-lg overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewBlog.featured_image}
                     alt={previewBlog.title}

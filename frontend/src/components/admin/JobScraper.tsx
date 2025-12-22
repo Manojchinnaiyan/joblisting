@@ -303,7 +303,7 @@ export function JobScraper() {
   useEffect(() => {
     fetchQueues()
     fetchActiveExtractionTask()
-    // eslint-disable-next-line react-hooks-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Poll only when there are active queues
@@ -631,6 +631,7 @@ export function JobScraper() {
                 ) : (
                   <div className="flex items-center gap-3">
                     {editedData.company_logo && (
+                      /* eslint-disable-next-line @next/next/no-img-element */
                       <img
                         src={editedData.company_logo}
                         alt={`${editedData.company} logo`}
@@ -657,6 +658,7 @@ export function JobScraper() {
                   <div className="flex items-center gap-2">
                     {editedData.company_logo ? (
                       <>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={editedData.company_logo}
                           alt="Company logo"

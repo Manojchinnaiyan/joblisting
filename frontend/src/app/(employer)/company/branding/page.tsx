@@ -94,6 +94,7 @@ export default function CompanyBrandingPage() {
         <CardContent>
           <div className="relative rounded-lg border overflow-hidden">
             {company?.cover_image_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={company.cover_image_url}
                 alt="Cover preview"
@@ -111,6 +112,7 @@ export default function CompanyBrandingPage() {
             )}
             <div className="absolute -bottom-8 left-4">
               {company?.logo_url ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={company.logo_url}
                   alt="Logo preview"
@@ -143,6 +145,7 @@ export default function CompanyBrandingPage() {
         <CardContent className="space-y-4">
           <div className="flex items-center gap-6">
             {company?.logo_url ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={company.logo_url}
                 alt="Current logo"
@@ -214,6 +217,7 @@ export default function CompanyBrandingPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {company?.cover_image_url ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={company.cover_image_url}
               alt="Current cover"

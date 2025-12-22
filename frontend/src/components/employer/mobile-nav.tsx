@@ -61,6 +61,7 @@ export function EmployerMobileNav() {
       <div className="fixed top-0 left-0 right-0 z-50 flex h-16 items-center justify-between border-b bg-background px-4 lg:hidden">
         <div className="flex items-center gap-2">
           {company?.logo_url ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={company.logo_url}
               alt={company.name}

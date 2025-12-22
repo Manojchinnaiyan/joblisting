@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Image, Video, Edit, Trash2, Star, Upload } from 'lucide-react'
+import { ArrowLeft, Plus, Image as ImageIcon, Video, Edit, Trash2, Star, Upload } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -168,7 +168,7 @@ export default function CompanyMediaPage() {
       {media?.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Image className="h-16 w-16 text-muted-foreground" />
+            <ImageIcon className="h-16 w-16 text-muted-foreground" />
             <h3 className="mt-4 text-lg font-semibold">No media uploaded</h3>
             <p className="mt-2 text-muted-foreground text-center">
               Upload photos and videos to showcase your workplace and culture.
@@ -196,6 +196,7 @@ export default function CompanyMediaPage() {
                       muted
                     />
                   ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={item.url}
                       alt={item.title || 'Company media'}
@@ -268,6 +269,7 @@ export default function CompanyMediaPage() {
                     controls
                   />
                 ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={uploadPreview}
                     alt="Upload preview"
@@ -349,6 +351,7 @@ export default function CompanyMediaPage() {
                     controls
                   />
                 ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={editingMedia.url}
                     alt={editingMedia.title || 'Media'}
