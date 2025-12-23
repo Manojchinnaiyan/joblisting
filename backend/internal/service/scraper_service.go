@@ -1,8 +1,11 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"job-platform/internal/dto"
 	"log"
 	"net/http"
@@ -18,17 +21,48 @@ import (
 
 // ScraperService handles web scraping for job postings
 type ScraperService struct {
-	aiService  *AIService
-	httpClient *http.Client
+	aiService        *AIService
+	httpClient       *http.Client
+	flareSolverrURL  string
+}
+
+// FlareSolverr request/response types
+type flareSolverrRequest struct {
+	Cmd        string `json:"cmd"`
+	URL        string `json:"url"`
+	MaxTimeout int    `json:"maxTimeout"`
+}
+
+type flareSolverrResponse struct {
+	Status   string `json:"status"`
+	Message  string `json:"message"`
+	Solution struct {
+		URL       string `json:"url"`
+		Status    int    `json:"status"`
+		Response  string `json:"response"`
+		Cookies   []struct {
+			Name   string `json:"name"`
+			Value  string `json:"value"`
+			Domain string `json:"domain"`
+		} `json:"cookies"`
+		UserAgent string `json:"userAgent"`
+	} `json:"solution"`
 }
 
 // NewScraperService creates a new scraper service instance
 func NewScraperService(aiService *AIService) *ScraperService {
+	// Check for FlareSolverr URL (Docker: job_flaresolverr, local: localhost)
+	flareSolverrURL := os.Getenv("FLARESOLVERR_URL")
+	if flareSolverrURL == "" {
+		flareSolverrURL = "http://localhost:8191/v1"
+	}
+
 	return &ScraperService{
 		aiService: aiService,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 120 * time.Second, // Longer timeout for FlareSolverr
 		},
+		flareSolverrURL: flareSolverrURL,
 	}
 }
 
@@ -110,7 +144,7 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 }
 
 // scrapeHTML fetches the HTML content from a URL
-// It first tries with colly (fast), then falls back to chromedp for JS-heavy pages or blocks
+// It tries: colly (fast) -> chromedp (JS) -> FlareSolverr (Cloudflare bypass)
 func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string, error) {
 	// First try with colly (faster for static pages)
 	html, err := s.scrapeWithColly(ctx, jobURL)
@@ -120,6 +154,15 @@ func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string,
 			log.Printf("⚠️ Colly blocked (403), falling back to ChromeDP for: %s", jobURL)
 			jsHTML, jsErr := s.scrapeWithChromedp(ctx, jobURL)
 			if jsErr != nil {
+				// If chromedp also fails (Cloudflare), try FlareSolverr
+				if strings.Contains(jsErr.Error(), "cloudflare") {
+					log.Printf("⚠️ ChromeDP blocked by Cloudflare, trying FlareSolverr for: %s", jobURL)
+					fsHTML, fsErr := s.scrapeWithFlareSolverr(ctx, jobURL)
+					if fsErr != nil {
+						return "", fmt.Errorf("all methods failed: colly: %v, chromedp: %v, flaresolverr: %v", err, jsErr, fsErr)
+					}
+					return fsHTML, nil
+				}
 				return "", fmt.Errorf("both colly and chromedp failed: colly: %v, chromedp: %v", err, jsErr)
 			}
 			return jsHTML, nil
@@ -133,6 +176,14 @@ func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string,
 		// Fall back to headless browser
 		jsHTML, jsErr := s.scrapeWithChromedp(ctx, jobURL)
 		if jsErr != nil {
+			// If chromedp fails with Cloudflare, try FlareSolverr
+			if strings.Contains(jsErr.Error(), "cloudflare") {
+				log.Printf("⚠️ ChromeDP blocked by Cloudflare, trying FlareSolverr for: %s", jobURL)
+				fsHTML, fsErr := s.scrapeWithFlareSolverr(ctx, jobURL)
+				if fsErr == nil {
+					return fsHTML, nil
+				}
+			}
 			// If chromedp fails, return the original HTML (better than nothing)
 			return html, nil
 		}
@@ -140,6 +191,53 @@ func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string,
 	}
 
 	return html, nil
+}
+
+// scrapeWithFlareSolverr uses FlareSolverr to bypass Cloudflare protection
+func (s *ScraperService) scrapeWithFlareSolverr(ctx context.Context, jobURL string) (string, error) {
+	reqBody := flareSolverrRequest{
+		Cmd:        "request.get",
+		URL:        jobURL,
+		MaxTimeout: 60000, // 60 seconds
+	}
+
+	jsonBody, err := json.Marshal(reqBody)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.flareSolverrURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("flaresolverr request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var fsResp flareSolverrResponse
+	if err := json.Unmarshal(body, &fsResp); err != nil {
+		return "", fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if fsResp.Status != "ok" {
+		return "", fmt.Errorf("flaresolverr error: %s", fsResp.Message)
+	}
+
+	if fsResp.Solution.Response == "" {
+		return "", fmt.Errorf("flaresolverr returned empty response")
+	}
+
+	log.Printf("✅ FlareSolverr successfully bypassed Cloudflare for: %s", jobURL)
+	return fsResp.Solution.Response, nil
 }
 
 // needsJavaScriptRendering checks if the HTML content indicates JS rendering is needed
@@ -496,26 +594,37 @@ func (s *ScraperService) ExtractJobLinks(ctx context.Context, listingURL string)
 		var html string
 		var scrapeErr error
 
-		// Try scraping methods in order: fast colly first, then chromedp with pagination support
-		// This handles both static pages and JS-heavy/blocked pages
+		// Try scraping methods in order: colly -> chromedp -> FlareSolverr
 		html, scrapeErr = s.scrapeWithColly(ctx, currentURL)
 		if scrapeErr != nil {
 			// If colly fails (403 or other error), fall back to ChromeDP with pagination support
 			log.Printf("⚠️ Colly failed for page %d: %v, trying ChromeDP...", page, scrapeErr)
 			html, scrapeErr = s.scrapeListingPageWithPagination(ctx, currentURL, page)
 			if scrapeErr != nil {
-				if page == 1 {
-					return nil, fmt.Errorf("failed to scrape listing page: %w", scrapeErr)
+				// If ChromeDP fails with Cloudflare, try FlareSolverr
+				if strings.Contains(scrapeErr.Error(), "cloudflare") {
+					log.Printf("⚠️ ChromeDP blocked by Cloudflare for page %d, trying FlareSolverr...", page)
+					html, scrapeErr = s.scrapeWithFlareSolverr(ctx, currentURL)
 				}
-				// Non-first page failed, just stop pagination
-				log.Printf("⚠️ Page %d scrape failed, stopping: %v", page, scrapeErr)
-				break
+				if scrapeErr != nil {
+					if page == 1 {
+						return nil, fmt.Errorf("failed to scrape listing page: %w", scrapeErr)
+					}
+					// Non-first page failed, just stop pagination
+					log.Printf("⚠️ Page %d scrape failed, stopping: %v", page, scrapeErr)
+					break
+				}
 			}
 		} else {
 			// Colly succeeded, but check if it needs JS rendering
 			if s.needsJavaScriptRendering(html) {
 				log.Printf("⚠️ Page %d needs JS rendering, using ChromeDP...", page)
 				jsHTML, jsErr := s.scrapeListingPageWithPagination(ctx, currentURL, page)
+				if jsErr != nil && strings.Contains(jsErr.Error(), "cloudflare") {
+					// Try FlareSolverr for Cloudflare-protected pages
+					log.Printf("⚠️ ChromeDP blocked by Cloudflare, trying FlareSolverr...")
+					jsHTML, jsErr = s.scrapeWithFlareSolverr(ctx, currentURL)
+				}
 				if jsErr == nil {
 					html = jsHTML
 				}
