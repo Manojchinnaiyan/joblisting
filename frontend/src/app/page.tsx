@@ -1,7 +1,3 @@
-'use client'
-
-import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { Header } from '@/components/layout/header'
 import { Footer } from '@/components/layout/footer'
 import { HeroSection } from '@/components/home/hero-section'
@@ -12,24 +8,10 @@ import { StatsSection } from '@/components/home/stats-section'
 import { HowItWorks } from '@/components/home/how-it-works'
 import { CTASection } from '@/components/home/cta-section'
 import { AnnouncementBanner } from '@/components/shared/announcement-banner'
-import { useAuthStore } from '@/store/auth-store'
-import { ROUTES } from '@/lib/constants'
 
+// Note: Redirect after login is handled by the login form itself
+// Home page is accessible to all users (authenticated or not)
 export default function HomePage() {
-  const router = useRouter()
-  const { isAuthenticated } = useAuthStore()
-
-  useEffect(() => {
-    // Redirect authenticated users to dashboard
-    if (isAuthenticated) {
-      router.push(ROUTES.DASHBOARD)
-    }
-  }, [isAuthenticated, router])
-
-  // Don't render the landing page if user is authenticated (will redirect)
-  if (isAuthenticated) {
-    return null
-  }
 
   return (
     <div className="flex min-h-screen flex-col">
