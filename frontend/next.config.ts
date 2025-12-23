@@ -29,7 +29,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "font-src 'self' https://fonts.gstatic.com data:",
               "img-src 'self' data: blob: https: http:",
-              "connect-src 'self' http://localhost:* https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://*.jobsworld.in wss://*.jobsworld.in https://static.cloudflareinsights.com https://*.cloudflareinsights.com https://*.cloudflare.com https://cloudflareinsights.com",
+              "connect-src 'self' http://localhost:* https://www.google-analytics.com https://www.googletagmanager.com https://accounts.google.com https://jobsworld.in https://www.jobsworld.in https://*.jobsworld.in wss://jobsworld.in wss://www.jobsworld.in wss://*.jobsworld.in https://static.cloudflareinsights.com https://*.cloudflareinsights.com https://*.cloudflare.com https://cloudflareinsights.com",
               "frame-src 'self' https://www.googletagmanager.com https://accounts.google.com https://challenges.cloudflare.com",
               "object-src 'none'",
               "base-uri 'self'",
