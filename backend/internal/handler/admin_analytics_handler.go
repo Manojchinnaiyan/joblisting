@@ -19,6 +19,7 @@ type AdminAnalyticsHandler struct {
 	companyRepo     *repository.CompanyRepository
 	applicationRepo *repository.ApplicationRepository
 	reviewRepo      *repository.ReviewRepository
+	jobViewRepo     *repository.JobViewRepository
 }
 
 // NewAdminAnalyticsHandler creates a new admin analytics handler
@@ -29,6 +30,7 @@ func NewAdminAnalyticsHandler(
 	companyRepo *repository.CompanyRepository,
 	applicationRepo *repository.ApplicationRepository,
 	reviewRepo *repository.ReviewRepository,
+	jobViewRepo *repository.JobViewRepository,
 ) *AdminAnalyticsHandler {
 	return &AdminAnalyticsHandler{
 		userService:     userService,
@@ -37,6 +39,7 @@ func NewAdminAnalyticsHandler(
 		companyRepo:     companyRepo,
 		applicationRepo: applicationRepo,
 		reviewRepo:      reviewRepo,
+		jobViewRepo:     jobViewRepo,
 	}
 }
 
@@ -280,5 +283,223 @@ func (h *AdminAnalyticsHandler) GetDashboard(c *gin.Context) {
 		"reviews": gin.H{
 			"pending_moderation": pendingReviews,
 		},
+	})
+}
+
+// parsePeriod converts period string to time duration
+func parsePeriod(period string) time.Time {
+	now := time.Now()
+	switch period {
+	case "7d":
+		return now.AddDate(0, 0, -7)
+	case "30d":
+		return now.AddDate(0, 0, -30)
+	case "90d":
+		return now.AddDate(0, 0, -90)
+	case "1y":
+		return now.AddDate(-1, 0, 0)
+	default:
+		return now.AddDate(0, 0, -30)
+	}
+}
+
+// GetComprehensiveAnalytics retrieves comprehensive analytics overview
+func (h *AdminAnalyticsHandler) GetComprehensiveAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
+	// Get total views
+	totalViews, _ := h.jobViewRepo.GetTotalViews()
+	periodViews, _ := h.jobViewRepo.GetTotalViewsInPeriod(since)
+
+	// Get top viewed jobs
+	topJobs, _ := h.jobViewRepo.GetTopViewedJobs(10, &since)
+
+	// Get views by country
+	viewsByCountry, _ := h.jobViewRepo.GetViewsByCountry(&since)
+
+	// Get views over time
+	viewsOverTime, _ := h.jobViewRepo.GetViewsOverTime(since)
+
+	// Get applications over time
+	applicationsOverTime, _ := h.jobViewRepo.GetApplicationsOverTime(since)
+
+	// Get monthly job activity (last 12 months)
+	monthlyJobActivity, _ := h.jobViewRepo.GetMonthlyJobActivity(12)
+
+	// Get featured jobs stats
+	featuredStats, _ := h.jobViewRepo.GetFeaturedJobsStats()
+
+	// Get conversion rates
+	conversionRates, _ := h.jobViewRepo.GetJobConversionRates(10)
+
+	// Get user activity stats
+	userActivity, _ := h.jobViewRepo.GetUserActivityStats(since)
+
+	// Get total applications
+	submittedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusSubmitted)
+	reviewedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusReviewed)
+	shortlistedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusShortlisted)
+	interviewCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusInterview)
+	offeredCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusOffered)
+	hiredCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusHired)
+	rejectedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusRejected)
+	withdrawnCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusWithdrawn)
+	totalApplications := submittedCount + reviewedCount + shortlistedCount + interviewCount + offeredCount + hiredCount + rejectedCount + withdrawnCount
+
+	response.OK(c, "Comprehensive analytics retrieved successfully", gin.H{
+		"period": period,
+		"views": gin.H{
+			"total":        totalViews,
+			"period_total": periodViews,
+		},
+		"top_viewed_jobs":        topJobs,
+		"views_by_country":       viewsByCountry,
+		"views_over_time":        viewsOverTime,
+		"applications_over_time": applicationsOverTime,
+		"monthly_job_activity":   monthlyJobActivity,
+		"featured_jobs":          featuredStats,
+		"conversion_rates":       conversionRates,
+		"user_activity":          userActivity,
+		"total_applications":     totalApplications,
+		"applications_by_status": gin.H{
+			"pending":     submittedCount,
+			"reviewed":    reviewedCount,
+			"shortlisted": shortlistedCount,
+			"interview":   interviewCount,
+			"offered":     offeredCount,
+			"hired":       hiredCount,
+			"rejected":    rejectedCount,
+			"withdrawn":   withdrawnCount,
+		},
+	})
+}
+
+// GetTopViewedJobs retrieves the most viewed jobs
+func (h *AdminAnalyticsHandler) GetTopViewedJobs(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	since := parsePeriod(period)
+	topJobs, err := h.jobViewRepo.GetTopViewedJobs(limit, &since)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Top viewed jobs retrieved successfully", gin.H{
+		"jobs":   topJobs,
+		"period": period,
+		"limit":  limit,
+	})
+}
+
+// GetViewsByCountry retrieves views grouped by country
+func (h *AdminAnalyticsHandler) GetViewsByCountry(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
+	viewsByCountry, err := h.jobViewRepo.GetViewsByCountry(&since)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Views by country retrieved successfully", gin.H{
+		"countries": viewsByCountry,
+		"period":    period,
+	})
+}
+
+// GetViewsTimeSeries retrieves job views over time
+func (h *AdminAnalyticsHandler) GetViewsTimeSeries(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
+	viewsOverTime, err := h.jobViewRepo.GetViewsOverTime(since)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	applicationsOverTime, err := h.jobViewRepo.GetApplicationsOverTime(since)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Time series data retrieved successfully", gin.H{
+		"views":        viewsOverTime,
+		"applications": applicationsOverTime,
+		"period":       period,
+	})
+}
+
+// GetFeaturedJobsAnalytics retrieves analytics for featured jobs
+func (h *AdminAnalyticsHandler) GetFeaturedJobsAnalytics(c *gin.Context) {
+	featuredStats, err := h.jobViewRepo.GetFeaturedJobsStats()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	// Get featured jobs list
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+	topFeatured, _ := h.jobViewRepo.GetTopViewedJobs(20, &since)
+
+	// Filter only featured jobs
+	var featuredJobs []repository.JobViewStats
+	for _, job := range topFeatured {
+		if job.IsFeatured {
+			featuredJobs = append(featuredJobs, job)
+		}
+	}
+
+	response.OK(c, "Featured jobs analytics retrieved successfully", gin.H{
+		"stats":         featuredStats,
+		"featured_jobs": featuredJobs,
+		"period":        period,
+	})
+}
+
+// GetMonthlyActivity retrieves monthly job and application activity
+func (h *AdminAnalyticsHandler) GetMonthlyActivity(c *gin.Context) {
+	months, _ := strconv.Atoi(c.DefaultQuery("months", "12"))
+	if months < 1 || months > 24 {
+		months = 12
+	}
+
+	monthlyActivity, err := h.jobViewRepo.GetMonthlyJobActivity(months)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Monthly activity retrieved successfully", gin.H{
+		"job_postings": monthlyActivity,
+		"months":       months,
+	})
+}
+
+// GetConversionAnalytics retrieves conversion rate analytics
+func (h *AdminAnalyticsHandler) GetConversionAnalytics(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+
+	conversionRates, err := h.jobViewRepo.GetJobConversionRates(limit)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Conversion analytics retrieved successfully", gin.H{
+		"jobs":  conversionRates,
+		"limit": limit,
 	})
 }

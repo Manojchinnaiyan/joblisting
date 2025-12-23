@@ -156,6 +156,72 @@ export interface DashboardStats {
   }
 }
 
+// New comprehensive analytics types
+export interface JobViewStats {
+  job_id: string
+  job_title: string
+  job_slug: string
+  company: string
+  views: number
+  clicks: number
+  is_featured: boolean
+}
+
+export interface CountryStats {
+  country: string
+  views: number
+}
+
+export interface FeaturedJobsStats {
+  total_featured: number
+  active_featured: number
+  expired_featured: number
+  featured_avg_views: number
+  non_featured_avg_views: number
+}
+
+export interface ConversionData {
+  job_id: string
+  title: string
+  company: string
+  views: number
+  applications: number
+  conversion_rate: number
+}
+
+export interface UserActivityStats {
+  unique_viewers: number
+  anonymous_views: number
+  authenticated_views: number
+}
+
+export interface ComprehensiveAnalytics {
+  period: string
+  views: {
+    total: number
+    period_total: number
+  }
+  top_viewed_jobs: JobViewStats[]
+  views_by_country: CountryStats[]
+  views_over_time: TimeSeriesData[]
+  applications_over_time: TimeSeriesData[]
+  monthly_job_activity: TimeSeriesData[]
+  featured_jobs: FeaturedJobsStats
+  conversion_rates: ConversionData[]
+  user_activity: UserActivityStats
+  total_applications: number
+  applications_by_status: {
+    pending: number
+    reviewed: number
+    shortlisted: number
+    interview: number
+    offered: number
+    hired: number
+    rejected: number
+    withdrawn: number
+  }
+}
+
 export const adminAnalyticsApi = {
   async getUserAnalytics(period: AnalyticsPeriod = '30d'): Promise<UserAnalytics> {
     const response = await apiClient.get('/admin/analytics/users', { params: { period } })
@@ -189,6 +255,42 @@ export const adminAnalyticsApi = {
 
   async getDashboardStats(): Promise<DashboardStats> {
     const response = await apiClient.get('/admin/analytics/dashboard')
+    return response.data.data || response.data
+  },
+
+  // New comprehensive analytics endpoints
+  async getComprehensiveAnalytics(period: AnalyticsPeriod = '30d'): Promise<ComprehensiveAnalytics> {
+    const response = await apiClient.get('/admin/analytics/overview', { params: { period } })
+    return response.data.data || response.data
+  },
+
+  async getTopViewedJobs(period: AnalyticsPeriod = '30d', limit: number = 20): Promise<{ jobs: JobViewStats[], period: string, limit: number }> {
+    const response = await apiClient.get('/admin/analytics/top-jobs', { params: { period, limit } })
+    return response.data.data || response.data
+  },
+
+  async getViewsByCountry(period: AnalyticsPeriod = '30d'): Promise<{ countries: CountryStats[], period: string }> {
+    const response = await apiClient.get('/admin/analytics/views-by-country', { params: { period } })
+    return response.data.data || response.data
+  },
+
+  async getViewsTimeSeries(period: AnalyticsPeriod = '30d'): Promise<{ views: TimeSeriesData[], applications: TimeSeriesData[], period: string }> {
+    const response = await apiClient.get('/admin/analytics/views-timeseries', { params: { period } })
+    return response.data.data || response.data
+  },
+
+  async getFeaturedJobsAnalytics(period: AnalyticsPeriod = '30d'): Promise<{ stats: FeaturedJobsStats, featured_jobs: JobViewStats[], period: string }> {
+    const response = await apiClient.get('/admin/analytics/featured-jobs', { params: { period } })
+    return response.data.data || response.data
+  },
+
+  async getMonthlyActivity(months: number = 12): Promise<{ job_postings: TimeSeriesData[], months: number }> {
+    const response = await apiClient.get('/admin/analytics/monthly-activity', { params: { months } })
+    return response.data.data || response.data
+  },
+
+  async getConversionAnalytics(limit: number = 20): Promise<{ jobs: ConversionData[], limit: number }> {
+    const response = await apiClient.get('/admin/analytics/conversions', { params: { limit } })
     return response.data.data || response.data
   },
 }

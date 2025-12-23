@@ -15,6 +15,21 @@ export const adminAnalyticsKeys = {
   logins: (period: AnalyticsPeriod) => [...adminAnalyticsKeys.all, 'logins', period] as const,
   security: (period: AnalyticsPeriod) =>
     [...adminAnalyticsKeys.all, 'security', period] as const,
+  // New comprehensive analytics keys
+  comprehensive: (period: AnalyticsPeriod) =>
+    [...adminAnalyticsKeys.all, 'comprehensive', period] as const,
+  topJobs: (period: AnalyticsPeriod, limit: number) =>
+    [...adminAnalyticsKeys.all, 'topJobs', period, limit] as const,
+  viewsByCountry: (period: AnalyticsPeriod) =>
+    [...adminAnalyticsKeys.all, 'viewsByCountry', period] as const,
+  viewsTimeSeries: (period: AnalyticsPeriod) =>
+    [...adminAnalyticsKeys.all, 'viewsTimeSeries', period] as const,
+  featuredJobs: (period: AnalyticsPeriod) =>
+    [...adminAnalyticsKeys.all, 'featuredJobs', period] as const,
+  monthlyActivity: (months: number) =>
+    [...adminAnalyticsKeys.all, 'monthlyActivity', months] as const,
+  conversions: (limit: number) =>
+    [...adminAnalyticsKeys.all, 'conversions', limit] as const,
 }
 
 export function useDashboardStats() {
@@ -64,6 +79,57 @@ export function useSecurityAnalytics(period: AnalyticsPeriod = '30d') {
   return useQuery({
     queryKey: adminAnalyticsKeys.security(period),
     queryFn: () => adminAnalyticsApi.getSecurityAnalytics(period),
+  })
+}
+
+// New comprehensive analytics hooks
+export function useComprehensiveAnalytics(period: AnalyticsPeriod = '30d') {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.comprehensive(period),
+    queryFn: () => adminAnalyticsApi.getComprehensiveAnalytics(period),
+    staleTime: 60 * 1000,
+  })
+}
+
+export function useTopViewedJobs(period: AnalyticsPeriod = '30d', limit: number = 20) {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.topJobs(period, limit),
+    queryFn: () => adminAnalyticsApi.getTopViewedJobs(period, limit),
+  })
+}
+
+export function useViewsByCountry(period: AnalyticsPeriod = '30d') {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.viewsByCountry(period),
+    queryFn: () => adminAnalyticsApi.getViewsByCountry(period),
+  })
+}
+
+export function useViewsTimeSeries(period: AnalyticsPeriod = '30d') {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.viewsTimeSeries(period),
+    queryFn: () => adminAnalyticsApi.getViewsTimeSeries(period),
+  })
+}
+
+export function useFeaturedJobsAnalytics(period: AnalyticsPeriod = '30d') {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.featuredJobs(period),
+    queryFn: () => adminAnalyticsApi.getFeaturedJobsAnalytics(period),
+  })
+}
+
+export function useMonthlyActivity(months: number = 12) {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.monthlyActivity(months),
+    queryFn: () => adminAnalyticsApi.getMonthlyActivity(months),
+  })
+}
+
+export function useConversionAnalytics(limit: number = 20) {
+  return useQuery({
+    queryKey: adminAnalyticsKeys.conversions(limit),
+    queryFn: () => adminAnalyticsApi.getConversionAnalytics(limit),
   })
 }
 

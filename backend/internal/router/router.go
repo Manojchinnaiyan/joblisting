@@ -218,7 +218,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	adminAuthHandler := handler.NewAdminAuthHandler(adminService, tokenService)
 	adminUserHandler := handler.NewAdminUserHandler(adminService, userService)
 	adminCMSHandler := handler.NewAdminCMSHandler(cmsService)
-	adminAnalyticsHandler := handler.NewAdminAnalyticsHandler(userService, adminService, jobRepo, companyRepo, applicationRepo, reviewRepo)
+	adminAnalyticsHandler := handler.NewAdminAnalyticsHandler(userService, adminService, jobRepo, companyRepo, applicationRepo, reviewRepo, jobViewRepo)
 	oauthHandler := handler.NewOAuthHandler(googleOAuthService, cfg)
 
 	// Job management handlers
@@ -385,6 +385,15 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminAnalytics.GET("/companies", adminAnalyticsHandler.GetCompanyAnalytics)
 			adminAnalytics.GET("/logins", adminAnalyticsHandler.GetLoginStats)
 			adminAnalytics.GET("/security-events", adminAnalyticsHandler.GetSecurityEvents)
+
+			// Comprehensive analytics endpoints
+			adminAnalytics.GET("/overview", adminAnalyticsHandler.GetComprehensiveAnalytics)
+			adminAnalytics.GET("/top-jobs", adminAnalyticsHandler.GetTopViewedJobs)
+			adminAnalytics.GET("/views-by-country", adminAnalyticsHandler.GetViewsByCountry)
+			adminAnalytics.GET("/views-timeseries", adminAnalyticsHandler.GetViewsTimeSeries)
+			adminAnalytics.GET("/featured-jobs", adminAnalyticsHandler.GetFeaturedJobsAnalytics)
+			adminAnalytics.GET("/monthly-activity", adminAnalyticsHandler.GetMonthlyActivity)
+			adminAnalytics.GET("/conversions", adminAnalyticsHandler.GetConversionAnalytics)
 		}
 
 		// ==================== Public Job Routes ====================

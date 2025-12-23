@@ -11,6 +11,7 @@ import {
   TrendingDown,
   ArrowRight,
   Calendar,
+  BarChart3,
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -264,6 +265,15 @@ export default function AnalyticsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3">
+              <Button variant="default" className="justify-between" asChild>
+                <Link href="/admin/analytics/overview">
+                  <span className="flex items-center">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    Comprehensive Overview
+                  </span>
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
               <Button variant="outline" className="justify-between" asChild>
                 <Link href="/admin/analytics/users">
                   <span className="flex items-center">

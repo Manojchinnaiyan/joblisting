@@ -110,11 +110,20 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 }
 
 // scrapeHTML fetches the HTML content from a URL
-// It first tries with colly (fast), then falls back to chromedp for JS-heavy pages
+// It first tries with colly (fast), then falls back to chromedp for JS-heavy pages or blocks
 func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string, error) {
 	// First try with colly (faster for static pages)
 	html, err := s.scrapeWithColly(ctx, jobURL)
 	if err != nil {
+		// If we got a 403/blocking error, try with headless browser which is harder to detect
+		if strings.Contains(err.Error(), "403") || strings.Contains(err.Error(), "blocking") {
+			log.Printf("⚠️ Colly blocked (403), falling back to ChromeDP for: %s", jobURL)
+			jsHTML, jsErr := s.scrapeWithChromedp(ctx, jobURL)
+			if jsErr != nil {
+				return "", fmt.Errorf("both colly and chromedp failed: colly: %v, chromedp: %v", err, jsErr)
+			}
+			return jsHTML, nil
+		}
 		return "", err
 	}
 
@@ -202,12 +211,29 @@ func (s *ScraperService) scrapeWithColly(ctx context.Context, jobURL string) (st
 	var scrapeErr error
 
 	c := colly.NewCollector(
-		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+		colly.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
 		colly.AllowURLRevisit(),
 	)
 
 	// Set timeout from context
 	c.SetRequestTimeout(30 * time.Second)
+
+	// Add realistic browser headers to avoid detection
+	c.OnRequest(func(r *colly.Request) {
+		r.Headers.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
+		r.Headers.Set("Accept-Language", "en-US,en;q=0.9")
+		r.Headers.Set("Accept-Encoding", "gzip, deflate, br")
+		r.Headers.Set("Connection", "keep-alive")
+		r.Headers.Set("Upgrade-Insecure-Requests", "1")
+		r.Headers.Set("Sec-Fetch-Dest", "document")
+		r.Headers.Set("Sec-Fetch-Mode", "navigate")
+		r.Headers.Set("Sec-Fetch-Site", "none")
+		r.Headers.Set("Sec-Fetch-User", "?1")
+		r.Headers.Set("Sec-Ch-Ua", `"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"`)
+		r.Headers.Set("Sec-Ch-Ua-Mobile", "?0")
+		r.Headers.Set("Sec-Ch-Ua-Platform", `"Windows"`)
+		r.Headers.Set("Cache-Control", "max-age=0")
+	})
 
 	// Handle response
 	c.OnResponse(func(r *colly.Response) {
@@ -244,9 +270,9 @@ func (s *ScraperService) scrapeWithColly(ctx context.Context, jobURL string) (st
 
 // scrapeWithChromedp fetches HTML using headless Chrome (handles JavaScript)
 func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) (string, error) {
-	// Build allocator options
+	// Build allocator options with enhanced anti-detection
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
+		chromedp.Flag("headless", "new"), // Use new headless mode (harder to detect)
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
@@ -254,7 +280,11 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 		chromedp.Flag("disable-background-networking", true),
 		chromedp.Flag("disable-software-rasterizer", true),
 		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"), // Hide automation
+		chromedp.Flag("exclude-switches", "enable-automation"),          // Remove automation switch
+		chromedp.Flag("disable-infobars", true),                         // Hide "Chrome is being controlled" bar
+		chromedp.WindowSize(1920, 1080),                                 // Realistic window size
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
 	)
 
 	// Check for custom Chrome path (for Docker/Alpine)
@@ -276,13 +306,33 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 
 	var html string
 
-	// Navigate and wait for content to load
+	// Navigate and wait for content to load with anti-detection scripts
 	err := chromedp.Run(timeoutCtx,
+		// Inject anti-detection scripts before navigation
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			// Override navigator.webdriver to hide automation
+			return chromedp.Evaluate(`
+				Object.defineProperty(navigator, 'webdriver', {
+					get: () => undefined
+				});
+				// Override Chrome automation properties
+				window.chrome = {
+					runtime: {}
+				};
+				// Override permissions
+				const originalQuery = window.navigator.permissions.query;
+				window.navigator.permissions.query = (parameters) => (
+					parameters.name === 'notifications' ?
+						Promise.resolve({ state: Notification.permission }) :
+						originalQuery(parameters)
+				);
+			`, nil).Do(ctx)
+		}),
 		chromedp.Navigate(jobURL),
 		// Wait for the page to be fully loaded
 		chromedp.WaitReady("body"),
 		// Additional wait for dynamic content to load
-		chromedp.Sleep(2*time.Second),
+		chromedp.Sleep(3*time.Second),
 		// Get the full HTML
 		chromedp.OuterHTML("html", &html),
 	)
@@ -369,24 +419,32 @@ func (s *ScraperService) ExtractJobLinks(ctx context.Context, listingURL string)
 	for page := 1; page <= maxPages; page++ {
 		log.Printf("🌐 Scraping page %d: %s", page, currentURL)
 
-		// Scrape the current page
-		html, scrapeErr := s.scrapeListingPageWithPagination(ctx, currentURL, page)
+		var html string
+		var scrapeErr error
+
+		// Try scraping methods in order: fast colly first, then chromedp with pagination support
+		// This handles both static pages and JS-heavy/blocked pages
+		html, scrapeErr = s.scrapeWithColly(ctx, currentURL)
 		if scrapeErr != nil {
-			if page == 1 {
-				// First page failed, try fallbacks
-				log.Printf("⚠️ scrapeListingPage failed: %v, trying chromedp...", scrapeErr)
-				html, scrapeErr = s.scrapeWithChromedp(ctx, currentURL)
-				if scrapeErr != nil {
-					log.Printf("⚠️ scrapeWithChromedp failed: %v, trying colly...", scrapeErr)
-					html, scrapeErr = s.scrapeWithColly(ctx, currentURL)
-					if scrapeErr != nil {
-						return nil, fmt.Errorf("failed to scrape listing page: %w", scrapeErr)
-					}
+			// If colly fails (403 or other error), fall back to ChromeDP with pagination support
+			log.Printf("⚠️ Colly failed for page %d: %v, trying ChromeDP...", page, scrapeErr)
+			html, scrapeErr = s.scrapeListingPageWithPagination(ctx, currentURL, page)
+			if scrapeErr != nil {
+				if page == 1 {
+					return nil, fmt.Errorf("failed to scrape listing page: %w", scrapeErr)
 				}
-			} else {
 				// Non-first page failed, just stop pagination
 				log.Printf("⚠️ Page %d scrape failed, stopping: %v", page, scrapeErr)
 				break
+			}
+		} else {
+			// Colly succeeded, but check if it needs JS rendering
+			if s.needsJavaScriptRendering(html) {
+				log.Printf("⚠️ Page %d needs JS rendering, using ChromeDP...", page)
+				jsHTML, jsErr := s.scrapeListingPageWithPagination(ctx, currentURL, page)
+				if jsErr == nil {
+					html = jsHTML
+				}
 			}
 		}
 
@@ -600,9 +658,9 @@ func resolveURLString(href string, baseURL string) string {
 
 // scrapeListingPageWithPagination scrapes a listing page with scroll and click behavior
 func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, listingURL string, pageNum int) (string, error) {
-	// Build allocator options
+	// Build allocator options with enhanced anti-detection
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", true),
+		chromedp.Flag("headless", "new"), // Use new headless mode (harder to detect)
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
@@ -610,7 +668,11 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 		chromedp.Flag("disable-background-networking", true),
 		chromedp.Flag("disable-software-rasterizer", true),
 		chromedp.Flag("disable-setuid-sandbox", true),
-		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+		chromedp.Flag("disable-blink-features", "AutomationControlled"), // Hide automation
+		chromedp.Flag("exclude-switches", "enable-automation"),          // Remove automation switch
+		chromedp.Flag("disable-infobars", true),                         // Hide "Chrome is being controlled" bar
+		chromedp.WindowSize(1920, 1080),                                 // Realistic window size
+		chromedp.UserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"),
 	)
 
 	// Check for custom Chrome path (for Docker/Alpine)
@@ -629,8 +691,17 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 
 	var htmlContent string
 
-	// Navigate and scroll to load lazy content
+	// Navigate and scroll to load lazy content with anti-detection
 	err := chromedp.Run(timeoutCtx,
+		// Inject anti-detection scripts before navigation
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return chromedp.Evaluate(`
+				Object.defineProperty(navigator, 'webdriver', {
+					get: () => undefined
+				});
+				window.chrome = { runtime: {} };
+			`, nil).Do(ctx)
+		}),
 		chromedp.Navigate(listingURL),
 		chromedp.WaitReady("body"),
 		chromedp.Sleep(2*time.Second),
