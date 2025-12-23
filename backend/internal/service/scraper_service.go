@@ -516,6 +516,82 @@ func (s *ScraperService) isCloudflareChallengePage(html string) bool {
 	return false
 }
 
+// waitForJobListings waits for job listing content to load on dynamic pages
+func (s *ScraperService) waitForJobListings(ctx context.Context) error {
+	// Wait for common job listing indicators to appear
+	// This handles sites that load job cards via AJAX
+	for i := 0; i < 15; i++ { // Max 15 iterations (~15 seconds)
+		var hasJobContent bool
+		err := chromedp.Evaluate(`
+			(function() {
+				const html = document.documentElement.outerHTML.toLowerCase();
+
+				// Check for common job listing indicators
+				const indicators = [
+					// Job card elements
+					'job-card',
+					'job-listing',
+					'job-result',
+					'job-item',
+					'position-card',
+					'career-card',
+					'vacancy-card',
+					'search-result-item',
+					'requisition-card',
+					// Common class patterns
+					'jobsearch',
+					'job-search-result',
+					'jobs-list',
+					'job-list-item',
+					// Data attributes
+					'data-job-id',
+					'data-requisition',
+					'data-job',
+					// Common job URL patterns in href
+					'/job/',
+					'/jobs/',
+					'/position/',
+					'/career/',
+					// Job titles pattern
+					'<h2',
+					'<h3',
+					'job-title',
+					'position-title'
+				];
+
+				for (const indicator of indicators) {
+					if (html.includes(indicator)) {
+						return true;
+					}
+				}
+
+				// Also check if there are any list items that could be jobs
+				const listItems = document.querySelectorAll('li, article, div[role="listitem"]');
+				if (listItems.length > 5) {
+					return true;
+				}
+
+				return false;
+			})()
+		`, &hasJobContent).Do(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		if hasJobContent {
+			log.Printf("✅ Job listings content detected")
+			return nil
+		}
+
+		// Wait a bit and check again
+		time.Sleep(1 * time.Second)
+	}
+
+	log.Printf("⚠️ No job listing content detected after waiting, proceeding anyway")
+	return nil // Continue anyway after max wait
+}
+
 // mapJobType maps common job type strings to our format
 func (s *ScraperService) mapJobType(jobType string) string {
 	jobType = strings.ToUpper(strings.TrimSpace(jobType))
@@ -891,6 +967,10 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			return s.waitForCloudflareChallenge(ctx)
 		}),
+		// Wait for dynamic content to load (job cards, listings, etc.)
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return s.waitForJobListings(ctx)
+		}),
 		// Scroll to load lazy content
 		chromedp.Evaluate(`
 			(async () => {
@@ -902,7 +982,7 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 				window.scrollTo(0, 0);
 			})()
 		`, nil),
-		chromedp.Sleep(2*time.Second),
+		chromedp.Sleep(3*time.Second), // Wait longer for AJAX content
 		chromedp.OuterHTML("html", &htmlContent),
 	)
 

@@ -19,14 +19,9 @@ import (
 )
 
 // extractAllLinks extracts all <a> href links from HTML using proper HTML parsing
+// Also extracts job URLs from data attributes and embedded JSON for modern JS-heavy sites
 func extractAllLinks(htmlContent string, baseURL string) []dto.ExtractedJobLink {
 	var links []dto.ExtractedJobLink
-
-	doc, err := html.Parse(strings.NewReader(htmlContent))
-	if err != nil {
-		log.Printf("⚠️ HTML parse error: %v", err)
-		return links
-	}
 
 	// Parse base URL for resolving relative URLs
 	base, err := neturl.Parse(baseURL)
@@ -35,21 +30,49 @@ func extractAllLinks(htmlContent string, baseURL string) []dto.ExtractedJobLink 
 		return links
 	}
 
+	doc, err := html.Parse(strings.NewReader(htmlContent))
+	if err != nil {
+		log.Printf("⚠️ HTML parse error: %v", err)
+		return links
+	}
+
 	var traverse func(*html.Node)
 	traverse = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "a" {
+		if n.Type == html.ElementNode {
 			var href, title string
-			for _, attr := range n.Attr {
-				if attr.Key == "href" {
-					href = attr.Val
+
+			// Check for standard <a> tags
+			if n.Data == "a" {
+				for _, attr := range n.Attr {
+					if attr.Key == "href" {
+						href = attr.Val
+					}
+					if attr.Key == "title" || attr.Key == "aria-label" {
+						title = attr.Val
+					}
 				}
-				if attr.Key == "title" || attr.Key == "aria-label" {
-					title = attr.Val
+			}
+
+			// Also check for data attributes that might contain job URLs
+			// Many modern sites use data-href, data-url, data-job-url, etc.
+			for _, attr := range n.Attr {
+				if strings.HasPrefix(attr.Key, "data-") && (strings.Contains(attr.Key, "href") ||
+					strings.Contains(attr.Key, "url") || strings.Contains(attr.Key, "link")) {
+					if href == "" && strings.HasPrefix(attr.Val, "/") || strings.HasPrefix(attr.Val, "http") {
+						href = attr.Val
+					}
+				}
+				// Extract title from data attributes too
+				if strings.HasPrefix(attr.Key, "data-") && (strings.Contains(attr.Key, "title") ||
+					strings.Contains(attr.Key, "name") || strings.Contains(attr.Key, "position")) {
+					if title == "" {
+						title = attr.Val
+					}
 				}
 			}
 
 			if href != "" {
-				// Get text content of the link as title if not set
+				// Get text content of the element as title if not set
 				if title == "" {
 					title = getTextContent(n)
 				}
@@ -71,6 +94,167 @@ func extractAllLinks(htmlContent string, baseURL string) []dto.ExtractedJobLink 
 	}
 
 	traverse(doc)
+
+	// Also extract job URLs from embedded JSON/JavaScript
+	// Many sites embed job data in script tags
+	embeddedLinks := extractJobURLsFromEmbeddedData(htmlContent, base)
+	links = append(links, embeddedLinks...)
+
+	return links
+}
+
+// extractJobURLsFromEmbeddedData extracts job URLs from embedded JSON and JavaScript
+func extractJobURLsFromEmbeddedData(htmlContent string, base *neturl.URL) []dto.ExtractedJobLink {
+	var links []dto.ExtractedJobLink
+
+	// Pattern 1: Look for JSON-LD structured data
+	jsonLDPattern := regexp.MustCompile(`(?s)<script[^>]*type=["']application/ld\+json["'][^>]*>(.*?)</script>`)
+	matches := jsonLDPattern.FindAllStringSubmatch(htmlContent, -1)
+	for _, match := range matches {
+		if len(match) > 1 {
+			// Try to extract job URLs from JSON-LD
+			extracted := extractURLsFromJSON(match[1], base)
+			links = append(links, extracted...)
+		}
+	}
+
+	// Pattern 2: Look for job URLs in JavaScript objects/arrays
+	// Common patterns: "url": "/en/job/...", href: "/jobs/..."
+	urlPatterns := []string{
+		`"url"\s*:\s*"(/[^"]*(?:job|position|career)[^"]*)"`,
+		`"href"\s*:\s*"(/[^"]*(?:job|position|career)[^"]*)"`,
+		`"link"\s*:\s*"(/[^"]*(?:job|position|career)[^"]*)"`,
+		`"jobUrl"\s*:\s*"(/[^"]*)"`,
+		`"detailUrl"\s*:\s*"(/[^"]*)"`,
+		`"applyUrl"\s*:\s*"([^"]*)"`,
+	}
+
+	for _, pattern := range urlPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(htmlContent, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				fullURL := resolveURL(match[1], base)
+				if fullURL != "" {
+					links = append(links, dto.ExtractedJobLink{
+						URL:   fullURL,
+						Title: "", // Will try to extract title later
+					})
+				}
+			}
+		}
+	}
+
+	// Pattern 3: Look for job IDs that can be converted to URLs
+	// Many sites use patterns like: jobId: "12345" or data-job-id="12345"
+	jobIDPattern := regexp.MustCompile(`(?:jobId|job-id|job_id|requisitionId|req-id)["']?\s*[:=]\s*["']?(\d{5,})["']?`)
+	jobIDMatches := jobIDPattern.FindAllStringSubmatch(htmlContent, -1)
+	for _, match := range jobIDMatches {
+		if len(match) > 1 {
+			// Construct potential job URL based on the base URL pattern
+			jobID := match[1]
+			// Try common URL patterns
+			potentialURLs := []string{
+				fmt.Sprintf("/en/job/%s", jobID),
+				fmt.Sprintf("/job/%s", jobID),
+				fmt.Sprintf("/jobs/%s", jobID),
+			}
+			for _, potentialURL := range potentialURLs {
+				fullURL := resolveURL(potentialURL, base)
+				if fullURL != "" {
+					links = append(links, dto.ExtractedJobLink{
+						URL:   fullURL,
+						Title: "",
+					})
+				}
+			}
+		}
+	}
+
+	// Pattern 4: Look for onclick handlers with job URLs
+	// e.g., onclick="window.location='/job/12345'" or onclick="navigateTo('/jobs/title-123')"
+	onclickPatterns := []string{
+		`onclick=["'][^"']*(?:location|href|navigate)[^"']*=["']?([^"'\s]+job[^"'\s)]+)`,
+		`onclick=["'][^"']*\(["']([^"']+job[^"']+)["']\)`,
+	}
+	for _, pattern := range onclickPatterns {
+		re := regexp.MustCompile(pattern)
+		matches := re.FindAllStringSubmatch(htmlContent, -1)
+		for _, match := range matches {
+			if len(match) > 1 {
+				fullURL := resolveURL(match[1], base)
+				if fullURL != "" {
+					links = append(links, dto.ExtractedJobLink{
+						URL:   fullURL,
+						Title: "",
+					})
+				}
+			}
+		}
+	}
+
+	// Pattern 5: Look for full URLs in the content that match job patterns
+	// This catches URLs embedded anywhere in the HTML
+	fullURLPattern := regexp.MustCompile(`https?://[^\s"'<>]+/(?:job|jobs|position|career)/[^\s"'<>]+`)
+	fullURLMatches := fullURLPattern.FindAllString(htmlContent, -1)
+	for _, urlStr := range fullURLMatches {
+		// Clean up the URL (remove trailing punctuation)
+		urlStr = strings.TrimRight(urlStr, ".,;:!?)]}")
+		links = append(links, dto.ExtractedJobLink{
+			URL:   urlStr,
+			Title: "",
+		})
+	}
+
+	return links
+}
+
+// extractURLsFromJSON extracts job URLs from JSON content
+func extractURLsFromJSON(jsonContent string, base *neturl.URL) []dto.ExtractedJobLink {
+	var links []dto.ExtractedJobLink
+
+	// Try to parse as JSON and extract URLs
+	var data interface{}
+	if err := json.Unmarshal([]byte(jsonContent), &data); err != nil {
+		return links
+	}
+
+	// Recursively find URL fields
+	var extractURLs func(interface{})
+	extractURLs = func(v interface{}) {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			// Look for URL-like fields
+			for key, value := range val {
+				lowerKey := strings.ToLower(key)
+				if lowerKey == "url" || lowerKey == "href" || lowerKey == "link" ||
+					strings.Contains(lowerKey, "joburl") || strings.Contains(lowerKey, "applyurl") {
+					if urlStr, ok := value.(string); ok {
+						fullURL := resolveURL(urlStr, base)
+						if fullURL != "" {
+							title := ""
+							if t, ok := val["title"].(string); ok {
+								title = t
+							} else if t, ok := val["name"].(string); ok {
+								title = t
+							}
+							links = append(links, dto.ExtractedJobLink{
+								URL:   fullURL,
+								Title: title,
+							})
+						}
+					}
+				}
+				extractURLs(value)
+			}
+		case []interface{}:
+			for _, item := range val {
+				extractURLs(item)
+			}
+		}
+	}
+
+	extractURLs(data)
 	return links
 }
 
@@ -408,6 +592,15 @@ func (s *AIService) ExtractJobLinksFromHTML(ctx context.Context, htmlContent str
 	allLinks := extractAllLinks(htmlContent, baseURL)
 	log.Printf("📊 Found %d total links in HTML", len(allLinks))
 
+	// Debug: Log some sample URLs to understand the site's URL structure
+	sampleCount := 0
+	for _, link := range allLinks {
+		if sampleCount < 10 && link.URL != "" && !strings.Contains(link.URL, "#") {
+			log.Printf("🔗 Sample link: %s", link.URL)
+			sampleCount++
+		}
+	}
+
 	// Deduplicate and filter for job detail URLs only
 	seen := make(map[string]bool)
 	var jobLinks []dto.ExtractedJobLink
@@ -418,7 +611,7 @@ func (s *AIService) ExtractJobLinksFromHTML(ctx context.Context, htmlContent str
 		}
 
 		// Filter for job detail pages only
-		if s.isValidJobDetailURL(link.URL) {
+		if s.isValidJobDetailURL(link.URL, baseURL) {
 			seen[link.URL] = true
 			jobLinks = append(jobLinks, link)
 		}
@@ -436,8 +629,30 @@ func (s *AIService) ExtractJobLinksFromHTML(ctx context.Context, htmlContent str
 }
 
 // isValidJobDetailURL checks if a URL looks like a job detail page, not a listing/category page
-func (s *AIService) isValidJobDetailURL(urlStr string) bool {
+func (s *AIService) isValidJobDetailURL(urlStr string, baseURL string) bool {
 	lowerURL := strings.ToLower(urlStr)
+	lowerBaseURL := strings.ToLower(baseURL)
+
+	// Parse base URL to get the host
+	baseParsed, _ := neturl.Parse(baseURL)
+	baseHost := ""
+	if baseParsed != nil {
+		baseHost = baseParsed.Host
+	}
+
+	// Parse the URL to check
+	urlParsed, _ := neturl.Parse(urlStr)
+	urlHost := ""
+	if urlParsed != nil {
+		urlHost = urlParsed.Host
+	}
+
+	// Must be from the same domain as the base URL (or relative)
+	if urlHost != "" && baseHost != "" && urlHost != baseHost {
+		return false
+	}
+
+	_ = lowerBaseURL // Used for future enhancements
 
 	// Exclude obvious non-job pages
 	excludePatterns := []string{
@@ -494,17 +709,22 @@ func (s *AIService) isValidJobDetailURL(urlStr string) bool {
 		}
 	}
 
-	// Must contain /job/ pattern with something after it (job ID or slug)
-	// This works for most career sites:
+	// Job detail URL patterns - these indicate individual job pages
+	// Works for most career sites:
 	// - Cisco: /global/en/job/1447037/title
 	// - Workday: /job/title/JR-12345
 	// - Greenhouse: /jobs/12345
 	// - Lever: /jobs/uuid-here
+	// - Kimberly-Clark: /en/job-detail/job-title-12345 or similar
 	// - Generic: /job/12345, /jobs/title-12345
 
 	jobPatterns := []string{
 		"/job/",
 		"/jobs/",
+		"/job-detail/",
+		"/jobdetail/",
+		"/job-details/",
+		"/jobdetails/",
 		"/position/",
 		"/positions/",
 		"/requisition/",
@@ -512,6 +732,8 @@ func (s *AIService) isValidJobDetailURL(urlStr string) bool {
 		"/vacancy/",
 		"/opportunity/",
 		"/posting/",
+		"/career/",
+		"/careers/job/",
 	}
 
 	hasJobPattern := false
@@ -522,22 +744,18 @@ func (s *AIService) isValidJobDetailURL(urlStr string) bool {
 		}
 	}
 
-	if !hasJobPattern {
-		return false
-	}
-
-	// Check that there's something meaningful after the job pattern (ID or slug)
-	// URLs like /job/1234567 or /jobs/software-engineer-12345 are valid
-	// But /jobs/ alone or /jobs/search are not
-
-	// Look for numeric ID in URL path
+	// Look for numeric ID in URL path - this is a strong indicator of a job detail page
 	parts := strings.Split(urlStr, "/")
 	for _, part := range parts {
 		// Skip empty parts and common non-ID segments
-		if part == "" || part == "job" || part == "jobs" || part == "en" || part == "global" {
+		if part == "" || part == "job" || part == "jobs" || part == "en" || part == "global" || part == "job-search" {
 			continue
 		}
-		// Check for numeric ID (5+ digits)
+		// Remove query params from part
+		if idx := strings.Index(part, "?"); idx >= 0 {
+			part = part[:idx]
+		}
+		// Check for numeric ID (5+ digits) - strong indicator
 		if len(part) >= 5 && isNumeric(part) {
 			return true
 		}
@@ -552,25 +770,37 @@ func (s *AIService) isValidJobDetailURL(urlStr string) bool {
 		if len(part) >= 32 && strings.Count(part, "-") >= 4 {
 			return true
 		}
-		// Check for slug with numbers (e.g., software-engineer-12345)
-		if strings.Contains(part, "-") && containsNumber(part) {
+		// Check for slug with numbers at the end (e.g., software-engineer-12345)
+		if strings.Contains(part, "-") && containsNumber(part) && len(part) > 10 {
 			return true
 		}
 	}
 
-	// If URL has /job/ or /jobs/ followed by a reasonable slug (not just category names)
-	// Accept it as potentially valid
-	for _, pattern := range jobPatterns {
-		idx := strings.Index(lowerURL, pattern)
-		if idx >= 0 {
-			afterPattern := lowerURL[idx+len(pattern):]
-			// Remove trailing slash and query params
-			if slashIdx := strings.Index(afterPattern, "?"); slashIdx >= 0 {
-				afterPattern = afterPattern[:slashIdx]
+	// If we found a job pattern, check for meaningful content after it
+	if hasJobPattern {
+		for _, pattern := range jobPatterns {
+			idx := strings.Index(lowerURL, pattern)
+			if idx >= 0 {
+				afterPattern := lowerURL[idx+len(pattern):]
+				// Remove trailing slash and query params
+				if slashIdx := strings.Index(afterPattern, "?"); slashIdx >= 0 {
+					afterPattern = afterPattern[:slashIdx]
+				}
+				afterPattern = strings.Trim(afterPattern, "/")
+				// If there's meaningful content after /job/ that's not a category name
+				if len(afterPattern) > 0 && !strings.HasSuffix(afterPattern, "-jobs") {
+					return true
+				}
 			}
-			afterPattern = strings.Trim(afterPattern, "/")
-			// If there's meaningful content after /job/ that's not a category name
-			if len(afterPattern) > 0 && !strings.HasSuffix(afterPattern, "-jobs") {
+		}
+	}
+
+	// Also check for URLs with job-related query parameters indicating a specific job
+	if strings.Contains(lowerURL, "?") {
+		queryPart := lowerURL[strings.Index(lowerURL, "?"):]
+		jobQueryParams := []string{"jobid=", "job_id=", "requisitionid=", "req_id=", "positionid=", "id="}
+		for _, param := range jobQueryParams {
+			if strings.Contains(queryPart, param) {
 				return true
 			}
 		}

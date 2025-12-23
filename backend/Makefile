@@ -14,6 +14,7 @@ dev: ## Start all services and run Go app with hot reload
 	@echo "✅ Services ready!"
 	@echo "📊 Dashboard URLs:"
 	@echo "   - API: http://localhost:8080"
+	@echo "   - FlareSolverr: http://localhost:8191"
 	@echo "   - Meilisearch: http://localhost:7700"
 	@echo "   - MinIO Console: http://localhost:9001"
 	@echo "   - Adminer (DB): http://localhost:8081"
@@ -57,12 +58,17 @@ db-shell: ## Connect to PostgreSQL
 redis-cli: ## Connect to Redis CLI
 	docker exec -it job_redis redis-cli
 
-rebuild: ## Rebuild and restart the backend container
+rebuild: ## Rebuild and restart the backend container with all dependencies
 	@echo "🔨 Rebuilding backend container..."
 	docker-compose down
-	docker-compose up --build -d app
-	@echo "⏳ Waiting for backend to start..."
-	@sleep 5
-	@echo "✅ Backend rebuilt and restarted!"
+	docker-compose up --build -d postgres redis meilisearch minio flaresolverr app
+	@echo "⏳ Waiting for services to be ready..."
+	@sleep 10
+	@echo "✅ Backend and all dependencies rebuilt and restarted!"
+	@echo "📊 Service URLs:"
+	@echo "   - API: http://localhost:8080"
+	@echo "   - FlareSolverr: http://localhost:8191"
+	@echo "   - Meilisearch: http://localhost:7700"
+	@echo "   - MinIO Console: http://localhost:9001"
 	@echo "🔍 Testing health endpoint..."
 	@curl -s http://localhost:8080/health | jq || echo "Backend not ready yet"
