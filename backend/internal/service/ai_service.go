@@ -307,6 +307,84 @@ func NewAIService() *AIService {
 	}
 }
 
+// callClaudeAPIWithRetry makes a request to Claude API with exponential backoff retry
+// for handling rate limits (429) and overload errors (529)
+func (s *AIService) callClaudeAPIWithRetry(ctx context.Context, requestBody []byte) (*ClaudeResponse, error) {
+	maxRetries := 5
+	baseDelay := 2 * time.Second
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff with jitter
+			delay := baseDelay * time.Duration(1<<uint(attempt-1)) // 2s, 4s, 8s, 16s, 32s
+			// Add some jitter (0-25% of delay)
+			jitter := time.Duration(float64(delay) * 0.25 * float64(attempt) / float64(maxRetries))
+			totalDelay := delay + jitter
+
+			log.Printf("⏳ Claude API retry %d/%d after %v (previous error: %v)", attempt+1, maxRetries, totalDelay, lastErr)
+
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(totalDelay):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(requestBody))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", s.apiKey)
+		req.Header.Set("anthropic-version", "2023-06-01")
+
+		resp, err := s.httpClient.Do(req)
+		if err != nil {
+			lastErr = fmt.Errorf("failed to call Claude API: %w", err)
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", err)
+			continue
+		}
+
+		// Check for retryable status codes
+		if resp.StatusCode == 429 || resp.StatusCode == 529 {
+			// Rate limit (429) or overload (529) - retry with backoff
+			statusName := "rate_limit"
+			if resp.StatusCode == 529 {
+				statusName = "overload"
+			}
+			lastErr = fmt.Errorf("claude API %s (status %d): %s", statusName, resp.StatusCode, string(body))
+			log.Printf("⚠️ Claude API %s error (attempt %d/%d): %s", statusName, attempt+1, maxRetries, string(body))
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			// Non-retryable error
+			return nil, fmt.Errorf("claude API error (status %d): %s", resp.StatusCode, string(body))
+		}
+
+		var claudeResp ClaudeResponse
+		if err := json.Unmarshal(body, &claudeResp); err != nil {
+			return nil, fmt.Errorf("failed to parse Claude response: %w", err)
+		}
+
+		if len(claudeResp.Content) == 0 {
+			return nil, fmt.Errorf("empty response from Claude API")
+		}
+
+		return &claudeResp, nil
+	}
+
+	return nil, fmt.Errorf("claude API failed after %d retries: %w", maxRetries, lastErr)
+}
+
 // ExtractedJob represents the extracted job data from AI
 type ExtractedJob struct {
 	Title           string   `json:"title"`
@@ -431,37 +509,10 @@ Rules:
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", "https://api.anthropic.com/v1/messages", bytes.NewBuffer(requestBody))
+	// Use retry logic for rate limits and overload errors
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", s.apiKey)
-	req.Header.Set("anthropic-version", "2023-06-01")
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to call Claude API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("claude API error (status %d): %s", resp.StatusCode, string(body))
-	}
-
-	var claudeResp ClaudeResponse
-	if err := json.Unmarshal(body, &claudeResp); err != nil {
-		return nil, fmt.Errorf("failed to parse Claude response: %w", err)
-	}
-
-	if len(claudeResp.Content) == 0 {
-		return nil, fmt.Errorf("empty response from Claude API")
+		return nil, err
 	}
 
 	// Extract JSON from response text
