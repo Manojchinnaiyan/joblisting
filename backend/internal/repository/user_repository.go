@@ -61,9 +61,15 @@ func (r *UserRepository) Update(user *domain.User) error {
 	return r.db.Save(user).Error
 }
 
-// Delete soft deletes a user
+// Delete soft deletes a user and renames email to allow re-registration
 func (r *UserRepository) Delete(id uuid.UUID) error {
-	return r.db.Model(&domain.User{}).Where("id = ?", id).Update("deleted_at", time.Now()).Error
+	now := time.Now()
+	// Rename email to allow re-registration with same email
+	// Format: original_email_deleted_timestamp
+	return r.db.Model(&domain.User{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"deleted_at": now,
+		"email":      gorm.Expr("CONCAT(email, '_deleted_', ?)", now.Unix()),
+	}).Error
 }
 
 // IncrementFailedAttempts increments failed login attempts
