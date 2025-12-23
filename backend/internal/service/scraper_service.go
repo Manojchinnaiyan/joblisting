@@ -300,8 +300,8 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 	defer browserCancel()
 
-	// Set overall timeout
-	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, 45*time.Second)
+	// Set overall timeout (longer to handle Cloudflare challenges)
+	timeoutCtx, timeoutCancel := context.WithTimeout(browserCtx, 60*time.Second)
 	defer timeoutCancel()
 
 	var html string
@@ -331,8 +331,10 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 		chromedp.Navigate(jobURL),
 		// Wait for the page to be fully loaded
 		chromedp.WaitReady("body"),
-		// Additional wait for dynamic content to load
-		chromedp.Sleep(3*time.Second),
+		// Wait for Cloudflare challenge to complete (if present)
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return s.waitForCloudflareChallenge(ctx)
+		}),
 		// Get the full HTML
 		chromedp.OuterHTML("html", &html),
 	)
@@ -341,7 +343,79 @@ func (s *ScraperService) scrapeWithChromedp(ctx context.Context, jobURL string) 
 		return "", fmt.Errorf("chromedp failed: %w", err)
 	}
 
+	// Check if we're still on a Cloudflare page
+	if s.isCloudflareChallengePage(html) {
+		return "", fmt.Errorf("cloudflare protection detected - site requires manual verification")
+	}
+
 	return html, nil
+}
+
+// waitForCloudflareChallenge waits for Cloudflare challenge to complete
+func (s *ScraperService) waitForCloudflareChallenge(ctx context.Context) error {
+	// Check for Cloudflare challenge indicators and wait for them to resolve
+	for i := 0; i < 10; i++ { // Max 10 iterations (~10 seconds)
+		var isChallenge bool
+		err := chromedp.Evaluate(`
+			(function() {
+				// Check for Cloudflare challenge indicators
+				const html = document.documentElement.outerHTML.toLowerCase();
+				const title = document.title.toLowerCase();
+
+				// Cloudflare challenge indicators
+				const indicators = [
+					'checking your browser',
+					'just a moment',
+					'please wait',
+					'cf-browser-verification',
+					'cf_chl_prog',
+					'challenge-running',
+					'ray id'
+				];
+
+				for (const indicator of indicators) {
+					if (html.includes(indicator) || title.includes(indicator)) {
+						return true;
+					}
+				}
+				return false;
+			})()
+		`, &isChallenge).Do(ctx)
+
+		if err != nil {
+			return err
+		}
+
+		if !isChallenge {
+			// Challenge complete or no challenge present
+			return nil
+		}
+
+		// Wait a bit and check again
+		time.Sleep(1 * time.Second)
+	}
+
+	return nil // Continue anyway after max wait
+}
+
+// isCloudflareChallengePage checks if the HTML is a Cloudflare challenge page
+func (s *ScraperService) isCloudflareChallengePage(html string) bool {
+	lowerHTML := strings.ToLower(html)
+	indicators := []string{
+		"checking your browser",
+		"just a moment",
+		"cf-browser-verification",
+		"challenge-platform",
+		"cloudflare ray id",
+		"verify you are human",
+	}
+
+	for _, indicator := range indicators {
+		if strings.Contains(lowerHTML, indicator) {
+			return true
+		}
+	}
+	return false
 }
 
 // mapJobType maps common job type strings to our format
@@ -704,7 +778,10 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 		}),
 		chromedp.Navigate(listingURL),
 		chromedp.WaitReady("body"),
-		chromedp.Sleep(2*time.Second),
+		// Wait for Cloudflare challenge to complete (if present)
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			return s.waitForCloudflareChallenge(ctx)
+		}),
 		// Scroll to load lazy content
 		chromedp.Evaluate(`
 			(async () => {
@@ -722,6 +799,11 @@ func (s *ScraperService) scrapeListingPageWithPagination(ctx context.Context, li
 
 	if err != nil {
 		return "", fmt.Errorf("chromedp pagination scrape failed: %w", err)
+	}
+
+	// Check if we're still on a Cloudflare page
+	if s.isCloudflareChallengePage(htmlContent) {
+		return "", fmt.Errorf("cloudflare protection detected - site requires manual verification")
 	}
 
 	return htmlContent, nil
