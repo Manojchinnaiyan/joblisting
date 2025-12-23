@@ -36,28 +36,55 @@ export function LoginForm() {
     setIsLoading(true)
     try {
       const response = await authApi.login(data)
+
+      // For admin users, store auth data directly and use hard navigation
+      // to avoid RSC fetch race conditions in Safari
+      if (response.user.role === 'ADMIN') {
+        // Store auth data in localStorage before React state update
+        const authData = {
+          state: {
+            user: response.user,
+            accessToken: response.tokens.access_token,
+            refreshToken: response.tokens.refresh_token,
+            isAuthenticated: true,
+          },
+          version: 0,
+        }
+        localStorage.setItem('auth-storage', JSON.stringify(authData))
+
+        // Store admin auth data
+        const adminAuthData = {
+          state: {
+            user: {
+              id: response.user.id,
+              email: response.user.email,
+              first_name: response.user.first_name,
+              last_name: response.user.last_name,
+              role: response.user.role,
+              status: response.user.status || 'active',
+              created_at: response.user.created_at || new Date().toISOString(),
+            },
+            accessToken: response.tokens.access_token,
+            refreshToken: response.tokens.refresh_token,
+            isAuthenticated: true,
+          },
+          version: 0,
+        }
+        localStorage.setItem('admin-auth-storage', JSON.stringify(adminAuthData))
+
+        toast.success('Logged in successfully')
+        // Hard navigation immediately - don't update React state
+        window.location.href = ROUTES.ADMIN
+        return
+      }
+
+      // For non-admin users, use normal flow
       login(response.user, response.tokens)
       toast.success('Logged in successfully')
 
       // Redirect based on user role
-      // Note: Backend blocks unverified users from logging in (returns 403)
-      // The client interceptor will redirect to verify-email page on AUTH_002 error
       if (response.user.role === 'EMPLOYER') {
         router.push(ROUTES.EMPLOYER)
-      } else if (response.user.role === 'ADMIN') {
-        // Also set admin auth store for admin users
-        setAdminTokens(response.tokens.access_token, response.tokens.refresh_token)
-        setAdminUser({
-          id: response.user.id,
-          email: response.user.email,
-          first_name: response.user.first_name,
-          last_name: response.user.last_name,
-          role: response.user.role,
-          status: response.user.status || 'active',
-          created_at: response.user.created_at || new Date().toISOString(),
-        })
-        // Use hard navigation to ensure state is synced
-        window.location.href = ROUTES.ADMIN
       } else {
         router.push(ROUTES.DASHBOARD)
       }
