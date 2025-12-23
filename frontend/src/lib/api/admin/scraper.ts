@@ -77,6 +77,18 @@ export interface ExtractLinksResponse {
   error?: string
 }
 
+export interface PageAnalysisResponse {
+  success: boolean
+  source_type: 'api' | 'html' | 'mixed'
+  api_endpoints: string[]
+  api_jobs_count: number
+  html_links_count: number
+  total_jobs: number
+  has_pagination: boolean
+  pagination_type: string
+  error?: string
+}
+
 export interface CreateFromScrapedData {
   scraped_data: ScrapedJob
   edits?: Partial<ScrapedJob>
@@ -180,10 +192,27 @@ export const scraperApi = {
   },
 
   /**
-   * Extract job links from a listing page URL
+   * Extract job links from a listing page URL (HTML-only method)
    */
   async extractLinks(url: string): Promise<ExtractLinksResponse> {
     const response = await scraperClient.post('/admin/jobs/scrape/extract-links', { url })
+    return response.data
+  },
+
+  /**
+   * Extract job links with auto-detection (API + HTML)
+   * Automatically detects whether jobs are loaded via API or HTML
+   */
+  async extractLinksAuto(url: string): Promise<ExtractLinksResponse> {
+    const response = await scraperClient.post('/admin/jobs/scrape/extract-links-auto', { url })
+    return response.data
+  },
+
+  /**
+   * Analyze a career page to detect job source type
+   */
+  async analyzeCareerPage(url: string): Promise<PageAnalysisResponse> {
+    const response = await scraperClient.post('/admin/jobs/scrape/analyze', { url })
     return response.data
   },
 

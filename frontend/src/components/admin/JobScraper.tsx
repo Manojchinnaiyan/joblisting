@@ -58,6 +58,7 @@ export function JobScraper() {
   const [selectedLinks, setSelectedLinks] = useState<Set<string>>(new Set())
   const [extractError, setExtractError] = useState<string | null>(null)
   const [startingImport, setStartingImport] = useState(false)
+  const [sourceType, setSourceType] = useState<string | null>(null)
 
   // Background extraction task state
   const [activeExtractionTask, setActiveExtractionTask] = useState<LinkExtractionTask | null>(null)
@@ -147,7 +148,7 @@ export function JobScraper() {
     }
   }
 
-  // Extract links handlers - now uses background extraction
+  // Extract links handlers - now uses auto-detection for API and HTML sources
   const handleExtractLinks = async () => {
     if (!listingUrl.trim()) {
       setExtractError('Please enter a listing page URL')
@@ -164,24 +165,43 @@ export function JobScraper() {
     setExtractedLinks([])
     setSelectedLinks(new Set())
     setActiveExtractionTask(null)
+    setSourceType(null)
 
     try {
-      // Start background extraction
-      const response = await scraperApi.startExtraction(listingUrl)
-      if (response.success && response.task) {
-        setActiveExtractionTask(response.task)
+      // Use auto-detection which handles both API and HTML sources
+      const response = await scraperApi.extractLinksAuto(listingUrl)
+
+      if (response.success && response.links && response.links.length > 0) {
+        setExtractedLinks(response.links)
+        setSelectedLinks(new Set(response.links.map(l => l.url)))
+        setSourceType(response.message || null)
         toast({
-          title: 'Extraction Started',
-          description: 'Extracting job links in background. This may take a minute...',
+          title: 'Links Extracted',
+          description: `Found ${response.total} job links. ${response.message || ''}`,
         })
+      } else if (response.error) {
+        setExtractError(response.error)
       } else {
-        setExtractError('Failed to start extraction')
-        setExtractingLinks(false)
+        // Fall back to background extraction if auto-detect finds nothing
+        const bgResponse = await scraperApi.startExtraction(listingUrl)
+        if (bgResponse.success && bgResponse.task) {
+          setActiveExtractionTask(bgResponse.task)
+          toast({
+            title: 'Extraction Started',
+            description: 'Auto-detect found no jobs, trying background extraction...',
+          })
+          return // Don't set extractingLinks to false yet
+        } else {
+          setExtractError('No job links found on this page')
+        }
       }
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to start extraction'
+      const errorMessage = err instanceof Error ? err.message : 'Failed to extract links'
       setExtractError(errorMessage)
-      setExtractingLinks(false)
+    } finally {
+      if (!activeExtractionTask) {
+        setExtractingLinks(false)
+      }
     }
   }
 
@@ -252,6 +272,7 @@ export function JobScraper() {
     setExtractError(null)
     setActiveExtractionTask(null)
     setExtractingLinks(false)
+    setSourceType(null)
   }
 
   // Fetch active queues
@@ -1012,7 +1033,8 @@ export function JobScraper() {
                 Extract Job Links from Listing Page
               </CardTitle>
               <CardDescription>
-                Paste a job listing page URL (like a company&apos;s careers page) to extract all job links and bulk import them
+                Paste a job listing page URL (like a company&apos;s careers page) to extract all job links and bulk import them.
+                Auto-detects whether jobs are loaded via API or HTML.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -1066,9 +1088,17 @@ export function JobScraper() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle>Extracted Job Links</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    Extracted Job Links
+                    {sourceType && (
+                      <Badge variant={sourceType.includes('api') ? 'default' : 'secondary'} className="ml-2 text-xs">
+                        {sourceType.includes('api') ? '🔌 API Detected' : sourceType.includes('mixed') ? '🔄 Mixed Source' : '📄 HTML'}
+                      </Badge>
+                    )}
+                  </CardTitle>
                   <CardDescription>
                     Found {extractedLinks.length} job links. Select which ones to import.
+                    {sourceType && <span className="block text-xs mt-1 text-muted-foreground">{sourceType}</span>}
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">

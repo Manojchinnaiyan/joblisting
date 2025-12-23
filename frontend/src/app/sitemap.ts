@@ -1,0 +1,107 @@
+import { MetadataRoute } from 'next'
+
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://jobsworld.in'
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
+
+interface SitemapJob {
+  slug: string
+  updated_at: string
+}
+
+interface SitemapCompany {
+  slug: string
+  updated_at: string
+}
+
+async function getJobsForSitemap(): Promise<SitemapJob[]> {
+  try {
+    const response = await fetch(`${API_URL}/jobs/sitemap`, {
+      next: { revalidate: 3600 }, // Revalidate every hour
+    })
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.data?.jobs || []
+  } catch (error) {
+    console.error('Failed to fetch jobs for sitemap:', error)
+    return []
+  }
+}
+
+async function getCompaniesForSitemap(): Promise<SitemapCompany[]> {
+  try {
+    const response = await fetch(`${API_URL}/companies/sitemap`, {
+      next: { revalidate: 3600 }, // Revalidate every hour
+    })
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.data?.companies || []
+  } catch (error) {
+    console.error('Failed to fetch companies for sitemap:', error)
+    return []
+  }
+}
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const [jobs, companies] = await Promise.all([
+    getJobsForSitemap(),
+    getCompaniesForSitemap(),
+  ])
+
+  // Static pages
+  const staticPages: MetadataRoute.Sitemap = [
+    {
+      url: BASE_URL,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 1,
+    },
+    {
+      url: `${BASE_URL}/jobs`,
+      lastModified: new Date(),
+      changeFrequency: 'hourly',
+      priority: 0.9,
+    },
+    {
+      url: `${BASE_URL}/companies`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.8,
+    },
+    {
+      url: `${BASE_URL}/about`,
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.5,
+    },
+    {
+      url: `${BASE_URL}/login`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+    {
+      url: `${BASE_URL}/register`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.3,
+    },
+  ]
+
+  // Job pages
+  const jobPages: MetadataRoute.Sitemap = jobs.map((job) => ({
+    url: `${BASE_URL}/jobs/${job.slug}`,
+    lastModified: new Date(job.updated_at),
+    changeFrequency: 'weekly' as const,
+    priority: 0.8,
+  }))
+
+  // Company pages
+  const companyPages: MetadataRoute.Sitemap = companies.map((company) => ({
+    url: `${BASE_URL}/companies/${company.slug}`,
+    lastModified: new Date(company.updated_at),
+    changeFrequency: 'weekly' as const,
+    priority: 0.7,
+  }))
+
+  return [...staticPages, ...jobPages, ...companyPages]
+}

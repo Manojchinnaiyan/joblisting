@@ -231,6 +231,36 @@ func (h *JobHandler) GetLocations(c *gin.Context) {
 	})
 }
 
+// GetJobsForSitemap retrieves all active jobs for sitemap generation
+// GET /api/v1/jobs/sitemap
+func (h *JobHandler) GetJobsForSitemap(c *gin.Context) {
+	// Get all active jobs with minimal data for sitemap
+	jobs, err := h.jobService.GetJobsForSitemap()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	// Return simple response with slug and updated_at
+	type SitemapJob struct {
+		Slug      string `json:"slug"`
+		UpdatedAt string `json:"updated_at"`
+	}
+
+	sitemapJobs := make([]SitemapJob, len(jobs))
+	for i, job := range jobs {
+		sitemapJobs[i] = SitemapJob{
+			Slug:      job.Slug,
+			UpdatedAt: job.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	response.OK(c, "Jobs for sitemap retrieved successfully", gin.H{
+		"jobs":  sitemapJobs,
+		"total": len(sitemapJobs),
+	})
+}
+
 // SearchJobs searches jobs (placeholder - will be implemented with Meilisearch)
 // GET /api/v1/jobs/search
 func (h *JobHandler) SearchJobs(c *gin.Context) {

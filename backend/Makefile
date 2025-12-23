@@ -61,7 +61,8 @@ redis-cli: ## Connect to Redis CLI
 rebuild: ## Rebuild and restart the backend container with all dependencies
 	@echo "🔨 Rebuilding backend container..."
 	docker-compose down
-	docker-compose up --build -d postgres redis meilisearch minio flaresolverr app
+	docker-compose build --no-cache app
+	docker-compose up -d postgres redis meilisearch minio flaresolverr app
 	@echo "⏳ Waiting for services to be ready..."
 	@sleep 10
 	@echo "✅ Backend and all dependencies rebuilt and restarted!"

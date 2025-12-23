@@ -405,6 +405,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			jobs.GET("/search", jobHandler.SearchJobs)        // Search jobs (Meilisearch)
 			jobs.GET("/categories", jobHandler.GetCategories) // Get all categories (tree or flat)
 			jobs.GET("/locations", jobHandler.GetLocations)   // Get all locations
+			jobs.GET("/sitemap", jobHandler.GetJobsForSitemap) // Get all jobs for sitemap
 			jobs.GET("/view/:slug", jobHandler.GetJobBySlug)  // Get job by slug (records view)
 		}
 
@@ -594,6 +595,8 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.POST("/scrape/bulk", scraperHandler.BulkScrapeJobs)
 			adminJobs.POST("/scrape/test", scraperHandler.TestScrape)
 			adminJobs.POST("/scrape/extract-links", scraperHandler.ExtractJobLinks)
+			adminJobs.POST("/scrape/extract-links-auto", scraperHandler.ExtractJobLinksAuto)
+			adminJobs.POST("/scrape/analyze", scraperHandler.AnalyzeCareerPage)
 
 			// Import queue endpoints
 			adminJobs.POST("/import-queue", importQueueHandler.CreateQueue)
@@ -667,6 +670,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			publicCompanies.GET("/featured", publicCompanyHandler.GetFeaturedCompanies)
 			publicCompanies.GET("/industries", publicCompanyHandler.GetIndustries)
 			publicCompanies.GET("/search", publicCompanyHandler.SearchCompanies)
+			publicCompanies.GET("/sitemap", publicCompanyHandler.GetCompaniesForSitemap) // Get all companies for sitemap
 			publicCompanies.GET("/:slug", publicCompanyHandler.GetCompanyBySlug)
 			publicCompanies.GET("/:slug/reviews", publicCompanyHandler.GetCompanyReviews)
 			publicCompanies.GET("/:slug/reviews/analytics", publicCompanyHandler.GetCompanyReviewAnalytics)

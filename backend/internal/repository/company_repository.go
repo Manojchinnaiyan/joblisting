@@ -144,6 +144,17 @@ func (r *CompanyRepository) GetFeatured(limit int) ([]*domain.Company, error) {
 	return companies, err
 }
 
+// GetCompaniesForSitemap retrieves all active companies for sitemap generation (minimal data)
+func (r *CompanyRepository) GetCompaniesForSitemap() ([]*domain.Company, error) {
+	var companies []*domain.Company
+	err := r.db.
+		Select("id, slug, updated_at").
+		Where("status = ? AND deleted_at IS NULL", domain.CompanyStatusActive).
+		Order("updated_at DESC").
+		Find(&companies).Error
+	return companies, err
+}
+
 // ExistsWithSlug checks if a company with slug exists
 func (r *CompanyRepository) ExistsWithSlug(slug string) (bool, error) {
 	var count int64

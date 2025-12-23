@@ -133,6 +133,18 @@ func (r *JobRepository) GetFeaturedJobs(limit int) ([]domain.Job, error) {
 	return jobs, err
 }
 
+// GetJobsForSitemap retrieves all active jobs for sitemap generation (minimal data)
+func (r *JobRepository) GetJobsForSitemap() ([]domain.Job, error) {
+	var jobs []domain.Job
+	err := r.db.
+		Select("id, slug, updated_at").
+		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive).
+		Where("expires_at > ?", time.Now()).
+		Order("updated_at DESC").
+		Find(&jobs).Error
+	return jobs, err
+}
+
 // CountActiveJobsByEmployer counts active jobs for an employer
 func (r *JobRepository) CountActiveJobsByEmployer(employerID uuid.UUID) (int64, error) {
 	var count int64

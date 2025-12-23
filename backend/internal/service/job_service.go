@@ -673,6 +673,11 @@ func (s *JobService) GetFeaturedJobs(limit int) ([]domain.Job, error) {
 	return s.jobRepo.GetFeaturedJobs(limit)
 }
 
+// GetJobsForSitemap retrieves all active jobs for sitemap generation
+func (s *JobService) GetJobsForSitemap() ([]domain.Job, error) {
+	return s.jobRepo.GetJobsForSitemap()
+}
+
 // CloseJob closes a job posting
 func (s *JobService) CloseJob(jobID, employerID uuid.UUID) error {
 	// Get job

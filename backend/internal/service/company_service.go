@@ -262,6 +262,11 @@ func (s *CompanyService) GetFeaturedCompanies(limit int) ([]*domain.Company, err
 	return s.companyRepo.GetFeatured(limit)
 }
 
+// GetCompaniesForSitemap retrieves all active companies for sitemap generation
+func (s *CompanyService) GetCompaniesForSitemap() ([]*domain.Company, error) {
+	return s.companyRepo.GetCompaniesForSitemap()
+}
+
 // GetUserCompany retrieves a user's company
 func (s *CompanyService) GetUserCompany(userID uuid.UUID) (*domain.Company, error) {
 	return s.companyRepo.GetByUserID(userID)

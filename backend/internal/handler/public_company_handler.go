@@ -373,3 +373,42 @@ func (h *PublicCompanyHandler) SearchCompanies(c *gin.Context) {
 	response := dto.ToCompanyListResponse(companies, total, page, limit)
 	c.JSON(http.StatusOK, response)
 }
+
+// GetCompaniesForSitemap godoc
+// @Summary Get companies for sitemap
+// @Description Get all active companies for sitemap generation
+// @Tags Public Company
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{}
+// @Router /companies/sitemap [get]
+func (h *PublicCompanyHandler) GetCompaniesForSitemap(c *gin.Context) {
+	companies, err := h.companyService.GetCompaniesForSitemap()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Return simple response with slug and updated_at
+	type SitemapCompany struct {
+		Slug      string `json:"slug"`
+		UpdatedAt string `json:"updated_at"`
+	}
+
+	sitemapCompanies := make([]SitemapCompany, len(companies))
+	for i, company := range companies {
+		sitemapCompanies[i] = SitemapCompany{
+			Slug:      company.Slug,
+			UpdatedAt: company.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Companies for sitemap retrieved successfully",
+		"data": gin.H{
+			"companies": sitemapCompanies,
+			"total":     len(sitemapCompanies),
+		},
+	})
+}

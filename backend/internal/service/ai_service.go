@@ -80,9 +80,30 @@ func extractAllLinks(htmlContent string, baseURL string) []dto.ExtractedJobLink 
 				// Resolve relative URLs
 				fullURL := resolveURL(href, base)
 				if fullURL != "" {
+					finalTitle := strings.TrimSpace(title)
+
+					// If title is generic (like "View Job", "Apply", "Learn More"), extract from URL slug
+					genericTitles := []string{"view job", "apply", "apply now", "learn more", "read more", "see details", "view details", "view", "details"}
+					lowerTitle := strings.ToLower(finalTitle)
+					isGeneric := finalTitle == "" || len(finalTitle) < 3
+					for _, generic := range genericTitles {
+						if lowerTitle == generic || strings.HasPrefix(lowerTitle, generic+" ") {
+							isGeneric = true
+							break
+						}
+					}
+
+					if isGeneric {
+						// Try to extract a meaningful title from the URL path
+						extractedTitle := extractTitleFromURLSlug(fullURL)
+						if extractedTitle != "" {
+							finalTitle = extractedTitle
+						}
+					}
+
 					links = append(links, dto.ExtractedJobLink{
 						URL:   fullURL,
-						Title: strings.TrimSpace(title),
+						Title: finalTitle,
 					})
 				}
 			}
@@ -707,22 +728,64 @@ func (s *AIService) isValidJobDetailURL(urlStr string, baseURL string) bool {
 
 	// Exclude obvious non-job pages
 	excludePatterns := []string{
+		// Social media
 		"linkedin.com",
 		"facebook.com",
 		"twitter.com",
 		"instagram.com",
 		"youtube.com",
+		// Auth pages
 		"/login",
 		"/signin",
 		"/sign-in",
 		"/register",
 		"/signup",
 		"/sign-up",
+		// Legal/policy pages
 		"/privacy",
 		"/terms",
 		"/cookie",
+		"/legal",
+		"/disclaimer",
+		// General pages
 		"/contact",
 		"/faq",
+		"/about",
+		"/help",
+		"/support",
+		// News/reports
+		"/press-release",
+		"/press-releases",
+		"/news",
+		"/blog",
+		"/annual-report",
+		"/report",
+		"/investor",
+		"/investors",
+		// Services/industry pages (not jobs)
+		"-services",
+		"/services/",
+		"-solutions",
+		"/solutions/",
+		"/industries/",
+		"/industry/",
+		"/capabilities/",
+		// Media
+		"/video",
+		"/webinar",
+		"/podcast",
+		"/event",
+		"/events",
+		// Marketing
+		"/case-study",
+		"/case-studies",
+		"/whitepaper",
+		"/ebook",
+		"/resources",
+		// Awards/recognitions
+		"/awards",
+		"/recognition",
+		"/achievements",
 	}
 
 	for _, pattern := range excludePatterns {
@@ -740,6 +803,22 @@ func (s *AIService) isValidJobDetailURL(urlStr string, baseURL string) bool {
 		"/jobs/$",       // ends with /jobs/
 		"/careers$",     // ends with /careers
 		"/careers/$",    // ends with /careers/
+		"/go/[^/]+/\\d+/$", // HCL-style category pages: /go/India/9553955/
+		"/go/[^/]+/\\d+$",  // HCL-style category pages without trailing slash
+	}
+
+	// Direct exclusions for known category URL patterns
+	categoryURLPatterns := []string{
+		"/careers/engineering",
+		"/careers/opportunities",
+		"/careers/careers-in-",
+		"/careers-in-",
+		"/go/",  // HCL career site category pages
+	}
+	for _, pattern := range categoryURLPatterns {
+		if strings.Contains(lowerURL, pattern) {
+			return false
+		}
 	}
 
 	for _, pattern := range categoryPatterns {
@@ -784,6 +863,7 @@ func (s *AIService) isValidJobDetailURL(urlStr string, baseURL string) bool {
 		"/opportunity/",
 		"/posting/",
 		"/career/",
+		"/careers/",
 		"/careers/job/",
 	}
 
@@ -822,8 +902,26 @@ func (s *AIService) isValidJobDetailURL(urlStr string, baseURL string) bool {
 			return true
 		}
 		// Check for slug with numbers at the end (e.g., software-engineer-12345)
+		// But exclude year-like patterns (2020, 2021, 2022, 2023, 2024, 2025, etc.)
 		if strings.Contains(part, "-") && containsNumber(part) && len(part) > 10 {
-			return true
+			// Extract the numeric part at the end
+			numPart := ""
+			for i := len(part) - 1; i >= 0; i-- {
+				if part[i] >= '0' && part[i] <= '9' {
+					numPart = string(part[i]) + numPart
+				} else {
+					break
+				}
+			}
+			// Skip if it looks like a year (4 digits, 19xx or 20xx)
+			if len(numPart) == 4 && (strings.HasPrefix(numPart, "19") || strings.HasPrefix(numPart, "20")) {
+				// This is likely a year, not a job ID - continue checking other parts
+				continue
+			}
+			// Must have at least 5 digits to be considered a job ID
+			if len(numPart) >= 5 {
+				return true
+			}
 		}
 	}
 
@@ -878,4 +976,320 @@ func isNumeric(s string) bool {
 		}
 	}
 	return len(s) > 0
+}
+
+// extractTitleFromURLSlug extracts a human-readable title from a URL path slug
+// For example: "/careers/test-automation-engineer" -> "Test Automation Engineer"
+func extractTitleFromURLSlug(urlStr string) string {
+	parsed, err := neturl.Parse(urlStr)
+	if err != nil {
+		return ""
+	}
+
+	path := parsed.Path
+	// Remove trailing slash
+	path = strings.TrimSuffix(path, "/")
+
+	// Get the last segment of the path
+	parts := strings.Split(path, "/")
+	if len(parts) == 0 {
+		return ""
+	}
+
+	slug := parts[len(parts)-1]
+	if slug == "" && len(parts) > 1 {
+		slug = parts[len(parts)-2]
+	}
+
+	// Skip if slug is too short or looks like an ID
+	if len(slug) < 3 {
+		return ""
+	}
+
+	// Skip pure numeric IDs
+	if isNumeric(slug) {
+		return ""
+	}
+
+	// Skip common non-job slugs
+	skipSlugs := []string{"jobs", "careers", "job", "career", "openings", "positions", "en", "us", "global"}
+	lowerSlug := strings.ToLower(slug)
+	for _, skip := range skipSlugs {
+		if lowerSlug == skip {
+			return ""
+		}
+	}
+
+	// Convert slug to title case
+	// Replace hyphens and underscores with spaces
+	title := strings.ReplaceAll(slug, "-", " ")
+	title = strings.ReplaceAll(title, "_", " ")
+
+	// Remove any numeric suffix (like job-title-12345)
+	// But only if there's text before it
+	words := strings.Fields(title)
+	if len(words) > 1 {
+		lastWord := words[len(words)-1]
+		if isNumeric(lastWord) {
+			words = words[:len(words)-1]
+			title = strings.Join(words, " ")
+		}
+	}
+
+	// Title case each word
+	words = strings.Fields(title)
+	for i, word := range words {
+		if len(word) > 0 {
+			words[i] = strings.ToUpper(string(word[0])) + strings.ToLower(word[1:])
+		}
+	}
+
+	return strings.Join(words, " ")
+}
+
+// AIPageAnalysis contains the AI analysis of a career page structure
+type AIPageAnalysis struct {
+	JobsFound          bool     `json:"jobs_found"`
+	JobLoadingMethod   string   `json:"job_loading_method"`   // "static", "ajax", "iframe", "api", "unknown"
+	AJAXEndpoint       string   `json:"ajax_endpoint"`        // The AJAX endpoint to fetch jobs
+	JobSelector        string   `json:"job_selector"`         // CSS selector for job listings
+	PaginationType     string   `json:"pagination_type"`      // "click", "scroll", "url", "none"
+	NextButtonSelector string   `json:"next_button_selector"`
+	WaitForSelector    string   `json:"wait_for_selector"`    // Element to wait for before extracting
+	Instructions       []string `json:"instructions"`         // Steps to extract jobs
+	Confidence         float64  `json:"confidence"`           // 0-1 confidence score
+}
+
+// AnalyzeCareerPageWithAI uses Claude to analyze a career page and determine how to extract jobs
+func (s *AIService) AnalyzeCareerPageWithAI(ctx context.Context, htmlContent string, pageURL string) (*AIPageAnalysis, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("ANTHROPIC_API_KEY not configured")
+	}
+
+	// Truncate HTML to avoid token limits - keep relevant parts
+	truncatedHTML := truncateHTMLForAnalysis(htmlContent, 50000)
+
+	prompt := fmt.Sprintf(`Analyze this career/jobs page HTML and determine how job listings are loaded.
+
+Page URL: %s
+
+HTML Content:
+%s
+
+Analyze the page structure and respond with a JSON object containing:
+{
+  "jobs_found": boolean, // Are there visible job listings in the HTML?
+  "job_loading_method": string, // One of: "static" (jobs in HTML), "ajax" (loaded via AJAX), "iframe", "api", "unknown"
+  "ajax_endpoint": string, // If AJAX, the endpoint URL (look for Drupal views/ajax, fetch calls, etc.)
+  "job_selector": string, // CSS selector to find job listing elements
+  "pagination_type": string, // "click" (click button), "scroll" (infinite scroll), "url" (change URL), "none"
+  "next_button_selector": string, // CSS selector for next/load more button
+  "wait_for_selector": string, // Element to wait for before extracting jobs
+  "instructions": array, // Step-by-step instructions to extract jobs
+  "confidence": number // 0-1 confidence in this analysis
+}
+
+Look for:
+1. Drupal views settings (drupal-settings-json) with ajax_path and view configurations
+2. React/Vue data attributes or state
+3. Infinite scroll library configurations
+4. Job listing container patterns
+5. API endpoint hints in scripts
+
+Respond ONLY with the JSON object, no other text.`, pageURL, truncatedHTML)
+
+	request := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 2000,
+		Messages: []ClaudeMessage{
+			{Role: "user", Content: prompt},
+		},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("Claude API call failed: %w", err)
+	}
+
+	if len(resp.Content) == 0 || resp.Content[0].Text == "" {
+		return nil, fmt.Errorf("empty response from Claude")
+	}
+
+	// Parse the JSON response
+	responseText := resp.Content[0].Text
+	// Clean up the response - remove markdown code blocks if present
+	responseText = strings.TrimPrefix(responseText, "```json")
+	responseText = strings.TrimPrefix(responseText, "```")
+	responseText = strings.TrimSuffix(responseText, "```")
+	responseText = strings.TrimSpace(responseText)
+
+	var result AIPageAnalysis
+	if err := json.Unmarshal([]byte(responseText), &result); err != nil {
+		log.Printf("⚠️ Failed to parse AI analysis response: %v\nResponse: %s", err, responseText)
+		return nil, fmt.Errorf("failed to parse analysis: %w", err)
+	}
+
+	log.Printf("🤖 AI Page Analysis: method=%s, ajax_endpoint=%s, selector=%s, confidence=%.2f",
+		result.JobLoadingMethod, result.AJAXEndpoint, result.JobSelector, result.Confidence)
+
+	return &result, nil
+}
+
+// DetectJobLoadingMethod analyzes HTML to detect how jobs are loaded (without AI)
+// Returns the loading method and any detected endpoints
+func (s *AIService) DetectJobLoadingMethod(htmlContent string, pageURL string) *AIPageAnalysis {
+	result := &AIPageAnalysis{
+		JobLoadingMethod: "unknown",
+		Confidence:       0.5,
+	}
+
+	lowerHTML := strings.ToLower(htmlContent)
+
+	// Check for Drupal Views AJAX (like HCL)
+	// The ajax_path is typically inside the drupal-settings-json as "ajax_path":"\/views\/ajax"
+	if strings.Contains(htmlContent, "drupal-settings-json") {
+		hasDrupalViews := strings.Contains(htmlContent, `"ajax_path":"\/views\/ajax"`) ||
+			strings.Contains(htmlContent, `"ajax_path":"/views/ajax"`) ||
+			strings.Contains(htmlContent, "views_infinite_scroll") ||
+			strings.Contains(htmlContent, `"view_name":`)
+
+		if hasDrupalViews {
+			result.JobLoadingMethod = "ajax"
+			result.AJAXEndpoint = "/views/ajax"
+			result.PaginationType = "scroll"
+			result.Confidence = 0.9
+
+			// Try to extract view name
+			viewNameRe := regexp.MustCompile(`"view_name":"([^"]+)"`)
+			if matches := viewNameRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
+				log.Printf("📋 Detected Drupal view: %s", matches[1])
+			}
+			// Look for infinite scroll
+			if strings.Contains(lowerHTML, "views_infinite_scroll") || strings.Contains(lowerHTML, "infinite-scroll") {
+				result.PaginationType = "scroll"
+			}
+			log.Printf("📋 Detected Drupal Views AJAX job loading")
+			return result
+		}
+	}
+
+	// Check for React/Next.js data
+	if strings.Contains(htmlContent, "__NEXT_DATA__") || strings.Contains(htmlContent, "window.__INITIAL_STATE__") {
+		result.JobLoadingMethod = "static"
+		result.Confidence = 0.8
+		log.Printf("📋 Detected Next.js/React SSR job data")
+		return result
+	}
+
+	// Check for common job API patterns in scripts
+	apiPatterns := []struct {
+		pattern  string
+		endpoint string
+	}{
+		{`/api/jobs`, "/api/jobs"},
+		{`/api/v1/jobs`, "/api/v1/jobs"},
+		{`/api/careers`, "/api/careers"},
+		{`/api/positions`, "/api/positions"},
+		{`/api/openings`, "/api/openings"},
+		{`jobs.json`, "/jobs.json"},
+		{`careers.json`, "/careers.json"},
+		{`/graphql`, "/graphql"},
+		{`workday.com`, "workday"},
+		{`greenhouse.io`, "greenhouse"},
+		{`lever.co`, "lever"},
+	}
+
+	for _, p := range apiPatterns {
+		if strings.Contains(lowerHTML, p.pattern) {
+			result.JobLoadingMethod = "api"
+			result.AJAXEndpoint = p.endpoint
+			result.Confidence = 0.7
+			log.Printf("📋 Detected API pattern: %s", p.pattern)
+			return result
+		}
+	}
+
+	// Check for iframe-based job listings
+	if strings.Contains(lowerHTML, "<iframe") && (strings.Contains(lowerHTML, "career") || strings.Contains(lowerHTML, "job")) {
+		result.JobLoadingMethod = "iframe"
+		result.Confidence = 0.6
+		// Try to extract iframe src
+		iframeSrcRe := regexp.MustCompile(`<iframe[^>]+src="([^"]*(?:career|job|work)[^"]*)"`)
+		if matches := iframeSrcRe.FindStringSubmatch(htmlContent); len(matches) > 1 {
+			result.AJAXEndpoint = matches[1]
+		}
+		log.Printf("📋 Detected iframe-based job loading")
+		return result
+	}
+
+	// Check for static job listings in HTML
+	jobIndicators := []string{
+		`class="job-`,
+		`class="career-`,
+		`class="position-`,
+		`class="vacancy-`,
+		`class="opening-`,
+		`data-job`,
+		`data-position`,
+		`job-listing`,
+		`job-card`,
+		`job-item`,
+		`career-item`,
+	}
+
+	staticJobCount := 0
+	for _, indicator := range jobIndicators {
+		if strings.Contains(lowerHTML, indicator) {
+			staticJobCount++
+		}
+	}
+
+	if staticJobCount >= 2 {
+		result.JobLoadingMethod = "static"
+		result.JobsFound = true
+		result.Confidence = 0.7
+		log.Printf("📋 Detected static HTML job listings (indicators: %d)", staticJobCount)
+		return result
+	}
+
+	// Check for pagination patterns
+	if strings.Contains(lowerHTML, "load more") || strings.Contains(lowerHTML, "loadmore") {
+		result.PaginationType = "click"
+		result.NextButtonSelector = ".load-more, [class*='load-more'], button:contains('Load More')"
+	} else if strings.Contains(lowerHTML, "next page") || strings.Contains(lowerHTML, "pagination") {
+		result.PaginationType = "click"
+	} else if strings.Contains(lowerHTML, "infinite") || strings.Contains(lowerHTML, "scroll") {
+		result.PaginationType = "scroll"
+	}
+
+	log.Printf("📋 Job loading method: %s (confidence: %.2f)", result.JobLoadingMethod, result.Confidence)
+	return result
+}
+
+// truncateHTMLForAnalysis truncates HTML while keeping relevant parts for AI analysis
+func truncateHTMLForAnalysis(html string, maxLen int) string {
+	if len(html) <= maxLen {
+		return html
+	}
+
+	// Try to keep the head (with scripts and settings) and some body
+	headEnd := strings.Index(html, "</head>")
+	if headEnd > 0 && headEnd < maxLen/2 {
+		head := html[:headEnd+7]
+		bodyStart := strings.Index(html, "<body")
+		if bodyStart > 0 {
+			remaining := maxLen - len(head) - 100
+			if remaining > 0 && bodyStart+remaining < len(html) {
+				return head + "\n<!-- TRUNCATED -->\n" + html[bodyStart:bodyStart+remaining] + "..."
+			}
+		}
+	}
+
+	// Just truncate from the beginning
+	return html[:maxLen] + "..."
 }

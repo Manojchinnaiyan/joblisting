@@ -216,6 +216,89 @@ func (h *ScraperHandler) ExtractJobLinks(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
+// ExtractJobLinksAuto handles POST /admin/jobs/scrape/extract-links-auto
+// @Summary Auto-detect and extract job links from a listing page
+// @Description Automatically detects whether jobs are loaded via API or HTML and extracts all job links
+// @Tags Admin Jobs
+// @Accept json
+// @Produce json
+// @Param request body dto.ExtractLinksRequest true "Extract links request"
+// @Success 200 {object} dto.ExtractLinksResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /admin/jobs/scrape/extract-links-auto [post]
+func (h *ScraperHandler) ExtractJobLinksAuto(c *gin.Context) {
+	var req dto.ExtractLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Invalid request: "+err.Error()))
+		return
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: URL must start with http:// or https://"))
+		return
+	}
+
+	// Extract job links with auto-detection
+	result, err := h.scraperService.ExtractJobLinksAuto(c.Request.Context(), req.URL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// AnalyzeCareerPage handles POST /admin/jobs/scrape/analyze
+// @Summary Analyze a career page to detect job source type
+// @Description Analyzes a career page to detect whether jobs are loaded via API or HTML
+// @Tags Admin Jobs
+// @Accept json
+// @Produce json
+// @Param request body dto.ExtractLinksRequest true "Analyze request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /admin/jobs/scrape/analyze [post]
+func (h *ScraperHandler) AnalyzeCareerPage(c *gin.Context) {
+	var req dto.ExtractLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Invalid request: "+err.Error()))
+		return
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: URL must start with http:// or https://"))
+		return
+	}
+
+	// Analyze the career page
+	result, err := h.scraperService.AnalyzeCareerPage(c.Request.Context(), req.URL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":          true,
+		"source_type":      result.SourceType,
+		"api_endpoints":    result.APIEndpoints,
+		"api_jobs_count":   len(result.APIJobListings),
+		"html_links_count": len(result.HTMLJobLinks),
+		"total_jobs":       result.TotalJobs,
+		"has_pagination":   result.HasPagination,
+		"pagination_type":  result.PaginationType,
+	})
+}
+
 // TestScrape handles POST /admin/jobs/scrape/test
 // @Summary Test scraping a URL
 // @Description Test scraping a URL without saving
