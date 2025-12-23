@@ -148,6 +148,41 @@ services:
     networks:
       - job_network
 
+  # FlareSolverr (Cloudflare bypass for scraping)
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: job_flaresolverr
+    restart: unless-stopped
+    # Only expose to internal network, not external
+    expose:
+      - "8191"
+    environment:
+      LOG_LEVEL: info
+      LOG_HTML: "false"
+      CAPTCHA_SOLVER: none
+      TZ: UTC
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8191/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+    networks:
+      - job_network
+
   # Go Backend Application
   backend:
     image: ${BACKEND_IMAGE:-ghcr.io/your-org/job-platform/backend:latest}
@@ -214,6 +249,9 @@ services:
 
       # AI Service (Anthropic)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+
+      # FlareSolverr (Cloudflare bypass for scraping)
+      FLARESOLVERR_URL: http://flaresolverr:8191/v1
 
       # Frontend URLs
       FRONTEND_URL: ${FRONTEND_URL}
