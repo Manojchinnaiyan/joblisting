@@ -1245,7 +1245,7 @@ Respond ONLY with the JSON object, no other text.`, pageURL, truncatedHTML)
 
 	resp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
 	if err != nil {
-		return nil, fmt.Errorf("Claude API call failed: %w", err)
+		return nil, fmt.Errorf("claude API call failed: %w", err)
 	}
 
 	if len(resp.Content) == 0 || resp.Content[0].Text == "" {

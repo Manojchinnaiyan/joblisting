@@ -1976,7 +1976,7 @@ func (s *ScraperService) scrapeWithNetworkCapture(ctx context.Context, pageURL s
 	}
 
 	// Also inject JS interceptors to capture any subsequent calls with POST data
-	err = chromedp.Run(timeoutCtx,
+	_ = chromedp.Run(timeoutCtx,
 		chromedp.Evaluate(`
 			(function() {
 				window.__capturedResponses = window.__capturedResponses || [];
@@ -4207,7 +4207,7 @@ func (s *ScraperService) scrapeJobDetailWithNetworkCapture(ctx context.Context, 
 	var jsCapture map[string]interface{}
 	chromedp.Run(timeoutCtx, chromedp.Evaluate(`window.__jobDetailCaptured`, &jsCapture))
 
-	if jsCapture != nil && len(jsCapture) > 0 {
+	if len(jsCapture) > 0 {
 		capturedMutex.Lock()
 		if capturedJobData == nil {
 			capturedJobData = jsCapture
