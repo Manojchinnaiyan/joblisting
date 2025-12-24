@@ -706,6 +706,76 @@ func (s *AIService) sanitizeJSONNewlines(jsonStr string) string {
 	return result.String()
 }
 
+// parseGeneratedBlogManually attempts to parse the blog JSON using regex extraction
+// This is a fallback when standard JSON parsing fails due to formatting issues
+func (s *AIService) parseGeneratedBlogManually(jsonStr string) (*GeneratedBlog, error) {
+	blog := &GeneratedBlog{}
+
+	// Helper function to extract string value between quotes after a key
+	extractString := func(key string) string {
+		// Pattern: "key": "value" or "key":"value"
+		pattern := regexp.MustCompile(`"` + key + `"\s*:\s*"((?:[^"\\]|\\.)*)`)
+		matches := pattern.FindStringSubmatch(jsonStr)
+		if len(matches) > 1 {
+			// Unescape the string
+			val := matches[1]
+			val = strings.ReplaceAll(val, `\"`, `"`)
+			val = strings.ReplaceAll(val, `\\`, `\`)
+			return val
+		}
+		return ""
+	}
+
+	// Extract string fields
+	blog.Title = extractString("title")
+	blog.Slug = extractString("slug")
+	blog.Excerpt = extractString("excerpt")
+	blog.MetaTitle = extractString("meta_title")
+	blog.MetaDescription = extractString("meta_description")
+	blog.MetaKeywords = extractString("meta_keywords")
+	blog.ImageSearchTerm = extractString("image_search_term")
+
+	// Extract content field - this is the tricky one as it contains HTML
+	// Find content field and extract everything until the next field
+	contentPattern := regexp.MustCompile(`"content"\s*:\s*"((?:[^"\\]|\\.)*)`)
+	contentMatches := contentPattern.FindStringSubmatch(jsonStr)
+	if len(contentMatches) > 1 {
+		content := contentMatches[1]
+		content = strings.ReplaceAll(content, `\"`, `"`)
+		content = strings.ReplaceAll(content, `\\n`, "\n")
+		content = strings.ReplaceAll(content, `\\t`, "\t")
+		content = strings.ReplaceAll(content, `\\`, `\`)
+		blog.Content = content
+	}
+
+	// Extract suggested_tags array
+	tagsPattern := regexp.MustCompile(`"suggested_tags"\s*:\s*\[(.*?)\]`)
+	tagsMatches := tagsPattern.FindStringSubmatch(jsonStr)
+	if len(tagsMatches) > 1 {
+		tagStr := tagsMatches[1]
+		tagPattern := regexp.MustCompile(`"([^"]+)"`)
+		tagMatches := tagPattern.FindAllStringSubmatch(tagStr, -1)
+		for _, m := range tagMatches {
+			if len(m) > 1 {
+				blog.SuggestedTags = append(blog.SuggestedTags, m[1])
+			}
+		}
+	}
+
+	// Validate we got at least the essential fields
+	if blog.Title == "" || blog.Content == "" {
+		return nil, fmt.Errorf("failed to extract essential fields from JSON")
+	}
+
+	// Generate slug if missing
+	if blog.Slug == "" {
+		blog.Slug = strings.ToLower(strings.ReplaceAll(blog.Title, " ", "-"))
+		blog.Slug = regexp.MustCompile(`[^a-z0-9-]`).ReplaceAllString(blog.Slug, "")
+	}
+
+	return blog, nil
+}
+
 // IsConfigured returns true if the AI service has the required API key
 func (s *AIService) IsConfigured() bool {
 	return s.apiKey != ""
@@ -1459,11 +1529,18 @@ Important:
 
 	var generatedBlog GeneratedBlog
 	if err := json.Unmarshal([]byte(jsonStr), &generatedBlog); err != nil {
-		// Log both the extracted JSON and original response for debugging
-		fmt.Printf("[AIService] JSON parse error: %v\n", err)
-		fmt.Printf("[AIService] Extracted JSON length: %d\n", len(jsonStr))
-		fmt.Printf("[AIService] First 500 chars of extracted JSON: %s\n", truncateString(jsonStr, 500))
-		return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+		// Standard JSON parsing failed, try manual extraction as fallback
+		fmt.Printf("[AIService] Standard JSON parse failed: %v, trying manual extraction\n", err)
+
+		manualBlog, manualErr := s.parseGeneratedBlogManually(responseText)
+		if manualErr != nil {
+			fmt.Printf("[AIService] Manual extraction also failed: %v\n", manualErr)
+			fmt.Printf("[AIService] First 500 chars of response: %s\n", truncateString(responseText, 500))
+			return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+		}
+
+		fmt.Printf("[AIService] Manual extraction succeeded\n")
+		return manualBlog, nil
 	}
 
 	return &generatedBlog, nil
@@ -1576,11 +1653,18 @@ Important:
 
 	var generatedBlog GeneratedBlog
 	if err := json.Unmarshal([]byte(jsonStr), &generatedBlog); err != nil {
-		// Log both the extracted JSON and original response for debugging
-		fmt.Printf("[AIService] JSON parse error: %v\n", err)
-		fmt.Printf("[AIService] Extracted JSON length: %d\n", len(jsonStr))
-		fmt.Printf("[AIService] First 500 chars of extracted JSON: %s\n", truncateString(jsonStr, 500))
-		return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+		// Standard JSON parsing failed, try manual extraction as fallback
+		fmt.Printf("[AIService] Standard JSON parse failed: %v, trying manual extraction\n", err)
+
+		manualBlog, manualErr := s.parseGeneratedBlogManually(responseText)
+		if manualErr != nil {
+			fmt.Printf("[AIService] Manual extraction also failed: %v\n", manualErr)
+			fmt.Printf("[AIService] First 500 chars of response: %s\n", truncateString(responseText, 500))
+			return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+		}
+
+		fmt.Printf("[AIService] Manual extraction succeeded\n")
+		return manualBlog, nil
 	}
 
 	return &generatedBlog, nil
