@@ -252,6 +252,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Blog handler
 	blogHandler := handler.NewBlogHandler(blogService)
 
+	// Blog scraper handler
+	blogScraperHandler := handler.NewBlogScraperHandler(aiService, scraperService, blogService)
+
 	// Scraper handler
 	scraperHandler := handler.NewScraperHandler(scraperService, jobService)
 
@@ -846,6 +849,12 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminBlogs.DELETE("/:id", blogHandler.DeleteBlog)
 			adminBlogs.POST("/:id/publish", blogHandler.PublishBlog)
 			adminBlogs.POST("/:id/unpublish", blogHandler.UnpublishBlog)
+
+			// AI Blog Generation endpoints
+			adminBlogs.POST("/generate/preview", blogScraperHandler.GenerateBlogPreview)
+			adminBlogs.POST("/generate/create", blogScraperHandler.CreateBlogFromGenerated)
+			adminBlogs.POST("/generate/images", blogScraperHandler.SearchImages)
+			adminBlogs.POST("/generate/simplify", blogScraperHandler.SimplifyContent)
 		}
 
 		// Admin blog categories management

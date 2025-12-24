@@ -15,6 +15,7 @@ import {
   XCircle,
   X,
   RefreshCw,
+  Sparkles,
 } from 'lucide-react'
 import { Blog, BlogStatus, adminBlogApi, blogApi, BlogCategory } from '@/lib/api/blog'
 import { BlogStatusBadge } from '@/components/blog/BlogStatusBadge'
@@ -195,6 +196,12 @@ export default function AdminBlogsPage() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/admin/blogs/generate">
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Generate
+            </Link>
           </Button>
           <Button asChild>
             <Link href="/admin/blogs/new">

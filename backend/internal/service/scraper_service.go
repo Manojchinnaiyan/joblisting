@@ -74,6 +74,12 @@ func NewScraperService(aiService *AIService) *ScraperService {
 	}
 }
 
+// ScrapeHTMLSimple is a public wrapper to scrape HTML from any URL
+// Used by blog scraper to fetch content for AI processing
+func (s *ScraperService) ScrapeHTMLSimple(ctx context.Context, targetURL string) (string, error) {
+	return s.scrapeHTML(ctx, targetURL)
+}
+
 // ScrapeJobURL scrapes a job posting from the given URL
 func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.ScrapedJobResponse, []string, error) {
 	warnings := []string{}

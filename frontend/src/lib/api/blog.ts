@@ -106,6 +106,79 @@ export interface CreateTagRequest {
   name: string
 }
 
+// Blog Generation Types
+export interface GenerateBlogRequest {
+  url?: string
+  prompt?: string // Optional if URL is provided
+  category_id?: string
+  target_tone?: string
+  target_length?: string
+}
+
+export interface GeneratedBlogResponse {
+  title: string
+  slug: string
+  excerpt: string
+  content: string
+  featured_image?: string
+  meta_title: string
+  meta_description: string
+  meta_keywords: string
+  suggested_tags?: string[]
+  source_url?: string
+  image_search_term?: string
+}
+
+export interface UnsplashImage {
+  id: string
+  url: string
+  thumb_url: string
+  download_url: string
+  alt_text: string
+  photographer: string
+  profile_url: string
+  width: number
+  height: number
+}
+
+export interface BlogPreviewResponse {
+  success: boolean
+  generated_blog: GeneratedBlogResponse
+  warnings?: string[]
+  image_options?: UnsplashImage[]
+}
+
+export interface CreateFromGeneratedRequest {
+  generated_data: GeneratedBlogResponse
+  edits?: Record<string, unknown>
+  category_id?: string
+  tag_ids?: string[]
+  status?: string
+}
+
+export interface SearchImagesRequest {
+  query: string
+  per_page?: number
+}
+
+export interface SearchImagesResponse {
+  success: boolean
+  images: UnsplashImage[]
+  total: number
+}
+
+export interface SimplifyContentRequest {
+  content: string
+  target_tone?: string
+}
+
+export interface SimplifyContentResponse {
+  success: boolean
+  simplified_content: string
+  original_length: number
+  simplified_length: number
+}
+
 // Public API functions
 export const blogApi = {
   getBlogs: async (filters?: BlogFilters): Promise<BlogListResponse> => {
@@ -212,5 +285,37 @@ export const adminBlogApi = {
 
   deleteTag: async (id: string): Promise<void> => {
     await apiClient.delete(`/admin/blog-tags/${id}`)
+  },
+
+  // AI Blog Generation
+  generateBlogPreview: async (data: GenerateBlogRequest): Promise<BlogPreviewResponse> => {
+    const response = await apiClient.post<BlogPreviewResponse>(
+      '/admin/blogs/generate/preview',
+      data,
+      { timeout: 120000 } // 2 minute timeout for AI generation
+    )
+    return response.data
+  },
+
+  createFromGenerated: async (data: CreateFromGeneratedRequest): Promise<Blog> => {
+    const response = await apiClient.post<Blog>('/admin/blogs/generate/create', data)
+    return response.data
+  },
+
+  searchImages: async (data: SearchImagesRequest): Promise<SearchImagesResponse> => {
+    const response = await apiClient.post<SearchImagesResponse>(
+      '/admin/blogs/generate/images',
+      data
+    )
+    return response.data
+  },
+
+  simplifyContent: async (data: SimplifyContentRequest): Promise<SimplifyContentResponse> => {
+    const response = await apiClient.post<SimplifyContentResponse>(
+      '/admin/blogs/generate/simplify',
+      data,
+      { timeout: 60000 } // 1 minute timeout
+    )
+    return response.data
   },
 }

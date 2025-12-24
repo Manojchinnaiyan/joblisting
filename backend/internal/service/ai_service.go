@@ -589,7 +589,7 @@ func (s *AIService) extractJSON(text string) string {
 	// Try to find JSON in markdown code blocks first
 	codeBlockRegex := regexp.MustCompile("(?s)```(?:json)?\\s*({.*})\\s*```")
 	if matches := codeBlockRegex.FindStringSubmatch(text); len(matches) > 1 {
-		return matches[1]
+		return s.sanitizeJSONNewlines(matches[1])
 	}
 
 	// Find the first { and last } to extract the JSON object
@@ -637,11 +637,73 @@ func (s *AIService) extractJSON(text string) string {
 	}
 
 	if end > start {
-		return text[start:end]
+		return s.sanitizeJSONNewlines(text[start:end])
 	}
 
 	// Return as-is if no JSON pattern found
 	return text
+}
+
+// sanitizeJSONNewlines attempts to fix JSON with literal newlines inside string values
+// Claude sometimes returns JSON with actual newlines in strings instead of \n
+// This function tries standard parsing first, then falls back to manual sanitization
+func (s *AIService) sanitizeJSONNewlines(jsonStr string) string {
+	// First, try to parse as-is - Go's json decoder can handle some formatting
+	var test interface{}
+	if err := json.Unmarshal([]byte(jsonStr), &test); err == nil {
+		// JSON is already valid, return as-is
+		return jsonStr
+	}
+
+	// If parsing failed, try to fix common issues
+	// Replace literal newlines/tabs inside strings with escaped versions
+	var result strings.Builder
+	result.Grow(len(jsonStr) + 200)
+
+	inString := false
+	i := 0
+	for i < len(jsonStr) {
+		c := jsonStr[i]
+
+		// Handle escape sequences
+		if c == '\\' && inString && i+1 < len(jsonStr) {
+			// This is an escape sequence, copy both characters
+			result.WriteByte(c)
+			i++
+			if i < len(jsonStr) {
+				result.WriteByte(jsonStr[i])
+			}
+			i++
+			continue
+		}
+
+		// Track string boundaries
+		if c == '"' {
+			inString = !inString
+			result.WriteByte(c)
+			i++
+			continue
+		}
+
+		// Handle literal newlines/tabs inside strings
+		if inString {
+			switch c {
+			case '\n':
+				result.WriteString("\\n")
+			case '\r':
+				result.WriteString("\\r")
+			case '\t':
+				result.WriteString("\\t")
+			default:
+				result.WriteByte(c)
+			}
+		} else {
+			result.WriteByte(c)
+		}
+		i++
+	}
+
+	return result.String()
 }
 
 // IsConfigured returns true if the AI service has the required API key
@@ -1292,4 +1354,291 @@ func truncateHTMLForAnalysis(html string, maxLen int) string {
 
 	// Just truncate from the beginning
 	return html[:maxLen] + "..."
+}
+
+// ============================================================
+// BLOG GENERATION AI FUNCTIONS
+// ============================================================
+
+// GeneratedBlog represents AI-generated blog content
+type GeneratedBlog struct {
+	Title           string   `json:"title"`
+	Slug            string   `json:"slug"`
+	Excerpt         string   `json:"excerpt"`
+	Content         string   `json:"content"`
+	MetaTitle       string   `json:"meta_title"`
+	MetaDescription string   `json:"meta_description"`
+	MetaKeywords    string   `json:"meta_keywords"`
+	SuggestedTags   []string `json:"suggested_tags"`
+	ImageSearchTerm string   `json:"image_search_term"`
+}
+
+// GenerateBlogFromPrompt generates a complete blog post from a user prompt
+func (s *AIService) GenerateBlogFromPrompt(ctx context.Context, prompt string, targetTone string, targetLength string) (*GeneratedBlog, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	// Set defaults
+	if targetTone == "" {
+		targetTone = "professional yet approachable"
+	}
+	if targetLength == "" {
+		targetLength = "medium (800-1200 words)"
+	}
+
+	lengthGuidance := map[string]string{
+		"short":  "around 400-600 words",
+		"medium": "around 800-1200 words",
+		"long":   "around 1500-2000 words",
+	}
+	if guidance, ok := lengthGuidance[targetLength]; ok {
+		targetLength = guidance
+	}
+
+	aiPrompt := fmt.Sprintf(`You are an expert blog content creator. Generate a complete, SEO-optimized blog post based on the following prompt.
+
+USER PROMPT: %s
+
+WRITING REQUIREMENTS:
+- Tone: %s
+- Length: %s
+- Write in a human-readable, engaging style
+- Use proper HTML formatting for the content (headings, paragraphs, lists, etc.)
+- Make it SEO-friendly with relevant keywords naturally integrated
+- Include practical insights and actionable information
+
+CRITICAL JSON FORMAT REQUIREMENTS:
+You MUST return a valid JSON object. All string values must have newlines escaped as \n (backslash-n), not actual line breaks.
+The "content" field should have all HTML on a single logical line with \n for line breaks.
+
+Return this exact JSON structure:
+{"title":"Your title here","slug":"your-slug-here","excerpt":"Your excerpt here","content":"<h2>Heading</h2>\n<p>Paragraph text...</p>\n<h3>Subheading</h3>\n<p>More text...</p>","meta_title":"SEO title","meta_description":"SEO description","meta_keywords":"keyword1, keyword2, keyword3","suggested_tags":["tag1","tag2","tag3"],"image_search_term":"search term"}
+
+Field descriptions:
+- title: Catchy, SEO-friendly blog title (max 70 characters)
+- slug: URL-friendly version of the title using lowercase and hyphens
+- excerpt: Compelling summary (150-200 characters) that hooks readers
+- content: Full blog content in HTML format using <h2>, <h3>, <p>, <ul>, <ol>, <strong>, <em> tags. Use \n for line breaks between tags.
+- meta_title: SEO meta title (max 60 characters)
+- meta_description: SEO meta description (max 155 characters)
+- meta_keywords: Comma-separated relevant keywords
+- suggested_tags: Array of 3-5 relevant tag strings
+- image_search_term: Best search term for finding a relevant featured image
+
+Important:
+1. The content should be original, informative, and valuable to readers
+2. Use proper HTML formatting in content - no markdown
+3. Include at least 3 section headings (h2 or h3)
+4. Return ONLY the JSON object - no markdown code blocks, no explanation
+5. All newlines in string values MUST be escaped as \n`, prompt, targetTone, targetLength)
+
+	request := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 4096,
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: aiPrompt,
+			},
+		},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	responseText := claudeResp.Content[0].Text
+	jsonStr := s.extractJSON(responseText)
+
+	var generatedBlog GeneratedBlog
+	if err := json.Unmarshal([]byte(jsonStr), &generatedBlog); err != nil {
+		// Log both the extracted JSON and original response for debugging
+		fmt.Printf("[AIService] JSON parse error: %v\n", err)
+		fmt.Printf("[AIService] Extracted JSON length: %d\n", len(jsonStr))
+		fmt.Printf("[AIService] First 500 chars of extracted JSON: %s\n", truncateString(jsonStr, 500))
+		return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+	}
+
+	return &generatedBlog, nil
+}
+
+// truncateString safely truncates a string to a maximum length
+func truncateString(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen] + "..."
+}
+
+// GenerateBlogFromURLContent generates a blog post based on scraped URL content
+func (s *AIService) GenerateBlogFromURLContent(ctx context.Context, htmlContent string, url string, prompt string, targetTone string, targetLength string) (*GeneratedBlog, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	// Clean and truncate HTML
+	cleanedHTML := s.cleanHTML(htmlContent)
+	if len(cleanedHTML) > 30000 {
+		cleanedHTML = cleanedHTML[:30000]
+	}
+
+	// Set defaults
+	if targetTone == "" {
+		targetTone = "professional yet approachable"
+	}
+	if targetLength == "" {
+		targetLength = "medium (800-1200 words)"
+	}
+
+	lengthGuidance := map[string]string{
+		"short":  "around 400-600 words",
+		"medium": "around 800-1200 words",
+		"long":   "around 1500-2000 words",
+	}
+	if guidance, ok := lengthGuidance[targetLength]; ok {
+		targetLength = guidance
+	}
+
+	aiPrompt := fmt.Sprintf(`You are an expert blog content creator. Generate a complete, SEO-optimized blog post based on the following source content and user instructions.
+
+SOURCE URL: %s
+
+SOURCE CONTENT:
+%s
+
+USER INSTRUCTIONS: %s
+
+WRITING REQUIREMENTS:
+- Tone: %s
+- Length: %s
+- Transform the source content into a fresh, human-readable blog post
+- DO NOT simply copy the source - rewrite and improve it
+- Use proper HTML formatting for the content
+- Make it SEO-friendly with relevant keywords naturally integrated
+- Add your own insights and structure to make it more valuable
+
+CRITICAL JSON FORMAT REQUIREMENTS:
+You MUST return a valid JSON object. All string values must have newlines escaped as \n (backslash-n), not actual line breaks.
+The "content" field should have all HTML on a single logical line with \n for line breaks.
+
+Return this exact JSON structure:
+{"title":"Your title here","slug":"your-slug-here","excerpt":"Your excerpt here","content":"<h2>Heading</h2>\n<p>Paragraph text...</p>\n<h3>Subheading</h3>\n<p>More text...</p>","meta_title":"SEO title","meta_description":"SEO description","meta_keywords":"keyword1, keyword2, keyword3","suggested_tags":["tag1","tag2","tag3"],"image_search_term":"search term"}
+
+Field descriptions:
+- title: Catchy, SEO-friendly blog title (max 70 characters)
+- slug: URL-friendly version of the title using lowercase and hyphens
+- excerpt: Compelling summary (150-200 characters) that hooks readers
+- content: Full blog content in HTML format using <h2>, <h3>, <p>, <ul>, <ol>, <strong>, <em> tags. Use \n for line breaks between tags.
+- meta_title: SEO meta title (max 60 characters)
+- meta_description: SEO meta description (max 155 characters)
+- meta_keywords: Comma-separated relevant keywords
+- suggested_tags: Array of 3-5 relevant tag strings
+- image_search_term: Best search term for finding a relevant featured image
+
+Important:
+1. Create ORIGINAL content inspired by the source - don't plagiarize
+2. Simplify complex information to make it accessible
+3. Use proper HTML formatting in content - no markdown
+4. Include at least 3 section headings (h2 or h3)
+5. Return ONLY the JSON object - no markdown code blocks, no explanation
+6. All newlines in string values MUST be escaped as \n`, url, cleanedHTML, prompt, targetTone, targetLength)
+
+	request := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 4096,
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: aiPrompt,
+			},
+		},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	responseText := claudeResp.Content[0].Text
+	jsonStr := s.extractJSON(responseText)
+
+	var generatedBlog GeneratedBlog
+	if err := json.Unmarshal([]byte(jsonStr), &generatedBlog); err != nil {
+		// Log both the extracted JSON and original response for debugging
+		fmt.Printf("[AIService] JSON parse error: %v\n", err)
+		fmt.Printf("[AIService] Extracted JSON length: %d\n", len(jsonStr))
+		fmt.Printf("[AIService] First 500 chars of extracted JSON: %s\n", truncateString(jsonStr, 500))
+		return nil, fmt.Errorf("failed to parse generated blog data: %w (response length: %d)", err, len(responseText))
+	}
+
+	return &generatedBlog, nil
+}
+
+// SimplifyBlogContent simplifies existing blog content to make it more readable
+func (s *AIService) SimplifyBlogContent(ctx context.Context, content string, targetTone string) (string, error) {
+	if s.apiKey == "" {
+		return "", fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	if targetTone == "" {
+		targetTone = "simple and easy to understand"
+	}
+
+	aiPrompt := fmt.Sprintf(`You are an expert editor who makes complex content accessible to all readers.
+
+CONTENT TO SIMPLIFY:
+%s
+
+REQUIREMENTS:
+- Tone: %s
+- Simplify complex sentences and jargon
+- Keep the core information and insights
+- Maintain proper HTML formatting
+- Make it engaging and easy to read
+- Keep approximately the same length
+- Use shorter paragraphs and bullet points where appropriate
+
+Return ONLY the simplified HTML content, nothing else. Do not add any explanation or wrapper.`, content, targetTone)
+
+	request := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 4096,
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: aiPrompt,
+			},
+		},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
+	if err != nil {
+		return "", err
+	}
+
+	simplifiedContent := claudeResp.Content[0].Text
+	// Remove markdown code blocks if present
+	simplifiedContent = strings.TrimPrefix(simplifiedContent, "```html")
+	simplifiedContent = strings.TrimPrefix(simplifiedContent, "```")
+	simplifiedContent = strings.TrimSuffix(simplifiedContent, "```")
+	simplifiedContent = strings.TrimSpace(simplifiedContent)
+
+	return simplifiedContent, nil
 }
