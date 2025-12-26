@@ -1,11 +1,13 @@
 package router
 
 import (
+	"job-platform/internal/cache"
 	"job-platform/internal/config"
 	"job-platform/internal/handler"
 	handlerMiddleware "job-platform/internal/handler/middleware"
 	"job-platform/internal/middleware"
 	"job-platform/internal/repository"
+	"job-platform/internal/search"
 	"job-platform/internal/service"
 	"job-platform/internal/storage"
 	"job-platform/internal/util/email"
@@ -16,7 +18,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClient *storage.MinioClient) *gin.Engine {
+func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClient *storage.MinioClient, meiliClient *search.MeiliClient, cacheService *cache.CacheService) *gin.Engine {
 	r := gin.Default()
 
 	// Middleware
@@ -209,12 +211,15 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	aiService := service.NewAIService()
 	scraperService := service.NewScraperService(aiService)
 
+	// Search service
+	searchService := service.NewSearchService(meiliClient)
+
 	// Set notification service on application service (to avoid circular dependency)
 	applicationService.SetNotificationService(notificationService)
 
 	// Initialize handlers
 	healthHandler := handler.NewHealthHandler(db, redis)
-	authHandler := handler.NewAuthHandler(authService, tokenService, userService)
+	authHandler := handler.NewAuthHandler(authService, tokenService, userService, cacheService)
 	adminAuthHandler := handler.NewAdminAuthHandler(adminService, tokenService)
 	adminUserHandler := handler.NewAdminUserHandler(adminService, userService)
 	adminCMSHandler := handler.NewAdminCMSHandler(cmsService)
@@ -222,10 +227,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	oauthHandler := handler.NewOAuthHandler(googleOAuthService, cfg)
 
 	// Job management handlers
-	jobHandler := handler.NewJobHandler(jobService, jobCategoryService, savedJobService)
+	jobHandler := handler.NewJobHandler(jobService, jobCategoryService, savedJobService, meiliClient, cacheService)
 	jobSeekerHandler := handler.NewJobSeekerHandler(applicationService, savedJobService, jobService)
-	employerJobHandler := handler.NewEmployerJobHandler(jobService, applicationService)
-	adminJobHandler := handler.NewAdminJobHandler(jobService, applicationService, jobCategoryService)
+	employerJobHandler := handler.NewEmployerJobHandler(jobService, applicationService, cacheService)
+	adminJobHandler := handler.NewAdminJobHandler(jobService, applicationService, jobCategoryService, searchService)
 
 	// Profile management handlers
 	profileHandler := handler.NewProfileHandler(profileService, userService, minioClient)
@@ -237,7 +242,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	resumeHandler := handler.NewResumeHandler(resumeService)
 
 	// Company management handlers
-	publicCompanyHandler := handler.NewPublicCompanyHandler(companyService, locationService, benefitService, mediaService, reviewService, followerService)
+	publicCompanyHandler := handler.NewPublicCompanyHandler(companyService, locationService, benefitService, mediaService, reviewService, followerService, cacheService)
 	jobSeekerCompanyHandler := handler.NewJobSeekerCompanyHandler(followerService, reviewService, companyService)
 	employerCompanyHandler := handler.NewEmployerCompanyHandler(companyService, teamService, locationService, benefitService, mediaService, reviewService, followerService)
 	invitationHandler := handler.NewInvitationHandler(invitationService, teamService)
@@ -250,7 +255,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	notificationHandler := handler.NewNotificationHandler(notificationService)
 
 	// Blog handler
-	blogHandler := handler.NewBlogHandler(blogService)
+	blogHandler := handler.NewBlogHandler(blogService, searchService, cacheService)
 
 	// Blog scraper handler
 	blogScraperHandler := handler.NewBlogScraperHandler(aiService, scraperService, blogService)
@@ -261,6 +266,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Import queue service and handler
 	importQueueService := service.NewImportQueueService(scraperService, jobService)
 	importQueueHandler := handler.NewImportQueueHandler(importQueueService)
+
+	// Cache handler
+	adminCacheHandler := handler.NewAdminCacheHandler(cacheService)
 
 	// Initialize middleware
 	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
@@ -325,6 +333,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			authProtected.POST("/change-password", authHandler.ChangePassword)
 			authProtected.POST("/logout", authHandler.Logout)
 
+			// Session Management
+			authProtected.POST("/logout-all-devices", authHandler.LogoutAllDevices)
+			authProtected.GET("/sessions", authHandler.GetActiveSessions)
+
 			// OAuth Account Linking
 			authProtected.POST("/oauth/google/link", oauthHandler.LinkGoogleAccount)
 			authProtected.DELETE("/oauth/google/unlink", oauthHandler.UnlinkGoogleAccount)
@@ -365,6 +377,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminUsers.POST("/:id/activate", adminUserHandler.ActivateUser)
 			adminUsers.GET("/:id/login-history", adminUserHandler.GetLoginHistory)
 			adminUsers.POST("/:id/revoke-sessions", adminUserHandler.RevokeSessions)
+			adminUsers.POST("/:id/unlock", adminUserHandler.UnlockUser)
 		}
 
 		// ==================== Admin CMS Routes ====================
@@ -599,7 +612,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.POST("/scrape/test", scraperHandler.TestScrape)
 			adminJobs.POST("/scrape/extract-links", scraperHandler.ExtractJobLinks)
 			adminJobs.POST("/scrape/extract-links-auto", scraperHandler.ExtractJobLinksAuto)
+			adminJobs.POST("/scrape/extract-from-api", scraperHandler.ExtractFromAPI)
 			adminJobs.POST("/scrape/analyze", scraperHandler.AnalyzeCareerPage)
+			adminJobs.POST("/scrape/analyze-ai", scraperHandler.AnalyzeCareerPageAI)
 
 			// Import queue endpoints
 			adminJobs.POST("/import-queue", importQueueHandler.CreateQueue)
@@ -616,6 +631,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminJobs.GET("/extract-links", importQueueHandler.GetAllExtractionTasks)
 			adminJobs.GET("/extract-links/:id", importQueueHandler.GetExtractionTask)
 			adminJobs.DELETE("/extract-links/:id", importQueueHandler.DeleteExtractionTask)
+
+			// Search indexing endpoints
+			adminJobs.POST("/reindex", adminJobHandler.ReindexJobs)
+			adminJobs.GET("/search-stats", adminJobHandler.GetSearchStats)
 		}
 
 		// Admin - Application stats
@@ -855,6 +874,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminBlogs.POST("/generate/create", blogScraperHandler.CreateBlogFromGenerated)
 			adminBlogs.POST("/generate/images", blogScraperHandler.SearchImages)
 			adminBlogs.POST("/generate/simplify", blogScraperHandler.SimplifyContent)
+
+			// Search indexing endpoints
+			adminBlogs.POST("/reindex", blogHandler.ReindexBlogs)
 		}
 
 		// Admin blog categories management
@@ -872,6 +894,34 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 		{
 			adminBlogTags.POST("", blogHandler.CreateTag)
 			adminBlogTags.DELETE("/:id", blogHandler.DeleteTag)
+		}
+
+		// ==================== Admin Cache Management Routes ====================
+		adminCache := v1.Group("/admin/cache")
+		adminCache.Use(authMiddleware, adminMiddleware)
+		{
+			adminCache.GET("/health", adminCacheHandler.HealthCheck)
+			adminCache.GET("/stats", adminCacheHandler.GetCacheStats)
+			adminCache.GET("/view-counts", adminCacheHandler.GetViewCounts)
+			adminCache.GET("/rate-limits", adminCacheHandler.GetRateLimits)
+
+			// Clear cache by type
+			adminCache.POST("/clear/jobs", adminCacheHandler.ClearJobCache)
+			adminCache.POST("/clear/blogs", adminCacheHandler.ClearBlogCache)
+			adminCache.POST("/clear/search", adminCacheHandler.ClearSearchCache)
+			adminCache.POST("/clear/companies", adminCacheHandler.ClearCompanyCache)
+			adminCache.POST("/clear/categories", adminCacheHandler.ClearCategoryCache)
+			adminCache.POST("/clear/locations", adminCacheHandler.ClearLocationCache)
+			adminCache.POST("/clear/sessions", adminCacheHandler.ClearSessionCache)
+			adminCache.POST("/clear/rate-limits", adminCacheHandler.ClearRateLimits)
+			adminCache.POST("/clear/all", adminCacheHandler.ClearAllCache)
+
+			// Key management - search endpoint (must be before wildcard routes)
+			adminCache.GET("/keys/search", adminCacheHandler.SearchKeys)
+			adminCache.POST("/keys", adminCacheHandler.SetKey)
+			adminCache.POST("/keys/ttl", adminCacheHandler.UpdateKeyTTL) // Uses body for key name
+			adminCache.GET("/key/*key", adminCacheHandler.GetKey)
+			adminCache.DELETE("/key/*key", adminCacheHandler.DeleteKey)
 		}
 	}
 

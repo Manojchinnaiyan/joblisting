@@ -33,32 +33,43 @@ export interface ReorderMediaData {
   order: { id: string; display_order: number }[]
 }
 
+// Normalize media type from backend (IMAGE/VIDEO) to frontend (image/video)
+function normalizeMedia(item: Record<string, unknown>): CompanyMedia {
+  return {
+    ...item,
+    type: (item.type as string)?.toLowerCase() as MediaType,
+    display_order: item.sort_order as number ?? item.display_order as number ?? 0,
+  } as CompanyMedia
+}
+
 export const employerMediaApi = {
   async getMedia(): Promise<CompanyMedia[]> {
     const response = await apiClient.get('/employer/company/media')
     // Backend returns { success, message, data: { media } }
     const apiData = response.data.data || response.data
-    return apiData.media ?? []
+    const media = apiData.media ?? []
+    return media.map(normalizeMedia)
   },
 
   async uploadMedia(data: UploadMediaData): Promise<CompanyMedia> {
     const formData = new FormData()
-    formData.append('file', data.file)
+    formData.append('image', data.file) // Backend expects 'image' field name
     if (data.title) formData.append('title', data.title)
     if (data.description) formData.append('description', data.description)
     if (data.is_featured !== undefined) formData.append('is_featured', String(data.is_featured))
 
-    const response = await apiClient.post('/employer/company/media', formData, {
+    const response = await apiClient.post('/employer/company/media/images', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
+    // Response is the media object directly (not wrapped in { media: ... })
     const apiData = response.data.data || response.data
-    return apiData.media
+    return normalizeMedia(apiData.media || apiData)
   },
 
   async updateMedia(id: string, data: UpdateMediaData): Promise<CompanyMedia> {
     const response = await apiClient.put(`/employer/company/media/${id}`, data)
     const apiData = response.data.data || response.data
-    return apiData.media
+    return normalizeMedia(apiData.media || apiData)
   },
 
   async deleteMedia(id: string): Promise<void> {
@@ -68,6 +79,7 @@ export const employerMediaApi = {
   async reorderMedia(data: ReorderMediaData): Promise<CompanyMedia[]> {
     const response = await apiClient.put('/employer/company/media/reorder', data)
     const apiData = response.data.data || response.data
-    return apiData.media ?? []
+    const media = apiData.media ?? []
+    return media.map(normalizeMedia)
   },
 }

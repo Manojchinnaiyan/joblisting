@@ -63,6 +63,7 @@ export default function AdminBlogsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [previewBlog, setPreviewBlog] = useState<Blog | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [isReindexing, setIsReindexing] = useState(false)
 
   const pageSize = 20
 
@@ -99,6 +100,26 @@ export default function AdminBlogsPage() {
     setIsRefreshing(true)
     await loadBlogs()
     setIsRefreshing(false)
+  }
+
+  const handleReindex = async () => {
+    setIsReindexing(true)
+    try {
+      const result = await adminBlogApi.reindexBlogs()
+      toast({
+        title: 'Success',
+        description: `Successfully reindexed ${result.indexed_count} blogs for search`,
+      })
+    } catch (error) {
+      console.error('Failed to reindex blogs:', error)
+      toast({
+        title: 'Error',
+        description: 'Failed to reindex blogs',
+        variant: 'destructive',
+      })
+    } finally {
+      setIsReindexing(false)
+    }
   }
 
   useEffect(() => {
@@ -196,6 +217,19 @@ export default function AdminBlogsPage() {
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleReindex}
+            disabled={isReindexing}
+          >
+            {isReindexing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Reindex Search
           </Button>
           <Button asChild variant="outline">
             <Link href="/admin/blogs/generate">

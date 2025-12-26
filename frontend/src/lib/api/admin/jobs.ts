@@ -290,4 +290,14 @@ export const adminJobsApi = {
     const response = await apiClient.get('/admin/jobs/stats')
     return response.data.data || response.data
   },
+
+  async reindexJobs(): Promise<{ message: string; jobs_indexed: number }> {
+    const response = await apiClient.post('/admin/jobs/reindex')
+    return response.data.data || response.data
+  },
+
+  async getSearchStats(): Promise<{ jobs: { numberOfDocuments: number }; blogs: { numberOfDocuments: number } }> {
+    const response = await apiClient.get('/admin/jobs/search-stats')
+    return response.data.data || response.data
+  },
 }

@@ -192,6 +192,15 @@ func (s *TokenService) GetActiveSessions(userID uuid.UUID) ([]domain.RefreshToke
 	return s.tokenRepo.GetUserActiveSessions(userID)
 }
 
+// GetActiveTokenCount returns the count of active tokens for a user
+func (s *TokenService) GetActiveTokenCount(userID uuid.UUID) (int64, error) {
+	sessions, err := s.tokenRepo.GetUserActiveSessions(userID)
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(sessions)), nil
+}
+
 // getPermissionsForRole returns permissions based on role
 func (s *TokenService) getPermissionsForRole(role domain.UserRole) []string {
 	switch role {

@@ -69,7 +69,7 @@ func (s *ResumeService) UploadResume(userID uuid.UUID, file *multipart.FileHeade
 
 	// Generate unique filename
 	uniqueFilename := storage.GenerateUniqueFileName(file.Filename)
-	filePath := storage.GenerateFilePath(userID, s.bucket, uniqueFilename)
+	filePath := storage.GenerateFilePath(userID, uniqueFilename)
 
 	// Upload to MinIO
 	uploadResult, err := s.storageClient.UploadFile(s.bucket, file, filePath)

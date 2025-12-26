@@ -23,6 +23,9 @@ import {
   Eye,
   Globe,
   Phone,
+  Unlock,
+  LogOut,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -55,6 +58,8 @@ import {
   useSuspendUser,
   useActivateUser,
   useDeleteUser,
+  useUnlockUser,
+  useRevokeUserSessions,
 } from '@/hooks/admin'
 
 interface PageProps {
@@ -64,13 +69,15 @@ interface PageProps {
 export default function UserDetailPage({ params }: PageProps) {
   const { id } = use(params)
   const router = useRouter()
-  const [actionDialog, setActionDialog] = useState<'suspend' | 'activate' | 'delete' | null>(null)
+  const [actionDialog, setActionDialog] = useState<'suspend' | 'activate' | 'delete' | 'unlock' | 'revoke-sessions' | null>(null)
 
   const { data: user, isLoading } = useAdminUser(id)
   const { data: loginHistory, isLoading: loginHistoryLoading } = useUserLoginHistory(id)
   const suspendUser = useSuspendUser()
   const activateUser = useActivateUser()
   const deleteUser = useDeleteUser()
+  const unlockUser = useUnlockUser()
+  const revokeUserSessions = useRevokeUserSessions()
 
   const handleAction = async () => {
     try {
@@ -85,11 +92,21 @@ export default function UserDetailPage({ params }: PageProps) {
           await deleteUser.mutateAsync(id)
           router.push('/admin/users')
           break
+        case 'unlock':
+          await unlockUser.mutateAsync(id)
+          break
+        case 'revoke-sessions':
+          await revokeUserSessions.mutateAsync(id)
+          break
       }
     } finally {
       setActionDialog(null)
     }
   }
+
+  // Check if user account is locked (has failed login attempts or lockout_until)
+  const isLocked = user?.failed_login_attempts && user.failed_login_attempts >= 5 ||
+                   (user?.lockout_until && new Date(user.lockout_until) > new Date())
 
   if (isLoading) {
     return <UserDetailSkeleton />
@@ -125,12 +142,29 @@ export default function UserDetailPage({ params }: PageProps) {
             <p className="text-sm text-slate-500 dark:text-slate-400">View and manage user information</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Button variant="outline" asChild>
             <Link href={`/admin/users/${id}/edit`}>
               <Edit className="mr-2 h-4 w-4" />
               Edit User
             </Link>
+          </Button>
+          {isLocked && (
+            <Button
+              variant="outline"
+              className="text-blue-600 border-blue-600 hover:bg-blue-50"
+              onClick={() => setActionDialog('unlock')}
+            >
+              <Unlock className="mr-2 h-4 w-4" />
+              Unlock Account
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => setActionDialog('revoke-sessions')}
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            Revoke Sessions
           </Button>
           {user.status === 'ACTIVE' ? (
             <Button
@@ -263,6 +297,36 @@ export default function UserDetailPage({ params }: PageProps) {
                   </Badge>
                 )}
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Account Status</span>
+                {isLocked ? (
+                  <Badge variant="destructive">
+                    <AlertTriangle className="mr-1 h-3 w-3" />
+                    Locked
+                  </Badge>
+                ) : (
+                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
+                    <CheckCircle className="mr-1 h-3 w-3" />
+                    Active
+                  </Badge>
+                )}
+              </div>
+              {user.failed_login_attempts > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Failed Logins</span>
+                  <Badge variant={user.failed_login_attempts >= 5 ? 'destructive' : 'secondary'}>
+                    {user.failed_login_attempts} attempts
+                  </Badge>
+                </div>
+              )}
+              {user.lockout_until && new Date(user.lockout_until) > new Date() && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Locked Until</span>
+                  <span className="text-sm font-medium text-destructive">
+                    {format(new Date(user.lockout_until), 'MMM d, HH:mm')}
+                  </span>
+                </div>
+              )}
             </div>
 
             <Separator className="my-6" />
@@ -649,6 +713,45 @@ export default function UserDetailPage({ params }: PageProps) {
               className="bg-destructive hover:bg-destructive/90"
             >
               Delete User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={actionDialog === 'unlock'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock User Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to unlock the account for {user.first_name} {user.last_name}?
+              This will reset their failed login attempts and remove any lockout.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAction}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Unlock Account
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={actionDialog === 'revoke-sessions'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Revoke All Sessions</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to revoke all sessions for {user.first_name} {user.last_name}?
+              This will log them out from all devices and they will need to log in again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAction}>
+              Revoke Sessions
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

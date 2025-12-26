@@ -20,7 +20,22 @@ export interface Company {
   is_following?: boolean
   locations?: CompanyLocation[]
   benefits?: CompanyBenefit[]
+  media?: CompanyMedia[]
   created_at: string
+}
+
+export interface CompanyMedia {
+  id: string
+  company_id: string
+  type: 'IMAGE' | 'VIDEO'
+  url: string
+  thumbnail_url?: string
+  title?: string
+  description?: string
+  sort_order: number
+  is_featured: boolean
+  created_at: string
+  updated_at: string
 }
 
 export type CompanySize = '1-10' | '11-50' | '51-200' | '201-500' | '501-1000' | '1001-5000' | '5000+'

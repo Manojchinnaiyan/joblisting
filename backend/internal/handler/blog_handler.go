@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 
+	"job-platform/internal/cache"
 	"job-platform/internal/domain"
 	"job-platform/internal/service"
 
@@ -13,12 +15,18 @@ import (
 
 // BlogHandler handles blog-related HTTP requests
 type BlogHandler struct {
-	blogService *service.BlogService
+	blogService   *service.BlogService
+	searchService *service.SearchService
+	cacheService  *cache.CacheService
 }
 
 // NewBlogHandler creates a new blog handler
-func NewBlogHandler(blogService *service.BlogService) *BlogHandler {
-	return &BlogHandler{blogService: blogService}
+func NewBlogHandler(blogService *service.BlogService, searchService *service.SearchService, cacheService *cache.CacheService) *BlogHandler {
+	return &BlogHandler{
+		blogService:   blogService,
+		searchService: searchService,
+		cacheService:  cacheService,
+	}
 }
 
 // ============= Admin Endpoints =============
@@ -50,7 +58,18 @@ func (h *BlogHandler) CreateBlog(c *gin.Context) {
 		return
 	}
 
+	// Invalidate blog caches
+	h.invalidateBlogCaches()
+
 	c.JSON(http.StatusCreated, blog)
+}
+
+// invalidateBlogCaches clears all blog-related caches
+func (h *BlogHandler) invalidateBlogCaches() {
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		ctx := context.Background()
+		_ = h.cacheService.InvalidateAllBlogCaches(ctx)
+	}
 }
 
 // UpdateBlog updates a blog post (admin only)
@@ -74,6 +93,9 @@ func (h *BlogHandler) UpdateBlog(c *gin.Context) {
 		return
 	}
 
+	// Invalidate blog caches
+	h.invalidateBlogCaches()
+
 	c.JSON(http.StatusOK, blog)
 }
 
@@ -91,6 +113,9 @@ func (h *BlogHandler) DeleteBlog(c *gin.Context) {
 		return
 	}
 
+	// Invalidate blog caches
+	h.invalidateBlogCaches()
+
 	c.Status(http.StatusNoContent)
 }
 
@@ -107,6 +132,9 @@ func (h *BlogHandler) PublishBlog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Invalidate blog caches
+	h.invalidateBlogCaches()
 
 	blog, err := h.blogService.GetBlog(id)
 	if err != nil {
@@ -130,6 +158,9 @@ func (h *BlogHandler) UnpublishBlog(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Invalidate blog caches
+	h.invalidateBlogCaches()
 
 	blog, err := h.blogService.GetBlog(id)
 	if err != nil {
@@ -290,8 +321,14 @@ func (h *BlogHandler) GetBlog(c *gin.Context) {
 		return
 	}
 
-	// Increment view count
-	_ = h.blogService.IncrementViewCount(id)
+	// Increment view count via Redis cache (faster, batched sync to DB later)
+	ctx := context.Background()
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_, _ = h.cacheService.IncrementViewCount(ctx, "blog", id.String())
+	} else {
+		// Fallback to direct DB update
+		_ = h.blogService.IncrementViewCount(id)
+	}
 
 	c.JSON(http.StatusOK, blog)
 }
@@ -299,6 +336,18 @@ func (h *BlogHandler) GetBlog(c *gin.Context) {
 // GetBlogBySlug gets a blog by slug (public - published only)
 func (h *BlogHandler) GetBlogBySlug(c *gin.Context) {
 	slug := c.Param("slug")
+	ctx := context.Background()
+
+	// Try to get from cache first
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		var cached domain.Blog
+		if err := h.cacheService.GetCachedBlogBySlug(ctx, slug, &cached); err == nil {
+			// Increment view count
+			_, _ = h.cacheService.IncrementViewCount(ctx, "blog", cached.ID.String())
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+	}
 
 	blog, err := h.blogService.GetBlogBySlug(slug)
 	if err != nil {
@@ -312,8 +361,15 @@ func (h *BlogHandler) GetBlogBySlug(c *gin.Context) {
 		return
 	}
 
-	// Increment view count
-	_ = h.blogService.IncrementViewCount(blog.ID)
+	// Increment view count via Redis cache (faster, batched sync to DB later)
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_, _ = h.cacheService.IncrementViewCount(ctx, "blog", blog.ID.String())
+		// Cache the blog
+		_ = h.cacheService.CacheBlogBySlug(ctx, slug, blog)
+	} else {
+		// Fallback to direct DB update
+		_ = h.blogService.IncrementViewCount(blog.ID)
+	}
 
 	c.JSON(http.StatusOK, blog)
 }
@@ -326,13 +382,52 @@ func (h *BlogHandler) ListBlogs(c *gin.Context) {
 	published := domain.BlogStatusPublished
 	filters.Status = &published
 
+	// Build cache key
+	cacheKey := h.buildBlogListCacheKey(filters)
+	ctx := context.Background()
+
+	// Try cache first
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		var cached domain.BlogListResponse
+		if err := h.cacheService.Get(ctx, cache.PrefixBlogList+cacheKey, &cached); err == nil {
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+	}
+
 	response, err := h.blogService.ListBlogs(filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	// Cache the response
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_ = h.cacheService.Set(ctx, cache.PrefixBlogList+cacheKey, response, cache.DefaultListTTL)
+	}
+
 	c.JSON(http.StatusOK, response)
+}
+
+// buildBlogListCacheKey creates a unique cache key based on filters
+func (h *BlogHandler) buildBlogListCacheKey(filters domain.BlogFilters) string {
+	key := "p:" + strconv.Itoa(filters.Page) + "|ps:" + strconv.Itoa(filters.PageSize)
+	if filters.Status != nil {
+		key += "|st:" + string(*filters.Status)
+	}
+	if filters.CategoryID != nil {
+		key += "|cat:" + filters.CategoryID.String()
+	}
+	if filters.Search != nil {
+		key += "|q:" + *filters.Search
+	}
+	if filters.SortBy != "" {
+		key += "|sb:" + filters.SortBy
+	}
+	if filters.SortOrder != "" {
+		key += "|so:" + filters.SortOrder
+	}
+	return key
 }
 
 // GetCategories lists all blog categories (public)
@@ -355,6 +450,37 @@ func (h *BlogHandler) GetTags(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, tags)
+}
+
+// ============= Search Indexing =============
+
+// ReindexBlogs reindexes all blogs to MeiliSearch
+// POST /api/v1/admin/blogs/reindex
+func (h *BlogHandler) ReindexBlogs(c *gin.Context) {
+	if h.searchService == nil || !h.searchService.IsAvailable() {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Search service not available"})
+		return
+	}
+
+	// Get all blogs
+	blogs, err := h.blogService.GetAllBlogs()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Reindex all blogs
+	ctx := context.Background()
+	if err := h.searchService.ReindexAllBlogs(ctx, blogs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":       true,
+		"message":       "Blogs reindexed successfully",
+		"indexed_count": len(blogs),
+	})
 }
 
 // ============= Helper Methods =============

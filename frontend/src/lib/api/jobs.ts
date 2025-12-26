@@ -38,7 +38,7 @@ export const jobsApi = {
     filters?: JobFilters,
     pagination?: PaginationParams
   ): Promise<JobsResponse> => {
-    const params = new URLSearchParams({ q: query })
+    const params = new URLSearchParams({ query })
 
     if (filters?.job_type?.length) {
       filters.job_type.forEach((t) => params.append('job_type', t))
@@ -55,8 +55,32 @@ export const jobsApi = {
     if (pagination?.page) params.append('page', pagination.page.toString())
     if (pagination?.per_page) params.append('limit', pagination.per_page.toString())
 
-    const response = await apiClient.get<ApiResponse<JobsResponse>>(`/jobs/search?${params}`)
-    return response.data.data!
+    // Meilisearch returns a different format, normalize it
+    interface MeiliSearchResponse {
+      jobs: Job[]
+      total: number
+      page: number
+      limit: number
+      total_pages: number
+      query: string
+      processing_time_ms: number
+    }
+
+    const response = await apiClient.get<ApiResponse<MeiliSearchResponse>>(`/jobs/search?${params}`)
+    const data = response.data.data!
+
+    // Normalize to JobsResponse format
+    return {
+      jobs: data.jobs || [],
+      pagination: {
+        page: data.page,
+        limit: data.limit,
+        total: data.total,
+        total_pages: data.total_pages,
+        has_next: data.page < data.total_pages,
+        has_prev: data.page > 1,
+      },
+    }
   },
 
   getJobBySlug: async (slug: string): Promise<Job> => {

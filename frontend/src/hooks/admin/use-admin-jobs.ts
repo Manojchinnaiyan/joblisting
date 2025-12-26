@@ -170,5 +170,20 @@ export function useJobStats() {
   })
 }
 
+export function useReindexJobs() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: () => adminJobsApi.reindexJobs(),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: adminJobsKeys.lists() })
+      toast.success(`Successfully reindexed ${data.jobs_indexed} jobs for search`)
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to reindex jobs')
+    },
+  })
+}
+
 // Alias for page imports
 export const useDeleteJob = useDeleteAdminJob

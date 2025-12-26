@@ -112,13 +112,20 @@ export default function JobsPage() {
     setError(null)
     try {
       const apiFilters: JobFiltersType = { ...filters }
-      if (searchQuery) {
-        apiFilters.q = searchQuery
-      }
-      const data = await jobsApi.getJobs(apiFilters, {
+      const paginationParams = {
         page: currentPage,
         per_page: 12,
-      })
+      }
+
+      let data
+      if (searchQuery?.trim()) {
+        // Use Meilisearch for search queries (faster, typo-tolerant, better relevance)
+        data = await jobsApi.searchJobs(searchQuery, apiFilters, paginationParams)
+      } else {
+        // Use regular DB query for browsing without search
+        data = await jobsApi.getJobs(apiFilters, paginationParams)
+      }
+
       setJobs(data.jobs)
       setPagination(data.pagination)
     } catch (err) {

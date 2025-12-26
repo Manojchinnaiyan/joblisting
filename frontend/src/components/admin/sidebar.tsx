@@ -18,6 +18,7 @@ import {
   ChevronDown,
   LogOut,
   BookOpen,
+  Database,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -102,6 +103,11 @@ const navItems: NavItem[] = [
     title: 'Security',
     href: '/admin/security',
     icon: Shield,
+  },
+  {
+    title: 'Cache',
+    href: '/admin/cache',
+    icon: Database,
   },
   {
     title: 'Settings',

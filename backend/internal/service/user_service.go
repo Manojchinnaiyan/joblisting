@@ -54,6 +54,11 @@ func (s *UserService) Activate(id uuid.UUID) error {
 	return s.userRepo.Activate(id)
 }
 
+// UnlockUser unlocks a user account by resetting failed attempts and lock time
+func (s *UserService) UnlockUser(id uuid.UUID) error {
+	return s.userRepo.ResetFailedAttempts(id)
+}
+
 // GetProfile retrieves user profile
 func (s *UserService) GetProfile(userID uuid.UUID) (*domain.UserProfile, error) {
 	return s.profileRepo.GetByUserID(userID)

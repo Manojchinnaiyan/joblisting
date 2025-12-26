@@ -328,3 +328,19 @@ func (h *AdminUserHandler) RevokeSessions(c *gin.Context) {
 
 	response.OK(c, "All sessions revoked successfully", nil)
 }
+
+// UnlockUser unlocks a locked user account (resets failed login attempts)
+func (h *AdminUserHandler) UnlockUser(c *gin.Context) {
+	userID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.BadRequest(c, domain.ErrInvalidToken)
+		return
+	}
+
+	if err := h.userService.UnlockUser(userID); err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "User account unlocked successfully", nil)
+}

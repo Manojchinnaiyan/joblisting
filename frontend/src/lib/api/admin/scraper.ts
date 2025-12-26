@@ -33,6 +33,11 @@ export interface ScrapedJob {
   description: string
   requirements: string
   salary: string
+  salary_min?: number
+  salary_max?: number
+  salary_currency?: string
+  application_deadline?: string
+  posted_date?: string
   job_type: string
   experience_level: string
   skills: string[]
@@ -86,6 +91,35 @@ export interface PageAnalysisResponse {
   total_jobs: number
   has_pagination: boolean
   pagination_type: string
+  error?: string
+}
+
+// AI URL Analysis Types
+export interface URLAnalysisResult {
+  url: string
+  site_type: 'career_listing' | 'job_board' | 'company_site' | 'ats_platform'
+  platform: string
+  job_loading_method: 'static_html' | 'ajax' | 'spa' | 'iframe'
+  job_list_selector: string
+  job_link_selector: string
+  job_link_pattern: string
+  pagination_type: 'none' | 'numbered' | 'load_more' | 'infinite_scroll' | 'api_based'
+  pagination_selector: string
+  api_endpoint_pattern: string
+  search_form_selector: string
+  total_jobs_estimate: number | string
+  extraction_methods: string[]
+  extraction_steps: string[]
+  challenges: string[]
+  sample_job_links: string[]
+  all_extracted_links: string[]  // All job URLs extracted from the page
+  confidence: number
+  notes: string
+}
+
+export interface AIAnalysisResponse {
+  success: boolean
+  analysis?: URLAnalysisResult
   error?: string
 }
 
@@ -213,6 +247,35 @@ export const scraperApi = {
    */
   async analyzeCareerPage(url: string): Promise<PageAnalysisResponse> {
     const response = await scraperClient.post('/admin/jobs/scrape/analyze', { url })
+    return response.data
+  },
+
+  /**
+   * Analyze a career page using AI to determine the best extraction strategy
+   * Returns detailed analysis including CSS selectors, extraction methods, and challenges
+   */
+  async analyzeCareerPageAI(url: string): Promise<AIAnalysisResponse> {
+    const response = await scraperClient.post('/admin/jobs/scrape/analyze-ai', { url })
+    return response.data
+  },
+
+  /**
+   * Extract jobs from a specific API endpoint
+   * Used when the AI analysis detected an API endpoint
+   * @param apiEndpoint - The API endpoint URL to fetch jobs from
+   * @param baseUrl - The base URL of the career site
+   * @param jobLinkPattern - Optional URL pattern for constructing job URLs (e.g., "/search-and-apply/{id}")
+   */
+  async extractFromAPI(
+    apiEndpoint: string,
+    baseUrl: string,
+    jobLinkPattern?: string
+  ): Promise<ExtractLinksResponse> {
+    const response = await scraperClient.post('/admin/jobs/scrape/extract-from-api', {
+      api_endpoint: apiEndpoint,
+      base_url: baseUrl,
+      job_link_pattern: jobLinkPattern || ''
+    })
     return response.data
   },
 

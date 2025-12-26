@@ -54,7 +54,7 @@ services:
   # MinIO (S3-compatible storage)
   minio:
     image: minio/minio:RELEASE.2024-11-07T00-52-20Z
-    container_name: job_minio
+    container_name: minio
     restart: unless-stopped
     ports:
       - "9000:9000"
@@ -144,15 +144,23 @@ services:
       MEILI_MASTER_KEY: masterKey123
 
       # MinIO (Docker container name)
-      MINIO_ENDPOINT: job_minio:9000
+      MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_URL: http://localhost:9000
       MINIO_BUCKET_NAME: resumes
       MINIO_BUCKET_RESUMES: resumes
       MINIO_BUCKET_AVATARS: avatars
       MINIO_BUCKET_CERTIFICATES: certificates
       MINIO_BUCKET_PORTFOLIOS: portfolios
+      MINIO_BUCKET_COMPANIES: companies
+
+      # File Upload Limits
+      MAX_RESUMES_PER_USER: 5
+      MAX_RESUME_SIZE_MB: 10
+      MAX_AVATAR_SIZE_MB: 5
+      RESUME_URL_EXPIRY_HOURS: 24
 
       # JWT
       JWT_SECRET: your-super-secret-jwt-key-change-this-in-production-use-random-64-chars

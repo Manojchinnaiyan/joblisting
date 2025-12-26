@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -195,21 +196,26 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 	experienceLevel := s.mapExperienceLevel(extractedJob.ExperienceLevel)
 
 	response := &dto.ScrapedJobResponse{
-		Title:           extractedJob.Title,
-		Company:         extractedJob.Company,
-		CompanyLogo:     extractedJob.CompanyLogo,
-		Location:        extractedJob.Location,
-		City:            extractedJob.City,
-		State:           extractedJob.State,
-		Country:         extractedJob.Country,
-		Description:     extractedJob.Description,
-		Requirements:    extractedJob.Requirements,
-		Salary:          extractedJob.Salary,
-		JobType:         jobType,
-		ExperienceLevel: experienceLevel,
-		Skills:          extractedJob.Skills,
-		Benefits:        extractedJob.Benefits,
-		OriginalURL:     jobURL,
+		Title:               extractedJob.Title,
+		Company:             extractedJob.Company,
+		CompanyLogo:         extractedJob.CompanyLogo,
+		Location:            extractedJob.Location,
+		City:                extractedJob.City,
+		State:               extractedJob.State,
+		Country:             extractedJob.Country,
+		Description:         extractedJob.Description,
+		Requirements:        extractedJob.Requirements,
+		Salary:              extractedJob.Salary,
+		SalaryMin:           extractedJob.SalaryMin,
+		SalaryMax:           extractedJob.SalaryMax,
+		SalaryCurrency:      extractedJob.SalaryCurrency,
+		ApplicationDeadline: extractedJob.ApplicationDeadline,
+		PostedDate:          extractedJob.PostedDate,
+		JobType:             jobType,
+		ExperienceLevel:     experienceLevel,
+		Skills:              extractedJob.Skills,
+		Benefits:            extractedJob.Benefits,
+		OriginalURL:         jobURL,
 	}
 
 	return response, warnings, nil
@@ -263,6 +269,16 @@ func (s *ScraperService) scrapeHTML(ctx context.Context, jobURL string) (string,
 	}
 
 	return html, nil
+}
+
+// ScrapeHTML is the exported version of scrapeHTML for use by handlers
+func (s *ScraperService) ScrapeHTML(ctx context.Context, jobURL string) (string, error) {
+	return s.scrapeHTML(ctx, jobURL)
+}
+
+// AnalyzeCareerPageAI uses AI to analyze a career page and determine the best extraction strategy
+func (s *ScraperService) AnalyzeCareerPageAI(ctx context.Context, htmlContent string, pageURL string) (*URLAnalysisResult, error) {
+	return s.aiService.AnalyzeCareerPageURL(ctx, htmlContent, pageURL)
 }
 
 // scrapeWithFlareSolverr uses FlareSolverr to bypass Cloudflare protection
@@ -1522,9 +1538,9 @@ func (s *ScraperService) scrapeWithNetworkCapture(ctx context.Context, pageURL s
 								log.Printf("🔷 Drupal AJAX response detected: %s", details.URL)
 							}
 
-							// Limit size to prevent memory issues
-							if len(body) > 1000000 {
-								body = body[:1000000]
+							// Limit size to prevent memory issues (10MB max)
+							if len(body) > 10000000 {
+								body = body[:10000000]
 							}
 
 							apiResponsesMutex.Lock()
@@ -2192,6 +2208,14 @@ func (s *ScraperService) extractJobsFromAPIResponse(responseBody string, baseURL
 			keys = append(keys, k)
 		}
 		log.Printf("📋 API response top-level keys: %v", keys)
+
+		// Check for HTML-in-JSON pattern (like Boeing: {"filters": "<html>", "results": "<html>"})
+		// Some job sites return JSON with HTML content in string fields
+		htmlJobs := s.extractJobsFromHTMLInJSON(dataMap, baseURL)
+		if len(htmlJobs) > 0 {
+			log.Printf("🔷 Extracted %d jobs from HTML-in-JSON response", len(htmlJobs))
+			return htmlJobs
+		}
 	}
 
 	// Recursively search for job arrays in the response
@@ -2335,6 +2359,155 @@ func (s *ScraperService) extractJobsFromDrupalHTML(htmlContent string, baseURL s
 
 	log.Printf("🔷 Drupal HTML extraction found %d job links", len(jobs))
 	return jobs
+}
+
+// extractJobsFromHTMLInJSON extracts job links from JSON responses where values contain HTML
+// This handles patterns like Boeing's API: {"filters": "<html>", "results": "<html with job links>"}
+func (s *ScraperService) extractJobsFromHTMLInJSON(data map[string]interface{}, baseURL string) []APIJobListing {
+	var jobs []APIJobListing
+	seenURLs := make(map[string]bool)
+
+	// Keys that commonly contain HTML with job listings
+	htmlKeys := []string{"results", "html", "content", "data", "body", "markup", "output", "jobsHtml", "listHtml"}
+
+	for key, value := range data {
+		// Check if this is a string value that looks like HTML
+		htmlStr, ok := value.(string)
+		if !ok || len(htmlStr) < 50 {
+			continue
+		}
+
+		// Check if it contains HTML tags
+		if !strings.Contains(htmlStr, "<") || !strings.Contains(htmlStr, ">") {
+			continue
+		}
+
+		// Only process known HTML-containing keys or keys that look like they contain HTML
+		isKnownKey := false
+		lowerKey := strings.ToLower(key)
+		for _, htmlKey := range htmlKeys {
+			if strings.Contains(lowerKey, strings.ToLower(htmlKey)) {
+				isKnownKey = true
+				break
+			}
+		}
+
+		// Also check if the content looks like HTML with links
+		if !isKnownKey && !strings.Contains(htmlStr, "<a ") {
+			continue
+		}
+
+		log.Printf("🔍 Checking HTML in JSON key '%s' (size: %d bytes)", key, len(htmlStr))
+
+		// Parse the HTML content
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(htmlStr))
+		if err != nil {
+			log.Printf("⚠️ Failed to parse HTML in key '%s': %v", key, err)
+			continue
+		}
+
+		// Look for job links - prioritize links with job-related patterns
+		doc.Find("a[href]").Each(func(i int, sel *goquery.Selection) {
+			href, exists := sel.Attr("href")
+			if !exists || href == "" || href == "#" {
+				return
+			}
+
+			lowerHref := strings.ToLower(href)
+
+			// Check if it looks like a job URL
+			isJobURL := strings.Contains(lowerHref, "/job") ||
+				strings.Contains(lowerHref, "/jobs/") ||
+				strings.Contains(lowerHref, "/career") ||
+				strings.Contains(lowerHref, "/opening") ||
+				strings.Contains(lowerHref, "/position") ||
+				strings.Contains(lowerHref, "/vacancy") ||
+				strings.Contains(lowerHref, "/requisition") ||
+				strings.Contains(lowerHref, "/posting")
+
+			if !isJobURL {
+				return
+			}
+
+			// Build absolute URL
+			jobURL := href
+			if !strings.HasPrefix(href, "http") {
+				parsedBase, err := url.Parse(baseURL)
+				if err != nil {
+					return
+				}
+				if strings.HasPrefix(href, "/") {
+					jobURL = fmt.Sprintf("%s://%s%s", parsedBase.Scheme, parsedBase.Host, href)
+				} else {
+					jobURL = strings.TrimRight(baseURL, "/") + "/" + href
+				}
+			}
+
+			// Normalize the URL to avoid duplicates with different locale prefixes
+			// e.g., /job/123, /en/job/123, /jobs/123 should be deduplicated
+			normalizedURL := s.normalizeJobURL(jobURL)
+
+			if seenURLs[normalizedURL] {
+				return
+			}
+			seenURLs[normalizedURL] = true
+
+			// Get title from link text
+			title := strings.TrimSpace(sel.Text())
+			title = regexp.MustCompile(`\s+`).ReplaceAllString(title, " ")
+			if len(title) > 200 {
+				title = title[:200]
+			}
+
+			// If title is empty, try to get from data attributes or nearby elements
+			if title == "" || len(title) < 3 {
+				if dataTitle, exists := sel.Attr("data-title"); exists {
+					title = dataTitle
+				} else if ariaLabel, exists := sel.Attr("aria-label"); exists {
+					title = ariaLabel
+				}
+			}
+
+			if title != "" && len(title) >= 3 {
+				jobs = append(jobs, APIJobListing{
+					Title: title,
+					URL:   jobURL, // Use original URL, not normalized (for actual scraping)
+				})
+				log.Printf("📋 Found job in HTML: %s -> %s", title[:min(50, len(title))], jobURL)
+			}
+		})
+	}
+
+	if len(jobs) > 0 {
+		log.Printf("🔷 HTML-in-JSON extraction found %d job links", len(jobs))
+	}
+	return jobs
+}
+
+// normalizeJobURL normalizes a job URL to detect duplicates with different formats
+// e.g., /job/123, /en/job/123, /jobs/123 -> /job/123
+func (s *ScraperService) normalizeJobURL(jobURL string) string {
+	parsedURL, err := url.Parse(jobURL)
+	if err != nil {
+		return jobURL
+	}
+
+	path := parsedURL.Path
+
+	// Remove common locale prefixes
+	localePattern := regexp.MustCompile(`^/(en|de|fr|es|it|pt|zh|ja|ko|nl|ru|ar|hi|en-us|en-gb|en-au|en-ca)/`)
+	path = localePattern.ReplaceAllString(path, "/")
+
+	// Normalize /jobs/ to /job/
+	path = strings.Replace(path, "/jobs/", "/job/", 1)
+
+	// Extract just the job ID if present
+	jobIDPattern := regexp.MustCompile(`/job[s]?/(\d+)`)
+	if matches := jobIDPattern.FindStringSubmatch(path); len(matches) > 1 {
+		return parsedURL.Host + "/job/" + matches[1]
+	}
+
+	return parsedURL.Host + path
 }
 
 // detectAPIPagination analyzes an API response to detect pagination info
@@ -2497,10 +2670,72 @@ func (s *ScraperService) detectAPIPagination(responseBody string, requestURL str
 		// Check URL for pagination params
 		if strings.Contains(requestURL, "from=") || strings.Contains(requestURL, "offset=") {
 			info.PaginationType = "offset"
-		} else if strings.Contains(requestURL, "page=") {
+		} else if strings.Contains(requestURL, "page=") || strings.Contains(requestURL, "CurrentPage=") {
 			info.PaginationType = "page"
 		} else {
 			info.PaginationType = "offset" // Default assumption
+		}
+	}
+
+	// If we still don't have total count or page size, try to extract from URL parameters
+	// This handles cases like Boeing where: FacetFilters[0].Count=20, RecordsPerPage=15, CurrentPage=1
+	if parsedURL, err := url.Parse(requestURL); err == nil {
+		query := parsedURL.Query()
+
+		// Extract total from URL params if not found in response
+		if info.TotalCount == 0 {
+			// Check FacetFilters[0].Count pattern (Boeing-style)
+			for key, values := range query {
+				if strings.Contains(key, "Count") && len(values) > 0 {
+					if count, err := strconv.Atoi(values[0]); err == nil && count > 0 {
+						info.TotalCount = count
+						log.Printf("📊 Detected total count: %d from URL param '%s'", info.TotalCount, key)
+						break
+					}
+				}
+			}
+		}
+
+		// Extract page size from URL params if not found in response
+		if info.PageSize == 0 {
+			pageSizeParams := []string{"RecordsPerPage", "recordsPerPage", "PageSize", "pageSize", "limit", "size", "perPage", "per_page"}
+			for _, param := range pageSizeParams {
+				if val := query.Get(param); val != "" {
+					if size, err := strconv.Atoi(val); err == nil && size > 0 {
+						info.PageSize = size
+						log.Printf("📊 Detected page size: %d from URL param '%s'", info.PageSize, param)
+						break
+					}
+				}
+			}
+		}
+
+		// Extract current page from URL params if not found in response
+		if info.CurrentPage == 0 {
+			pageParams := []string{"CurrentPage", "currentPage", "page", "pageNumber", "Page"}
+			for _, param := range pageParams {
+				if val := query.Get(param); val != "" {
+					if page, err := strconv.Atoi(val); err == nil && page > 0 {
+						info.CurrentPage = page
+						info.PaginationType = "page"
+						log.Printf("📊 Detected current page: %d from URL param '%s'", info.CurrentPage, param)
+						break
+					}
+				}
+			}
+		}
+
+		// Re-check if there's more data based on updated values
+		if info.TotalCount > 0 && info.PageSize > 0 {
+			currentCount := info.CurrentOffset + info.PageSize
+			if info.CurrentPage > 0 {
+				currentCount = info.CurrentPage * info.PageSize
+			}
+			info.HasMore = currentCount < info.TotalCount
+			if info.HasMore {
+				log.Printf("📊 Pagination detected: total=%d, pageSize=%d, currentPage=%d, hasMore=%v",
+					info.TotalCount, info.PageSize, info.CurrentPage, info.HasMore)
+			}
 		}
 	}
 
@@ -3482,15 +3717,50 @@ func (s *ScraperService) extractJobFromObject(obj map[string]interface{}, baseUR
 		}
 	}
 
+	// Build Emirates URL if it's Emirates careers site
+	// Emirates uses reqid/reqno for URLs, NOT the id field
+	if job.URL == "" {
+		if strings.Contains(baseURL, "emiratesgroupcareers.com") {
+			// Emirates format: /search-and-apply/{reqid}
+			// Try reqid first, then reqno, then fall back to id
+			var urlID string
+			if reqid, ok := obj["reqid"].(string); ok && reqid != "" {
+				urlID = reqid
+			} else if reqno, ok := obj["reqno"].(string); ok && reqno != "" {
+				urlID = reqno
+			} else if reqid, ok := obj["reqId"].(string); ok && reqid != "" {
+				urlID = reqid
+			} else if job.ID != "" {
+				// Fall back to job.ID only if reqid/reqno not found
+				urlID = job.ID
+				// Handle scientific notation
+				if strings.Contains(urlID, "e+") || strings.Contains(urlID, "E+") {
+					var floatID float64
+					if _, err := fmt.Sscanf(urlID, "%e", &floatID); err == nil {
+						urlID = fmt.Sprintf("%.0f", floatID)
+					}
+				}
+			}
+			if urlID != "" {
+				job.URL = fmt.Sprintf("https://www.emiratesgroupcareers.com/search-and-apply/%s", urlID)
+			}
+		}
+	}
+
 	// Extract URL - check many possible field names including nested structures
+	// Note: redirectionurl is used by Emirates/Avature systems
 	urlFields := []string{"url", "href", "link", "applyUrl", "apply_url", "jobUrl", "job_url",
 		"detailUrl", "detail_url", "absoluteUrl", "absolute_url", "canonicalUrl", "canonical_url",
 		"pageUrl", "page_url", "jobDetailUrl", "job_detail_url", "viewUrl", "view_url",
+		"redirectionurl", "redirectionUrl", "redirection_url", "externalUrl", "external_url",
 		"path", "slug", "uri", "seoUrl", "seo_url"}
-	for _, field := range urlFields {
-		if val, ok := obj[field].(string); ok && val != "" {
-			job.URL = s.resolveJobURL(val, baseURL, job.ID)
-			break
+	// Only extract URL from fields if we don't already have one from company-specific logic
+	if job.URL == "" {
+		for _, field := range urlFields {
+			if val, ok := obj[field].(string); ok && val != "" {
+				job.URL = s.resolveJobURL(val, baseURL, job.ID)
+				break
+			}
 		}
 	}
 
@@ -4571,4 +4841,592 @@ func (s *ScraperService) convertAPIDataToExtractedJob(apiData map[string]interfa
 func (s *ScraperService) jsonStringArray(arr []string) string {
 	bytes, _ := json.Marshal(arr)
 	return string(bytes)
+}
+
+// ExtractJobsFromAPIEndpoint fetches and extracts jobs from a specific API endpoint
+// This is used when the user wants to directly call a detected API endpoint
+// It first tries direct API call with proper headers, then falls back to browser automation if that fails
+// jobLinkPattern is the URL pattern from AI analysis (e.g., "/search-and-apply/{id}" or "/jobs/{slug}")
+func (s *ScraperService) ExtractJobsFromAPIEndpoint(ctx context.Context, apiEndpoint string, baseURL string, jobLinkPattern string) (*dto.ExtractLinksResponse, error) {
+	log.Printf("🔌 ExtractJobsFromAPIEndpoint: Fetching from %s (base: %s, pattern: %s)", apiEndpoint, baseURL, jobLinkPattern)
+
+	var jobs []APIJobListing
+	var directAPIError error
+	var responseBody string
+
+	// First try direct API call with proper headers
+	responseBody, err := s.fetchAPIEndpointWithHeaders(ctx, apiEndpoint, baseURL)
+	if err != nil {
+		log.Printf("⚠️ Direct API call failed: %v, will try browser automation", err)
+		directAPIError = err
+	} else {
+		// If we have a job link pattern, verify it with Claude using a sample job
+		verifiedPattern := jobLinkPattern
+		if s.aiService != nil && s.aiService.IsConfigured() {
+			// Try to get a sample job object to verify the URL pattern
+			var jsonData interface{}
+			if err := json.Unmarshal([]byte(responseBody), &jsonData); err == nil {
+				sampleJob := s.getSampleJobFromJSON(jsonData)
+				if sampleJob != nil {
+					log.Printf("🔍 Verifying URL pattern with Claude using sample job...")
+					verified, verifyErr := s.aiService.VerifyJobURLPattern(ctx, sampleJob, baseURL, jobLinkPattern)
+					if verifyErr == nil && verified != "" {
+						verifiedPattern = verified
+						log.Printf("✅ Claude verified URL pattern: %s", verifiedPattern)
+					}
+				}
+			}
+		}
+
+		// Extract jobs from the API response, passing the verified job link pattern for URL construction
+		jobs = s.extractJobsFromAPIResponseWithPattern(responseBody, baseURL, verifiedPattern)
+		if len(jobs) == 0 {
+			// Try parsing as direct JSON
+			var jsonData interface{}
+			if err := json.Unmarshal([]byte(responseBody), &jsonData); err == nil {
+				jobs = s.findJobsInJSONWithPattern(jsonData, baseURL, verifiedPattern)
+			}
+		}
+
+		// If we found jobs, try to get more pages
+		if len(jobs) > 0 {
+			log.Printf("✅ First page returned %d jobs, checking for more pages...", len(jobs))
+			allJobs := s.fetchAllPagesFromAPIWithPattern(ctx, apiEndpoint, baseURL, jobs, verifiedPattern)
+			if len(allJobs) > len(jobs) {
+				jobs = allJobs
+			}
+		}
+	}
+
+	// If direct API call failed or returned no jobs, try browser automation
+	if (directAPIError != nil || len(jobs) == 0) && baseURL != "" {
+		log.Printf("🌐 Trying browser automation to capture API responses from %s", baseURL)
+
+		// Use the AnalyzeCareerPage method which uses ChromeDP with network capture
+		analysis, err := s.AnalyzeCareerPage(ctx, baseURL)
+		if err != nil {
+			log.Printf("⚠️ Browser automation failed: %v", err)
+			if directAPIError != nil {
+				return nil, fmt.Errorf("failed to fetch API endpoint: %w (browser fallback also failed: %v)", directAPIError, err)
+			}
+		} else {
+			// Use jobs extracted from API responses captured during browser automation
+			if len(analysis.APIJobListings) > 0 {
+				jobs = analysis.APIJobListings
+				log.Printf("✅ Browser automation captured %d jobs from API", len(jobs))
+			} else if len(analysis.HTMLJobLinks) > 0 {
+				// Convert HTML links to API job listings format
+				log.Printf("✅ Browser automation found %d jobs in HTML", len(analysis.HTMLJobLinks))
+				for _, link := range analysis.HTMLJobLinks {
+					jobs = append(jobs, APIJobListing{
+						URL:   link.URL,
+						Title: link.Title,
+					})
+				}
+			}
+		}
+	}
+
+	if len(jobs) == 0 {
+		return &dto.ExtractLinksResponse{
+			Success:   true,
+			SourceURL: apiEndpoint,
+			Links:     []dto.ExtractedJobLink{},
+			Total:     0,
+			Message:   "No jobs found. The API endpoint may require authentication or special headers.",
+		}, nil
+	}
+
+	// Check for pagination and try to get all jobs (only if we got a valid response body)
+	var totalFromAPI int
+	if responseBody != "" {
+		paginationInfo := s.detectAPIPagination(responseBody, apiEndpoint)
+		if paginationInfo != nil {
+			totalFromAPI = paginationInfo.TotalCount
+			if paginationInfo.HasMore {
+				log.Printf("📄 API has pagination (total: %d, pageSize: %d, type: %s)",
+					paginationInfo.TotalCount, paginationInfo.PageSize, paginationInfo.PaginationType)
+
+				// Fetch additional pages
+				allJobs, err := s.fetchAllPaginatedJobsFromAPI(ctx, apiEndpoint, paginationInfo, jobs, baseURL)
+				if err != nil {
+					log.Printf("⚠️ Failed to fetch all paginated jobs: %v", err)
+				} else if len(allJobs) > len(jobs) {
+					jobs = allJobs
+				}
+			}
+		}
+	}
+
+	// Convert to ExtractedJobLink format
+	var links []dto.ExtractedJobLink
+	seenURLs := make(map[string]bool)
+
+	for _, job := range jobs {
+		if job.URL == "" || seenURLs[job.URL] {
+			continue
+		}
+		// Skip invalid URLs
+		if strings.Contains(job.URL, "{0}") || strings.Contains(job.URL, "{") {
+			continue
+		}
+		seenURLs[job.URL] = true
+		links = append(links, dto.ExtractedJobLink{
+			URL:   job.URL,
+			Title: job.Title,
+		})
+	}
+
+	message := fmt.Sprintf("Extracted %d jobs", len(links))
+	if totalFromAPI > 0 {
+		message = fmt.Sprintf("Extracted %d jobs (API reports %d total)", len(links), totalFromAPI)
+	}
+
+	return &dto.ExtractLinksResponse{
+		Success:   true,
+		SourceURL: apiEndpoint,
+		Links:     links,
+		Total:     len(links),
+		Message:   message,
+	}, nil
+}
+
+// fetchAPIEndpointWithHeaders makes an HTTP request with proper headers to mimic browser
+func (s *ScraperService) fetchAPIEndpointWithHeaders(ctx context.Context, apiURL string, baseURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Parse baseURL to get origin
+	parsedBase, _ := url.Parse(baseURL)
+	origin := ""
+	if parsedBase != nil {
+		origin = fmt.Sprintf("%s://%s", parsedBase.Scheme, parsedBase.Host)
+	}
+
+	// Set headers to mimic browser request from the same origin
+	req.Header.Set("Accept", "application/json, text/plain, */*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+	req.Header.Set("Sec-Fetch-Dest", "empty")
+	req.Header.Set("Sec-Fetch-Mode", "cors")
+	req.Header.Set("Sec-Fetch-Site", "same-origin")
+	if origin != "" {
+		req.Header.Set("Origin", origin)
+		req.Header.Set("Referer", baseURL)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("API returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read response: %w", err)
+	}
+
+	return string(body), nil
+}
+
+// addPageParam adds or updates the page parameter in a URL
+func (s *ScraperService) addPageParam(apiURL string, page int) string {
+	parsedURL, err := url.Parse(apiURL)
+	if err != nil {
+		return apiURL
+	}
+
+	q := parsedURL.Query()
+
+	// Check for existing pagination params and update them
+	// Including CurrentPage for Boeing-style APIs
+	pageParams := []string{"page", "pageNumber", "p", "pageIndex", "pageNo", "CurrentPage", "currentPage", "Page"}
+	for _, param := range pageParams {
+		if q.Has(param) {
+			q.Set(param, fmt.Sprintf("%d", page))
+			parsedURL.RawQuery = q.Encode()
+			return parsedURL.String()
+		}
+	}
+
+	// Check for offset-based params
+	offsetParams := []string{"offset", "from", "start", "skip"}
+	for _, param := range offsetParams {
+		if q.Has(param) {
+			// Assume page size based on offset value or use default of 20
+			currentOffset := 0
+			fmt.Sscanf(q.Get(param), "%d", &currentOffset)
+			pageSize := 20
+			if currentOffset > 0 {
+				pageSize = currentOffset // First offset is usually page size
+			}
+			q.Set(param, fmt.Sprintf("%d", (page-1)*pageSize))
+			parsedURL.RawQuery = q.Encode()
+			return parsedURL.String()
+		}
+	}
+
+	// No existing pagination param, add "page" parameter
+	q.Set("page", fmt.Sprintf("%d", page))
+	parsedURL.RawQuery = q.Encode()
+	return parsedURL.String()
+}
+
+// fetchAllPaginatedJobsFromAPI fetches all jobs from a paginated API endpoint
+func (s *ScraperService) fetchAllPaginatedJobsFromAPI(ctx context.Context, apiEndpoint string, paginationInfo *APIPaginationInfo, initialJobs []APIJobListing, baseURL string) ([]APIJobListing, error) {
+	allJobs := make([]APIJobListing, len(initialJobs))
+	copy(allJobs, initialJobs)
+
+	seenJobIDs := make(map[string]bool)
+	for _, job := range initialJobs {
+		key := job.ID
+		if key == "" {
+			key = job.URL
+		}
+		if key != "" {
+			seenJobIDs[key] = true
+		}
+	}
+
+	pageSize := paginationInfo.PageSize
+	if pageSize == 0 {
+		pageSize = len(initialJobs)
+		if pageSize == 0 {
+			pageSize = 20 // Default
+		}
+	}
+
+	maxPages := 50 // Safety limit
+	currentPage := 2
+	offset := pageSize
+
+	for currentPage <= maxPages {
+		select {
+		case <-ctx.Done():
+			return allJobs, ctx.Err()
+		default:
+		}
+
+		// Construct paginated URL
+		paginatedURL := s.buildPaginatedAPIURL(apiEndpoint, offset, currentPage, pageSize)
+		log.Printf("📄 Fetching page %d (offset %d): %s", currentPage, offset, paginatedURL)
+
+		responseBody, err := s.fetchAPIEndpoint(ctx, paginatedURL)
+		if err != nil {
+			log.Printf("⚠️ Failed to fetch page %d: %v", currentPage, err)
+			break
+		}
+
+		jobs := s.extractJobsFromAPIResponse(responseBody, baseURL)
+		if len(jobs) == 0 {
+			log.Printf("📄 No more jobs on page %d, stopping", currentPage)
+			break
+		}
+
+		// Check for new jobs
+		newJobsFound := 0
+		for _, job := range jobs {
+			key := job.ID
+			if key == "" {
+				key = job.URL
+			}
+			if key != "" && !seenJobIDs[key] {
+				seenJobIDs[key] = true
+				allJobs = append(allJobs, job)
+				newJobsFound++
+			}
+		}
+
+		if newJobsFound == 0 {
+			log.Printf("📄 No new jobs on page %d, stopping", currentPage)
+			break
+		}
+
+		log.Printf("📄 Found %d new jobs on page %d (total: %d)", newJobsFound, currentPage, len(allJobs))
+
+		// Check if we have all jobs
+		if paginationInfo.TotalCount > 0 && len(allJobs) >= paginationInfo.TotalCount {
+			log.Printf("✅ Fetched all %d jobs", len(allJobs))
+			break
+		}
+
+		currentPage++
+		offset += pageSize
+
+		// Rate limiting
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	return allJobs, nil
+}
+
+// buildPaginatedAPIURL builds a paginated URL based on detected pagination pattern
+func (s *ScraperService) buildPaginatedAPIURL(apiURL string, offset, page, pageSize int) string {
+	parsedURL, err := url.Parse(apiURL)
+	if err != nil {
+		return apiURL
+	}
+
+	q := parsedURL.Query()
+
+	// Try to detect and update pagination params
+	offsetParams := []string{"from", "offset", "start", "skip", "startIndex"}
+	for _, param := range offsetParams {
+		if q.Has(param) {
+			q.Set(param, fmt.Sprintf("%d", offset))
+			parsedURL.RawQuery = q.Encode()
+			return parsedURL.String()
+		}
+	}
+
+	// Including CurrentPage for Boeing-style APIs
+	pageParams := []string{"page", "pageNumber", "p", "pageIndex", "CurrentPage", "currentPage", "Page", "pageNo"}
+	for _, param := range pageParams {
+		if q.Has(param) {
+			q.Set(param, fmt.Sprintf("%d", page))
+			parsedURL.RawQuery = q.Encode()
+			return parsedURL.String()
+		}
+	}
+
+	// If no pagination params found, try adding common ones
+	// First check if URL path contains pagination pattern
+	pathParts := strings.Split(parsedURL.Path, "/")
+	digitOnlyRegex := regexp.MustCompile(`^\d+$`)
+	for i, part := range pathParts {
+		if digitOnlyRegex.MatchString(part) {
+			// Found a number in path, might be page number
+			pathParts[i] = fmt.Sprintf("%d", page)
+			parsedURL.Path = strings.Join(pathParts, "/")
+			return parsedURL.String()
+		}
+	}
+
+	// Add offset parameter as fallback
+	q.Set("from", fmt.Sprintf("%d", offset))
+	parsedURL.RawQuery = q.Encode()
+	return parsedURL.String()
+}
+
+// extractJobsFromAPIResponseWithPattern extracts jobs using the AI-provided job link pattern
+func (s *ScraperService) extractJobsFromAPIResponseWithPattern(responseBody string, baseURL string, jobLinkPattern string) []APIJobListing {
+	// First try regular extraction
+	jobs := s.extractJobsFromAPIResponse(responseBody, baseURL)
+
+	// If pattern is provided, construct URLs for jobs that don't have one
+	if jobLinkPattern != "" {
+		for i := range jobs {
+			if jobs[i].URL == "" && jobs[i].ID != "" {
+				jobs[i].URL = s.constructURLFromPattern(baseURL, jobLinkPattern, jobs[i].ID, jobs[i].Title)
+			}
+		}
+	}
+
+	return jobs
+}
+
+// findJobsInJSONWithPattern recursively searches JSON data for job listings using the pattern
+func (s *ScraperService) findJobsInJSONWithPattern(data interface{}, baseURL string, jobLinkPattern string) []APIJobListing {
+	jobs := s.findJobsInJSON(data, baseURL)
+
+	// If pattern is provided, construct URLs for jobs that don't have one
+	if jobLinkPattern != "" {
+		for i := range jobs {
+			if jobs[i].URL == "" && jobs[i].ID != "" {
+				jobs[i].URL = s.constructURLFromPattern(baseURL, jobLinkPattern, jobs[i].ID, jobs[i].Title)
+			}
+		}
+	}
+
+	return jobs
+}
+
+// fetchAllPagesFromAPIWithPattern fetches all pages using the job link pattern
+func (s *ScraperService) fetchAllPagesFromAPIWithPattern(ctx context.Context, apiEndpoint string, baseURL string, initialJobs []APIJobListing, jobLinkPattern string) []APIJobListing {
+	allJobs := make([]APIJobListing, len(initialJobs))
+	copy(allJobs, initialJobs)
+
+	seenJobIDs := make(map[string]bool)
+	for _, job := range initialJobs {
+		key := job.ID
+		if key == "" && job.URL != "" {
+			// Use normalized URL for deduplication (handles /job/X, /en/job/X, /jobs/X variants)
+			key = s.normalizeJobURL(job.URL)
+		}
+		if key != "" {
+			seenJobIDs[key] = true
+		}
+	}
+
+	// Try page-based pagination (page=2, page=3, etc.)
+	maxPages := 50 // Safety limit
+	for page := 2; page <= maxPages; page++ {
+		select {
+		case <-ctx.Done():
+			return allJobs
+		default:
+		}
+
+		// Build paginated URL
+		paginatedURL := s.addPageParam(apiEndpoint, page)
+		log.Printf("📄 Fetching page %d: %s", page, paginatedURL)
+
+		responseBody, err := s.fetchAPIEndpointWithHeaders(ctx, paginatedURL, baseURL)
+		if err != nil {
+			log.Printf("⚠️ Failed to fetch page %d: %v", page, err)
+			break
+		}
+
+		jobs := s.extractJobsFromAPIResponseWithPattern(responseBody, baseURL, jobLinkPattern)
+		if len(jobs) == 0 {
+			// Try parsing as direct JSON
+			var jsonData interface{}
+			if err := json.Unmarshal([]byte(responseBody), &jsonData); err == nil {
+				jobs = s.findJobsInJSONWithPattern(jsonData, baseURL, jobLinkPattern)
+			}
+		}
+
+		if len(jobs) == 0 {
+			log.Printf("📄 No more jobs on page %d, stopping", page)
+			break
+		}
+
+		// Check for new jobs (avoid duplicates using normalized URLs)
+		newJobsFound := 0
+		for _, job := range jobs {
+			key := job.ID
+			if key == "" && job.URL != "" {
+				// Use normalized URL for deduplication (handles /job/X, /en/job/X, /jobs/X variants)
+				key = s.normalizeJobURL(job.URL)
+			}
+			if key != "" && !seenJobIDs[key] {
+				seenJobIDs[key] = true
+				allJobs = append(allJobs, job)
+				newJobsFound++
+			}
+		}
+
+		if newJobsFound == 0 {
+			log.Printf("📄 No new jobs on page %d (all duplicates), stopping", page)
+			break
+		}
+
+		log.Printf("📄 Found %d new jobs on page %d (total: %d)", newJobsFound, page, len(allJobs))
+
+		// Rate limiting
+		time.Sleep(300 * time.Millisecond)
+	}
+
+	return allJobs
+}
+
+// constructURLFromPattern builds a job URL using the pattern from AI analysis
+// Supports patterns like:
+//   - "/search-and-apply/{id}" -> replaces {id} with job ID
+//   - "/jobs/{slug}" -> replaces {slug} with job slug/title
+//   - "/careers/job/{id}/{title}" -> replaces multiple placeholders
+func (s *ScraperService) constructURLFromPattern(baseURL string, pattern string, jobID string, jobTitle string) string {
+	if pattern == "" || jobID == "" {
+		return ""
+	}
+
+	// Parse base URL
+	parsedBase, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+
+	// Clean up the job ID (handle scientific notation like 2.039526e+06)
+	cleanID := jobID
+	if strings.Contains(cleanID, "e+") || strings.Contains(cleanID, "E+") {
+		var floatID float64
+		if _, err := fmt.Sscanf(cleanID, "%e", &floatID); err == nil {
+			cleanID = fmt.Sprintf("%.0f", floatID)
+		}
+	}
+	// Also try parsing as float64 directly (JSON numbers often come as float64)
+	if floatVal, err := strconv.ParseFloat(jobID, 64); err == nil && floatVal > 1000 {
+		cleanID = fmt.Sprintf("%.0f", floatVal)
+	}
+
+	// Create a slug from job title
+	slug := strings.ToLower(jobTitle)
+	slug = regexp.MustCompile(`[^a-z0-9]+`).ReplaceAllString(slug, "-")
+	slug = strings.Trim(slug, "-")
+	if len(slug) > 100 {
+		slug = slug[:100]
+	}
+
+	// Replace placeholders in pattern
+	result := pattern
+
+	// Common placeholder patterns
+	placeholders := map[string]string{
+		"{id}":            cleanID,
+		"{ID}":            cleanID,
+		"{jobId}":         cleanID,
+		"{job_id}":        cleanID,
+		"{requisitionId}": cleanID,
+		"{slug}":          slug,
+		"{title}":         slug,
+		"{job-slug}":      slug,
+	}
+
+	for placeholder, value := range placeholders {
+		result = strings.ReplaceAll(result, placeholder, value)
+	}
+
+	// If pattern still has unreplaced placeholders, try generic replacement
+	// Replace any remaining {something} with the ID
+	result = regexp.MustCompile(`\{[^}]+\}`).ReplaceAllString(result, cleanID)
+
+	// Build full URL
+	if strings.HasPrefix(result, "http://") || strings.HasPrefix(result, "https://") {
+		return result
+	}
+
+	// Ensure pattern starts with /
+	if !strings.HasPrefix(result, "/") {
+		result = "/" + result
+	}
+
+	return fmt.Sprintf("%s://%s%s", parsedBase.Scheme, parsedBase.Host, result)
+}
+
+// getSampleJobFromJSON extracts a sample job object from JSON data for URL pattern verification
+func (s *ScraperService) getSampleJobFromJSON(data interface{}) map[string]interface{} {
+	switch v := data.(type) {
+	case map[string]interface{}:
+		// Check if this object itself looks like a job
+		if s.looksLikeJobObject(v) {
+			return v
+		}
+		// Check common container fields
+		containerFields := []string{"data", "jobs", "results", "items", "records", "listings", "positions", "openings", "vacancies"}
+		for _, field := range containerFields {
+			if container, ok := v[field]; ok {
+				if arr, ok := container.([]interface{}); ok && len(arr) > 0 {
+					if job, ok := arr[0].(map[string]interface{}); ok {
+						return job
+					}
+				}
+				if obj, ok := container.(map[string]interface{}); ok {
+					return s.getSampleJobFromJSON(obj)
+				}
+			}
+		}
+	case []interface{}:
+		if len(v) > 0 {
+			if job, ok := v[0].(map[string]interface{}); ok {
+				return job
+			}
+		}
+	}
+	return nil
 }

@@ -32,14 +32,16 @@ type Config struct {
 	MeiliMasterKey string
 
 	// MinIO
-	MinioEndpoint         string
-	MinioAccessKey        string
-	MinioSecretKey        string
-	MinioUseSSL           bool
-	MinioBucketResumes    string
-	MinioBucketAvatars    string
-	MinioBucketCerts      string
-	MinioBucketPortfolios string
+	MinioEndpoint          string
+	MinioAccessKey         string
+	MinioSecretKey         string
+	MinioUseSSL            bool
+	MinioPublicURL         string
+	MinioBucketResumes     string
+	MinioBucketAvatars     string
+	MinioBucketCerts       string
+	MinioBucketPortfolios  string
+	MinioBucketCompanies   string
 
 	// File Upload Limits
 	MaxResumeSizeMB       int64
@@ -107,6 +109,12 @@ func Load() (*Config, error) {
 	viper.SetDefault("APP_PORT", "8080")
 	viper.SetDefault("APP_HOST", "0.0.0.0")
 
+	// File upload defaults
+	viper.SetDefault("MAX_RESUMES_PER_USER", 5)
+	viper.SetDefault("MAX_RESUME_SIZE_MB", 10)
+	viper.SetDefault("MAX_AVATAR_SIZE_MB", 5)
+	viper.SetDefault("RESUME_URL_EXPIRY_HOURS", 24)
+
 	cfg := &Config{
 		AppEnv:  viper.GetString("APP_ENV"),
 		AppPort: viper.GetString("APP_PORT"),
@@ -130,10 +138,12 @@ func Load() (*Config, error) {
 		MinioAccessKey:        viper.GetString("MINIO_ACCESS_KEY"),
 		MinioSecretKey:        viper.GetString("MINIO_SECRET_KEY"),
 		MinioUseSSL:           viper.GetBool("MINIO_USE_SSL"),
+		MinioPublicURL:        viper.GetString("MINIO_PUBLIC_URL"),
 		MinioBucketResumes:    viper.GetString("MINIO_BUCKET_RESUMES"),
 		MinioBucketAvatars:    viper.GetString("MINIO_BUCKET_AVATARS"),
 		MinioBucketCerts:      viper.GetString("MINIO_BUCKET_CERTIFICATES"),
 		MinioBucketPortfolios: viper.GetString("MINIO_BUCKET_PORTFOLIOS"),
+		MinioBucketCompanies:  viper.GetString("MINIO_BUCKET_COMPANIES"),
 
 		// File Upload Limits
 		MaxResumeSizeMB:       viper.GetInt64("MAX_RESUME_SIZE_MB"),

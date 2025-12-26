@@ -408,20 +408,25 @@ func (s *AIService) callClaudeAPIWithRetry(ctx context.Context, requestBody []by
 
 // ExtractedJob represents the extracted job data from AI
 type ExtractedJob struct {
-	Title           string   `json:"title"`
-	Company         string   `json:"company"`
-	CompanyLogo     string   `json:"company_logo"`
-	Location        string   `json:"location"`
-	City            string   `json:"city"`
-	State           string   `json:"state"`
-	Country         string   `json:"country"`
-	Description     string   `json:"description"`
-	Requirements    string   `json:"requirements"`
-	Salary          string   `json:"salary"`
-	JobType         string   `json:"job_type"`
-	ExperienceLevel string   `json:"experience_level"`
-	Skills          []string `json:"skills"`
-	Benefits        []string `json:"benefits"`
+	Title               string   `json:"title"`
+	Company             string   `json:"company"`
+	CompanyLogo         string   `json:"company_logo"`
+	Location            string   `json:"location"`
+	City                string   `json:"city"`
+	State               string   `json:"state"`
+	Country             string   `json:"country"`
+	Description         string   `json:"description"`
+	Requirements        string   `json:"requirements"`
+	Salary              string   `json:"salary"`
+	SalaryMin           int      `json:"salary_min"`
+	SalaryMax           int      `json:"salary_max"`
+	SalaryCurrency      string   `json:"salary_currency"`
+	ApplicationDeadline string   `json:"application_deadline"`
+	PostedDate          string   `json:"posted_date"`
+	JobType             string   `json:"job_type"`
+	ExperienceLevel     string   `json:"experience_level"`
+	Skills              []string `json:"skills"`
+	Benefits            []string `json:"benefits"`
 }
 
 // ClaudeRequest represents the request to Claude API
@@ -457,14 +462,19 @@ type ClaudeResponse struct {
 
 // ExtractJobFromHTML extracts job details from HTML content using Claude AI
 func (s *AIService) ExtractJobFromHTML(ctx context.Context, html string, url string) (*ExtractedJob, error) {
+	return s.ExtractJobFromHTMLWithContinuation(ctx, html, url, 3) // Allow up to 3 continuations
+}
+
+// ExtractJobFromHTMLWithContinuation extracts job details with support for continuing truncated responses
+func (s *AIService) ExtractJobFromHTMLWithContinuation(ctx context.Context, html string, url string, maxContinuations int) (*ExtractedJob, error) {
 	if s.apiKey == "" {
 		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
 	}
 
-	// Clean and truncate HTML to avoid token limits
+	// Clean and truncate HTML to avoid token limits - increased to 80000 for more complete content
 	cleanedHTML := s.cleanHTML(html)
-	if len(cleanedHTML) > 50000 {
-		cleanedHTML = cleanedHTML[:50000]
+	if len(cleanedHTML) > 80000 {
+		cleanedHTML = cleanedHTML[:80000]
 	}
 
 	prompt := fmt.Sprintf(`You are a job posting extraction assistant. Extract job details from this HTML page.
@@ -483,13 +493,18 @@ Extract and return a JSON object with these exact fields:
   "city": "City name only",
   "state": "State/Province name only",
   "country": "Country name only",
-  "description": "Full job description (keep HTML formatting if present)",
-  "requirements": "Required qualifications and requirements",
-  "salary": "Salary range if mentioned (e.g., '$100,000 - $150,000')",
+  "description": "Full job description with HTML formatting - include ALL text",
+  "requirements": "Required qualifications and requirements with HTML formatting",
+  "salary": "Salary/compensation info (e.g., '$100,000 - $150,000/year', 'AED 15,000 - 20,000/month', 'Competitive')",
+  "salary_min": "Minimum salary as number only (e.g., 100000), or 0 if not specified",
+  "salary_max": "Maximum salary as number only (e.g., 150000), or 0 if not specified",
+  "salary_currency": "Currency code (e.g., 'USD', 'AED', 'INR', 'GBP')",
+  "application_deadline": "Application closing date in YYYY-MM-DD format if mentioned, empty string if not",
   "job_type": "One of: FULL_TIME, PART_TIME, CONTRACT, FREELANCE, INTERNSHIP",
   "experience_level": "One of: ENTRY, MID, SENIOR, LEAD, EXECUTIVE",
   "skills": ["Array", "of", "specific", "skills"],
-  "benefits": ["Array", "of", "benefits", "if", "mentioned"]
+  "benefits": ["Array", "of", "benefits", "if", "mentioned"],
+  "posted_date": "Job posting date in YYYY-MM-DD format if mentioned, empty string if not"
 }
 
 Rules:
@@ -510,19 +525,23 @@ Rules:
    - Methodologies (e.g., "Agile", "Scrum", "Lean")
    DO NOT include generic soft skills like "communication", "teamwork", "leadership", "problem-solving", "written", "verbal", etc.
    Keep skills concise (1-3 words each), capitalize properly
-6. Keep the description in HTML format if it was HTML
-7. Be thorough and extract all relevant information
-8. Return ONLY valid JSON, no markdown formatting or extra text`, url, cleanedHTML)
+6. For description: Include the FULL job description. Do NOT truncate. Include company info and role details.
+7. For requirements: Include ALL qualifications, responsibilities, and requirements.
+8. CRITICAL: You MUST complete the entire JSON response. Do not stop mid-response.
+9. Return ONLY valid JSON, no markdown formatting or extra text`, url, cleanedHTML)
 
+	messages := []ClaudeMessage{
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	// Initial request - claude-3-haiku has 4096 max output tokens
 	request := ClaudeRequest{
 		Model:     "claude-3-haiku-20240307",
-		MaxTokens: 4000,
-		Messages: []ClaudeMessage{
-			{
-				Role:    "user",
-				Content: prompt,
-			},
-		},
+		MaxTokens: 4096, // Max for claude-3-haiku
+		Messages:  messages,
 	}
 
 	requestBody, err := json.Marshal(request)
@@ -536,16 +555,591 @@ Rules:
 		return nil, err
 	}
 
-	// Extract JSON from response text
+	// Collect response text
 	responseText := claudeResp.Content[0].Text
+	log.Printf("📊 Claude response: stop_reason=%s, output_tokens=%d", claudeResp.StopReason, claudeResp.Usage.OutputTokens)
+
+	// Handle truncated responses with continuation
+	continuationCount := 0
+	for claudeResp.StopReason == "max_tokens" && continuationCount < maxContinuations {
+		continuationCount++
+		log.Printf("⚠️ Response truncated (max_tokens), attempting continuation %d/%d...", continuationCount, maxContinuations)
+
+		// Build continuation request with previous context
+		continuationMessages := append(messages, ClaudeMessage{
+			Role:    "assistant",
+			Content: responseText,
+		}, ClaudeMessage{
+			Role:    "user",
+			Content: "Your response was truncated. Please continue EXACTLY from where you left off. Continue the JSON output without repeating what you already wrote. Start immediately with the next character.",
+		})
+
+		continuationRequest := ClaudeRequest{
+			Model:     "claude-3-haiku-20240307",
+			MaxTokens: 4096,
+			Messages:  continuationMessages,
+		}
+
+		contBody, err := json.Marshal(continuationRequest)
+		if err != nil {
+			log.Printf("⚠️ Failed to marshal continuation request: %v", err)
+			break
+		}
+
+		contResp, err := s.callClaudeAPIWithRetry(ctx, contBody)
+		if err != nil {
+			log.Printf("⚠️ Continuation request failed: %v", err)
+			break
+		}
+
+		// Append continuation to response
+		continuationText := contResp.Content[0].Text
+		responseText += continuationText
+		claudeResp = contResp
+		log.Printf("✅ Continuation %d received: stop_reason=%s, added %d chars", continuationCount, contResp.StopReason, len(continuationText))
+	}
+
+	if continuationCount > 0 {
+		log.Printf("📊 Total response after %d continuations: %d chars", continuationCount, len(responseText))
+	}
+
+	// Extract JSON from response text
 	jsonStr := s.extractJSON(responseText)
 
 	var extractedJob ExtractedJob
 	if err := json.Unmarshal([]byte(jsonStr), &extractedJob); err != nil {
-		return nil, fmt.Errorf("failed to parse extracted job data: %w (response: %s)", err, responseText)
+		// Try fallback regex parsing for truncated/malformed JSON
+		log.Printf("⚠️ Standard JSON parse failed, trying fallback parser: %v", err)
+		fallbackJob, fallbackErr := s.parseExtractedJobManually(jsonStr)
+		if fallbackErr != nil {
+			return nil, fmt.Errorf("failed to parse extracted job data: %w (response preview: %.500s...)", err, responseText)
+		}
+		log.Printf("✅ Fallback parser succeeded for job: %s", fallbackJob.Title)
+		return fallbackJob, nil
 	}
 
 	return &extractedJob, nil
+}
+
+// URLAnalysisResult represents the AI analysis of a career page URL
+type URLAnalysisResult struct {
+	URL                  string      `json:"url"`
+	SiteType             string      `json:"site_type"`              // "career_listing", "job_board", "company_site", "ats_platform"
+	Platform             string      `json:"platform"`               // "workday", "greenhouse", "lever", "custom", etc.
+	JobLoadingMethod     string      `json:"job_loading_method"`     // "static_html", "ajax", "spa", "iframe"
+	JobListSelector      string      `json:"job_list_selector"`      // CSS selector for job list container
+	JobLinkSelector      string      `json:"job_link_selector"`      // CSS selector for individual job links
+	JobLinkPattern       string      `json:"job_link_pattern"`       // URL pattern for job detail pages
+	PaginationType       string      `json:"pagination_type"`        // "none", "numbered", "load_more", "infinite_scroll"
+	PaginationSelector   string      `json:"pagination_selector"`    // CSS selector for pagination
+	APIEndpointPattern   string      `json:"api_endpoint_pattern"`   // Pattern for API endpoint if AJAX-based
+	SearchFormSelector   string      `json:"search_form_selector"`   // CSS selector for search/filter form
+	TotalJobsEstimate    interface{} `json:"total_jobs_estimate"`    // Estimated number of jobs (can be int or string)
+	ExtractionMethods    []string    `json:"extraction_methods"`     // Recommended extraction methods in order
+	ExtractionSteps      []string    `json:"extraction_steps"`       // Step-by-step extraction guide
+	Challenges           []string    `json:"challenges"`             // Potential scraping challenges
+	SampleJobLinks       []string    `json:"sample_job_links"`       // Example job detail URLs found (5 samples)
+	AllExtractedLinks    []string    `json:"all_extracted_links"`    // All job URLs extracted from the page
+	Confidence           float64     `json:"confidence"`             // Confidence score 0-1
+	Notes                string      `json:"notes"`                  // Additional analysis notes
+}
+
+// GetTotalJobsEstimateInt returns the total jobs estimate as an integer
+func (r *URLAnalysisResult) GetTotalJobsEstimateInt() int {
+	if r.TotalJobsEstimate == nil {
+		return 0
+	}
+	switch v := r.TotalJobsEstimate.(type) {
+	case float64:
+		return int(v)
+	case int:
+		return v
+	case string:
+		// Try to parse string as int
+		var n int
+		fmt.Sscanf(v, "%d", &n)
+		return n
+	default:
+		return 0
+	}
+}
+
+// AnalyzeCareerPageURL analyzes a URL using Claude AI to determine the best scraping strategy
+func (s *AIService) AnalyzeCareerPageURL(ctx context.Context, htmlContent string, pageURL string) (*URLAnalysisResult, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	// Pre-analyze the HTML for important patterns before sending to Claude
+	preAnalysis := s.preAnalyzeHTML(htmlContent, pageURL)
+
+	// Extract all links from HTML first - these are REAL links from the page
+	allLinks := extractAllLinks(htmlContent, pageURL)
+
+	// Filter to potential job links based on URL patterns
+	var potentialJobLinks []string
+	jobPatterns := []string{"/job/", "/jobs/", "/position/", "/career/", "/opening/", "/vacancy/",
+		"/opportunity/", "/search-and-apply/", "/requisition/", "jobid=", "job_id=", "positionid=",
+		"/apply/", "/posting/", "/listing/"}
+
+	seen := make(map[string]bool)
+	for _, link := range allLinks {
+		lowerURL := strings.ToLower(link.URL)
+		for _, pattern := range jobPatterns {
+			if strings.Contains(lowerURL, pattern) && !seen[link.URL] {
+				// Skip pagination and filter URLs
+				if !strings.Contains(lowerURL, "page=") && !strings.Contains(lowerURL, "filter=") &&
+					!strings.Contains(lowerURL, "sort=") && !strings.Contains(lowerURL, "#") {
+					potentialJobLinks = append(potentialJobLinks, link.URL)
+					seen[link.URL] = true
+					if len(potentialJobLinks) >= 50 { // Limit to 50 for analysis
+						break
+					}
+				}
+			}
+		}
+		if len(potentialJobLinks) >= 50 {
+			break
+		}
+	}
+
+	// Format potential job links for the prompt
+	jobLinksInfo := "No potential job links found in HTML"
+	if len(potentialJobLinks) > 0 {
+		jobLinksInfo = fmt.Sprintf("Found %d potential job links in HTML:\n", len(potentialJobLinks))
+		for i, link := range potentialJobLinks {
+			if i < 20 { // Show first 20 in prompt
+				jobLinksInfo += fmt.Sprintf("  - %s\n", link)
+			}
+		}
+		if len(potentialJobLinks) > 20 {
+			jobLinksInfo += fmt.Sprintf("  ... and %d more\n", len(potentialJobLinks)-20)
+		}
+	}
+
+	// Clean HTML but preserve script content for API detection
+	cleanedHTML := s.cleanHTMLForAnalysis(htmlContent)
+	if len(cleanedHTML) > 60000 { // Reduced to make room for job links
+		cleanedHTML = cleanedHTML[:60000]
+	}
+
+	prompt := fmt.Sprintf(`You are an expert web scraping analyst. Analyze this career/job listing page to determine how to extract job listings.
+
+URL: %s
+
+Pre-Analysis Findings:
+%s
+
+EXTRACTED JOB LINKS FROM HTML (if any):
+%s
+
+HTML Content (sample):
+%s
+
+TASK: Analyze how jobs are loaded and provide extraction strategy.
+
+IMPORTANT ANALYSIS:
+1. Look for JavaScript frameworks (React, Vue, Angular) - indicates SPA
+2. Look for API endpoints in script tags (fetch, axios, XMLHttpRequest calls)
+3. Look for JSON data embedded in script tags or data attributes
+4. Check if job listings are present in HTML or loaded dynamically
+5. Identify the ATS platform (Workday, Greenhouse, Lever, Taleo, iCIMS, Oracle, SmartRecruiters, etc.)
+
+For SPA/AJAX sites, look for:
+- API endpoint URLs in JavaScript code
+- GraphQL endpoints
+- REST API patterns like /api/jobs, /careers/api, etc.
+- Network request patterns
+
+Return this JSON (use 0 for unknown numbers, not strings):
+{
+  "site_type": "career_listing|job_board|company_site|ats_platform",
+  "platform": "workday|greenhouse|lever|taleo|icims|oracle|successfactors|smartrecruiters|custom|unknown",
+  "job_loading_method": "static_html|ajax|spa|iframe",
+  "job_list_selector": "CSS selector for job list container (or empty if SPA)",
+  "job_link_selector": "CSS selector for job links (or empty if SPA)",
+  "job_link_pattern": "URL pattern for job detail pages (e.g., '/search-and-apply/{id}')",
+  "pagination_type": "none|numbered|load_more|infinite_scroll|api_based",
+  "pagination_selector": "CSS selector or API param for pagination",
+  "api_endpoint_pattern": "Full API endpoint URL if detected (IMPORTANT for SPA sites)",
+  "search_form_selector": "CSS selector for search form",
+  "total_jobs_estimate": 0,
+  "extraction_methods": ["api_call", "html_links", "browser_automation", "pagination_crawl"],
+  "extraction_steps": ["Detailed step 1", "Detailed step 2", "..."],
+  "challenges": ["Challenge 1", "Challenge 2"],
+  "sample_job_links": [],
+  "confidence": 0.0-1.0,
+  "notes": "Detailed analysis notes including API endpoints found, authentication requirements, etc."
+}
+
+FOR SPA SITES:
+- Set job_loading_method to "spa" or "ajax"
+- Find and include the FULL API endpoint URL in api_endpoint_pattern
+- Include detailed extraction_steps explaining how to call the API
+- List any headers or parameters needed
+
+FOR STATIC HTML SITES:
+- Use the EXTRACTED JOB LINKS provided above for sample_job_links
+- Provide accurate CSS selectors
+
+Return ONLY valid JSON. Use 0 for unknown numbers, not "Unknown".`, pageURL, preAnalysis, jobLinksInfo, cleanedHTML)
+
+	request := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 4096,
+		Messages: []ClaudeMessage{
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+	}
+
+	requestBody, err := json.Marshal(request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, requestBody)
+	if err != nil {
+		return nil, err
+	}
+
+	responseText := claudeResp.Content[0].Text
+	jsonStr := s.extractJSON(responseText)
+
+	var result URLAnalysisResult
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("⚠️ URL analysis JSON parse failed: %v", err)
+		log.Printf("Response text: %s", responseText[:min(500, len(responseText))])
+		return nil, fmt.Errorf("failed to parse URL analysis: %w", err)
+	}
+
+	result.URL = pageURL
+
+	// If Claude didn't select real sample links or selected fake ones, use our extracted links
+	if len(result.SampleJobLinks) == 0 || (len(result.SampleJobLinks) > 0 && !s.validateURLsExist(result.SampleJobLinks, potentialJobLinks)) {
+		// Use the first 5 real extracted job links
+		if len(potentialJobLinks) > 0 {
+			maxLinks := 5
+			if len(potentialJobLinks) < maxLinks {
+				maxLinks = len(potentialJobLinks)
+			}
+			result.SampleJobLinks = potentialJobLinks[:maxLinks]
+			log.Printf("✅ Replaced sample links with %d real extracted links", maxLinks)
+		}
+	}
+
+	// Store all extracted job links for later use
+	result.AllExtractedLinks = potentialJobLinks
+
+	return &result, nil
+}
+
+// extractAPIEndpoints finds potential API endpoints in HTML/script content
+func extractAPIEndpoints(html string) []string {
+	var endpoints []string
+	seen := make(map[string]bool)
+
+	// Common API URL patterns in JavaScript
+	patterns := []*regexp.Regexp{
+		// Fetch/axios calls with URL strings
+		regexp.MustCompile(`(?i)fetch\s*\(\s*["']([^"']+(?:api|jobs|careers|search|query)[^"']*)["']`),
+		regexp.MustCompile(`(?i)axios\s*\.\s*(?:get|post)\s*\(\s*["']([^"']+(?:api|jobs|careers|search)[^"']*)["']`),
+		// API base URLs
+		regexp.MustCompile(`(?i)["'](?:https?://[^"']*)?(/api/[^"']+)["']`),
+		regexp.MustCompile(`(?i)["'](?:https?://[^"']*)?(/v[12]/[^"']+)["']`),
+		regexp.MustCompile(`(?i)apiUrl\s*[:=]\s*["']([^"']+)["']`),
+		regexp.MustCompile(`(?i)baseUrl\s*[:=]\s*["']([^"']+)["']`),
+		regexp.MustCompile(`(?i)endpoint\s*[:=]\s*["']([^"']+)["']`),
+		// GraphQL
+		regexp.MustCompile(`(?i)["'](/graphql[^"']*)["']`),
+		// Common job API patterns
+		regexp.MustCompile(`(?i)["']([^"']*(?:getJobs|searchJobs|listJobs|fetchJobs)[^"']*)["']`),
+		regexp.MustCompile(`(?i)["']([^"']+/jobs(?:/search|/list|/filter)?[^"']*)["']`),
+	}
+
+	for _, pattern := range patterns {
+		matches := pattern.FindAllStringSubmatch(html, 20)
+		for _, match := range matches {
+			if len(match) > 1 {
+				endpoint := match[1]
+				// Filter out obviously wrong matches
+				if len(endpoint) > 5 && len(endpoint) < 500 &&
+					!strings.Contains(endpoint, ".js") &&
+					!strings.Contains(endpoint, ".css") &&
+					!strings.Contains(endpoint, ".png") &&
+					!strings.Contains(endpoint, ".jpg") &&
+					!seen[endpoint] {
+					endpoints = append(endpoints, endpoint)
+					seen[endpoint] = true
+				}
+			}
+		}
+	}
+
+	// Limit to top 10 unique endpoints
+	if len(endpoints) > 10 {
+		endpoints = endpoints[:10]
+	}
+
+	return endpoints
+}
+
+// validateURLsExist checks if the given URLs exist in the extracted links
+func (s *AIService) validateURLsExist(urls []string, extractedLinks []string) bool {
+	if len(urls) == 0 {
+		return false
+	}
+	extractedSet := make(map[string]bool)
+	for _, link := range extractedLinks {
+		extractedSet[link] = true
+	}
+	// At least one URL should exist in extracted links
+	for _, url := range urls {
+		if extractedSet[url] {
+			return true
+		}
+	}
+	return false
+}
+
+// VerifyJobURLPattern takes a sample job from API response and determines the correct URL pattern
+// It returns the verified URL pattern that should be used to construct job detail URLs
+func (s *AIService) VerifyJobURLPattern(ctx context.Context, sampleJob map[string]interface{}, baseURL string, suggestedPattern string) (string, error) {
+	if !s.IsConfigured() {
+		return suggestedPattern, nil // Return suggested pattern if AI not configured
+	}
+
+	// Convert sample job to JSON for Claude
+	jobJSON, err := json.MarshalIndent(sampleJob, "", "  ")
+	if err != nil {
+		return suggestedPattern, err
+	}
+
+	prompt := fmt.Sprintf(`Analyze this job listing data from an API and determine the correct URL pattern to view the job details page.
+
+Base URL: %s
+Suggested Pattern: %s
+
+Sample Job Data:
+%s
+
+Your task:
+1. Look at all fields in the job data (id, reqid, reqno, redirectionurl, url, slug, etc.)
+2. Determine which field(s) should be used to construct the job detail page URL
+3. Figure out the correct URL pattern
+
+Common patterns:
+- /jobs/{id}
+- /careers/{id}
+- /job/{id}
+- /job-details/{id}
+- /search-and-apply/{id}
+- /position/{id}
+- /vacancy/{id}
+- /openings/{slug}
+
+Important:
+- The "redirectionurl" is usually an APPLY link, not a job details page
+- Look for patterns in the base URL structure
+- The job ID might be in "id", "jobId", "job_id", "reqid", "reqno", etc.
+
+Return ONLY a JSON object in this exact format:
+{
+  "url_pattern": "/path/{id}",
+  "id_field": "id",
+  "sample_url": "https://full-sample-url.com/path/123",
+  "confidence": 0.9,
+  "notes": "Brief explanation"
+}
+
+If you cannot determine the pattern, return:
+{
+  "url_pattern": "",
+  "id_field": "",
+  "sample_url": "",
+  "confidence": 0.0,
+  "notes": "Could not determine pattern"
+}`, baseURL, suggestedPattern, string(jobJSON))
+
+	messages := []ClaudeMessage{
+		{
+			Role:    "user",
+			Content: prompt,
+		},
+	}
+
+	requestBody := ClaudeRequest{
+		Model:     "claude-3-haiku-20240307",
+		MaxTokens: 500,
+		Messages:  messages,
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return suggestedPattern, err
+	}
+
+	resp, err := s.callClaudeAPIWithRetry(ctx, jsonBody)
+	if err != nil {
+		log.Printf("⚠️ Claude API error in VerifyJobURLPattern: %v", err)
+		return suggestedPattern, nil // Fall back to suggested pattern
+	}
+
+	if len(resp.Content) == 0 {
+		return suggestedPattern, nil
+	}
+
+	responseText := resp.Content[0].Text
+	jsonStr := s.extractJSON(responseText)
+	if jsonStr == "" {
+		return suggestedPattern, nil
+	}
+
+	var result struct {
+		URLPattern string  `json:"url_pattern"`
+		IDField    string  `json:"id_field"`
+		SampleURL  string  `json:"sample_url"`
+		Confidence float64 `json:"confidence"`
+		Notes      string  `json:"notes"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		log.Printf("⚠️ Failed to parse URL pattern response: %v", err)
+		return suggestedPattern, nil
+	}
+
+	log.Printf("🔍 URL Pattern Analysis: pattern=%s, id_field=%s, confidence=%.2f, notes=%s",
+		result.URLPattern, result.IDField, result.Confidence, result.Notes)
+
+	if result.URLPattern != "" && result.Confidence >= 0.5 {
+		return result.URLPattern, nil
+	}
+
+	return suggestedPattern, nil
+}
+
+// preAnalyzeHTML performs quick pattern detection before AI analysis
+func (s *AIService) preAnalyzeHTML(html string, pageURL string) string {
+	var findings []string
+
+	// Detect common platforms from URL
+	lowerURL := strings.ToLower(pageURL)
+	if strings.Contains(lowerURL, "workday") || strings.Contains(lowerURL, "myworkdayjobs") {
+		findings = append(findings, "Platform detected: Workday (from URL)")
+	}
+	if strings.Contains(lowerURL, "greenhouse.io") || strings.Contains(lowerURL, "boards.greenhouse") {
+		findings = append(findings, "Platform detected: Greenhouse (from URL)")
+	}
+	if strings.Contains(lowerURL, "lever.co") || strings.Contains(lowerURL, "jobs.lever") {
+		findings = append(findings, "Platform detected: Lever (from URL)")
+	}
+	if strings.Contains(lowerURL, "icims") {
+		findings = append(findings, "Platform detected: iCIMS (from URL)")
+	}
+	if strings.Contains(lowerURL, "taleo") {
+		findings = append(findings, "Platform detected: Taleo (from URL)")
+	}
+	if strings.Contains(lowerURL, "successfactors") || strings.Contains(lowerURL, "jobs.sap") {
+		findings = append(findings, "Platform detected: SuccessFactors (from URL)")
+	}
+	if strings.Contains(lowerURL, "smartrecruiters") {
+		findings = append(findings, "Platform detected: SmartRecruiters (from URL)")
+	}
+
+	// Detect SPA frameworks
+	lowerHTML := strings.ToLower(html)
+	if strings.Contains(lowerHTML, "__next_data__") || strings.Contains(lowerHTML, "next.js") {
+		findings = append(findings, "Framework detected: Next.js (likely SSR with hydration)")
+	}
+	if strings.Contains(lowerHTML, "ng-app") || strings.Contains(lowerHTML, "ng-controller") || strings.Contains(lowerHTML, "angular") {
+		findings = append(findings, "Framework detected: AngularJS")
+	}
+	if strings.Contains(lowerHTML, "data-reactroot") || strings.Contains(lowerHTML, "react") {
+		findings = append(findings, "Framework detected: React")
+	}
+	if strings.Contains(lowerHTML, "data-v-") || strings.Contains(lowerHTML, "vue") {
+		findings = append(findings, "Framework detected: Vue.js")
+	}
+
+	// Count job-like links
+	jobLinkPatterns := []string{"/job/", "/jobs/", "/position/", "/career/", "/opening/", "jobid=", "job_id=", "requisition"}
+	jobLinkCount := 0
+	for _, pattern := range jobLinkPatterns {
+		jobLinkCount += strings.Count(lowerHTML, pattern)
+	}
+	if jobLinkCount > 0 {
+		findings = append(findings, fmt.Sprintf("Found %d potential job URL patterns in HTML", jobLinkCount))
+	}
+
+	// Check for API patterns in scripts
+	apiPatterns := []string{"/api/jobs", "/api/v1/jobs", "/api/v2/jobs", "fetch(", "xhr.", "ajax(", "/careers/api", "getjobs", "jobsearch", "/graphql", "query jobs"}
+	apiFound := false
+	for _, pattern := range apiPatterns {
+		if strings.Contains(lowerHTML, pattern) {
+			apiFound = true
+			findings = append(findings, fmt.Sprintf("API pattern found: %s", pattern))
+		}
+	}
+	if !apiFound && jobLinkCount > 5 {
+		findings = append(findings, "Jobs appear to be in static HTML (no API patterns found)")
+	}
+
+	// Extract potential API endpoints from script content
+	apiEndpoints := extractAPIEndpoints(html)
+	if len(apiEndpoints) > 0 {
+		findings = append(findings, "Potential API endpoints found:")
+		for _, endpoint := range apiEndpoints {
+			findings = append(findings, fmt.Sprintf("  - %s", endpoint))
+		}
+	}
+
+	// Check for pagination
+	if strings.Contains(lowerHTML, "load more") || strings.Contains(lowerHTML, "show more") || strings.Contains(lowerHTML, "loadmore") {
+		findings = append(findings, "Pagination: Load More button detected")
+	}
+	if strings.Contains(lowerHTML, "page=") || strings.Contains(lowerHTML, "pagenum") || strings.Contains(lowerHTML, "pagination") {
+		findings = append(findings, "Pagination: Numbered pages detected")
+	}
+	if strings.Contains(lowerHTML, "intersectionobserver") || strings.Contains(lowerHTML, "infinite") {
+		findings = append(findings, "Pagination: Infinite scroll detected")
+	}
+
+	// Check for iframes
+	if strings.Contains(lowerHTML, "<iframe") && (strings.Contains(lowerHTML, "job") || strings.Contains(lowerHTML, "career")) {
+		findings = append(findings, "Jobs may be loaded in iframe")
+	}
+
+	if len(findings) == 0 {
+		return "No specific patterns pre-detected. Full analysis needed."
+	}
+
+	return strings.Join(findings, "\n")
+}
+
+// cleanHTMLForAnalysis cleans HTML but keeps script content for analysis
+func (s *AIService) cleanHTMLForAnalysis(html string) string {
+	// Keep script tags but remove their content markers
+	// This helps identify JavaScript patterns
+
+	// Remove style tags and content
+	styleRegex := regexp.MustCompile(`(?is)<style[^>]*>.*?</style>`)
+	html = styleRegex.ReplaceAllString(html, "")
+
+	// Remove comments
+	commentRegex := regexp.MustCompile(`(?is)<!--.*?-->`)
+	html = commentRegex.ReplaceAllString(html, "")
+
+	// Remove SVG tags
+	svgRegex := regexp.MustCompile(`(?is)<svg[^>]*>.*?</svg>`)
+	html = svgRegex.ReplaceAllString(html, "")
+
+	// Collapse multiple whitespace
+	whitespaceRegex := regexp.MustCompile(`\s+`)
+	html = whitespaceRegex.ReplaceAllString(html, " ")
+
+	return strings.TrimSpace(html)
 }
 
 // cleanHTML removes scripts, styles, and unnecessary whitespace from HTML
@@ -774,6 +1368,88 @@ func (s *AIService) parseGeneratedBlogManually(jsonStr string) (*GeneratedBlog, 
 	}
 
 	return blog, nil
+}
+
+// parseExtractedJobManually attempts to parse job JSON using regex extraction
+// This is a fallback when standard JSON parsing fails due to formatting issues or truncation
+func (s *AIService) parseExtractedJobManually(jsonStr string) (*ExtractedJob, error) {
+	job := &ExtractedJob{}
+
+	// Helper function to extract string value between quotes after a key
+	// Handles both complete and truncated field names
+	extractString := func(key string) string {
+		// Try exact match first
+		pattern := regexp.MustCompile(`"` + key + `"\s*:\s*"((?:[^"\\]|\\.)*)`)
+		matches := pattern.FindStringSubmatch(jsonStr)
+		if len(matches) > 1 {
+			val := matches[1]
+			val = strings.ReplaceAll(val, `\"`, `"`)
+			val = strings.ReplaceAll(val, `\\`, `\`)
+			val = strings.ReplaceAll(val, `\n`, "\n")
+			val = strings.ReplaceAll(val, `\t`, "\t")
+			return val
+		}
+
+		// Try partial match for truncated fields (e.g., "ription" for "description")
+		if len(key) > 4 {
+			partialKey := key[len(key)-6:] // Last 6 chars
+			partialPattern := regexp.MustCompile(partialKey + `"\s*:\s*"((?:[^"\\]|\\.)*)`)
+			matches = partialPattern.FindStringSubmatch(jsonStr)
+			if len(matches) > 1 {
+				val := matches[1]
+				val = strings.ReplaceAll(val, `\"`, `"`)
+				val = strings.ReplaceAll(val, `\\`, `\`)
+				val = strings.ReplaceAll(val, `\n`, "\n")
+				val = strings.ReplaceAll(val, `\t`, "\t")
+				return val
+			}
+		}
+		return ""
+	}
+
+	// Extract string array - handles truncated arrays too
+	extractArray := func(key string) []string {
+		pattern := regexp.MustCompile(`"` + key + `"\s*:\s*\[([^\]]*)\]?`)
+		matches := pattern.FindStringSubmatch(jsonStr)
+		if len(matches) > 1 {
+			arrStr := matches[1]
+			itemPattern := regexp.MustCompile(`"([^"]+)"`)
+			itemMatches := itemPattern.FindAllStringSubmatch(arrStr, -1)
+			var result []string
+			for _, m := range itemMatches {
+				if len(m) > 1 {
+					result = append(result, m[1])
+				}
+			}
+			return result
+		}
+		return nil
+	}
+
+	job.Title = extractString("title")
+	job.Company = extractString("company")
+	job.CompanyLogo = extractString("company_logo")
+	job.Location = extractString("location")
+	job.City = extractString("city")
+	job.State = extractString("state")
+	job.Country = extractString("country")
+	job.Description = extractString("description")
+	job.Requirements = extractString("requirements")
+	job.Salary = extractString("salary")
+	job.JobType = extractString("job_type")
+	job.ExperienceLevel = extractString("experience_level")
+	job.Skills = extractArray("skills")
+	job.Benefits = extractArray("benefits")
+
+	// Log what we extracted for debugging
+	log.Printf("🔍 Fallback parser extracted - Title: %q, Company: %q, Location: %q, Skills: %d",
+		job.Title, job.Company, job.Location, len(job.Skills))
+
+	if job.Title == "" {
+		return nil, fmt.Errorf("failed to extract essential fields from JSON")
+	}
+
+	return job, nil
 }
 
 // IsConfigured returns true if the AI service has the required API key

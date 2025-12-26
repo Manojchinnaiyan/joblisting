@@ -21,6 +21,7 @@ import {
   Plus,
   Link2,
   Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -51,6 +52,7 @@ import {
   useFeatureJob,
   useUnfeatureJob,
   useDeleteJob,
+  useReindexJobs,
 } from '@/hooks/admin'
 import { AdminJobListItem } from '@/lib/api/admin/jobs'
 
@@ -73,6 +75,7 @@ export default function JobsPage() {
   const featureJob = useFeatureJob()
   const unfeatureJob = useUnfeatureJob()
   const deleteJob = useDeleteJob()
+  const reindexJobs = useReindexJobs()
 
   const handleAction = async () => {
     try {
@@ -398,6 +401,19 @@ export default function JobsPage() {
               <Link2 className="mr-2 h-4 w-4" />
               Import from URL
             </Link>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => reindexJobs.mutate()}
+            disabled={reindexJobs.isPending}
+          >
+            {reindexJobs.isPending ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-2 h-4 w-4" />
+            )}
+            Reindex Search
           </Button>
           <Button size="sm" asChild>
             <Link href="/admin/jobs/new">

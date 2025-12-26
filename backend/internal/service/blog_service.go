@@ -328,3 +328,14 @@ func (s *BlogService) GetTagByID(id uuid.UUID) (*domain.BlogTag, error) {
 func (s *BlogService) DeleteTag(id uuid.UUID) error {
 	return s.blogRepo.DeleteTag(id)
 }
+
+// GetAllBlogs retrieves all blogs for reindexing
+func (s *BlogService) GetAllBlogs() ([]domain.Blog, error) {
+	// Use list with no filters and high limit
+	filters := domain.BlogFilters{
+		Page:     1,
+		PageSize: 10000,
+	}
+	blogs, _, err := s.blogRepo.List(filters)
+	return blogs, err
+}

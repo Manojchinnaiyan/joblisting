@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"context"
+	"job-platform/internal/cache"
 	"job-platform/internal/domain"
 	"job-platform/internal/dto"
 	"job-platform/internal/middleware"
@@ -17,16 +19,19 @@ import (
 type EmployerJobHandler struct {
 	jobService         *service.JobService
 	applicationService *service.ApplicationService
+	cacheService       *cache.CacheService
 }
 
 // NewEmployerJobHandler creates a new employer job handler
 func NewEmployerJobHandler(
 	jobService *service.JobService,
 	applicationService *service.ApplicationService,
+	cacheService *cache.CacheService,
 ) *EmployerJobHandler {
 	return &EmployerJobHandler{
 		jobService:         jobService,
 		applicationService: applicationService,
+		cacheService:       cacheService,
 	}
 }
 
@@ -115,10 +120,22 @@ func (h *EmployerJobHandler) CreateJob(c *gin.Context) {
 		return
 	}
 
+	// Invalidate job caches
+	h.invalidateJobCaches()
+
 	// Convert to response
 	jobResponse := dto.ToJobResponse(job, nil)
 
 	response.Created(c, "Job created successfully", jobResponse)
+}
+
+// invalidateJobCaches clears all job-related caches
+func (h *EmployerJobHandler) invalidateJobCaches() {
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		ctx := context.Background()
+		_ = h.cacheService.InvalidateAllJobCaches(ctx)
+		_ = h.cacheService.InvalidateLocations(ctx)
+	}
 }
 
 // UpdateJob updates an existing job
@@ -226,6 +243,9 @@ func (h *EmployerJobHandler) UpdateJob(c *gin.Context) {
 		return
 	}
 
+	// Invalidate job caches
+	h.invalidateJobCaches()
+
 	// Convert to response
 	jobResponse := dto.ToJobResponse(job, nil)
 
@@ -264,6 +284,9 @@ func (h *EmployerJobHandler) DeleteJob(c *gin.Context) {
 		response.InternalError(c, err)
 		return
 	}
+
+	// Invalidate job caches
+	h.invalidateJobCaches()
 
 	response.OK(c, "Job deleted successfully", nil)
 }
@@ -378,6 +401,9 @@ func (h *EmployerJobHandler) CloseJob(c *gin.Context) {
 		return
 	}
 
+	// Invalidate job caches
+	h.invalidateJobCaches()
+
 	response.OK(c, "Job closed successfully", nil)
 }
 
@@ -422,6 +448,9 @@ func (h *EmployerJobHandler) RenewJob(c *gin.Context) {
 		response.InternalError(c, err)
 		return
 	}
+
+	// Invalidate job caches
+	h.invalidateJobCaches()
 
 	// Get updated job
 	job, err := h.jobService.GetJobByID(jobID)

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"job-platform/internal/domain"
 	"job-platform/internal/repository"
 	"job-platform/internal/storage"
@@ -39,8 +40,12 @@ func (s *MediaService) UploadImage(companyID uuid.UUID, file *multipart.FileHead
 		return nil, domain.ErrCompanyNotFound
 	}
 
+	// Generate unique filename and path
+	uniqueFilename := storage.GenerateUniqueFileName(file.Filename)
+	filePath := fmt.Sprintf("media/%s/%s", companyID.String(), uniqueFilename)
+
 	// Upload to MinIO
-	result, err := s.storage.UploadFile("companies", file, "media")
+	result, err := s.storage.UploadFile("companies", file, filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -239,8 +244,12 @@ func (s *MediaService) BulkUploadImages(companyID uuid.UUID, files []*multipart.
 
 	now := time.Now()
 	for i, file := range files {
+		// Generate unique filename and path
+		uniqueFilename := storage.GenerateUniqueFileName(file.Filename)
+		filePath := fmt.Sprintf("media/%s/%s", companyID.String(), uniqueFilename)
+
 		// Upload to MinIO
-		result, err := s.storage.UploadFile("companies", file, "media")
+		result, err := s.storage.UploadFile("companies", file, filePath)
 		if err != nil {
 			return nil, err
 		}

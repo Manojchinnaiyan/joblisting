@@ -16,6 +16,9 @@ import {
   Shield,
   UserCog,
   Download,
+  Unlock,
+  AlertTriangle,
+  ShieldAlert,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -44,6 +47,7 @@ import {
   useSuspendUser,
   useActivateUser,
   useDeleteUser,
+  useUnlockUser,
 } from '@/hooks/admin'
 import { AdminUserListItem } from '@/lib/api/admin/users'
 
@@ -55,12 +59,16 @@ export default function UsersPage() {
   const [limit, setLimit] = useState(20)
   const [search, setSearch] = useState('')
   const [selectedUser, setSelectedUser] = useState<User | null>(null)
-  const [actionDialog, setActionDialog] = useState<'suspend' | 'activate' | 'delete' | null>(null)
+  const [actionDialog, setActionDialog] = useState<'suspend' | 'activate' | 'delete' | 'unlock' | null>(null)
 
   const { data, isLoading, refetch, isFetching } = useAdminUsers({ search: search || undefined }, { page, limit })
   const suspendUser = useSuspendUser()
   const activateUser = useActivateUser()
   const deleteUser = useDeleteUser()
+  const unlockUser = useUnlockUser()
+
+  // Helper to check if user is locked
+  const isUserLocked = (user: User) => user.failed_login_attempts >= 5
 
   const handleAction = async () => {
     if (!selectedUser) return
@@ -75,6 +83,9 @@ export default function UsersPage() {
           break
         case 'delete':
           await deleteUser.mutateAsync(selectedUser.id)
+          break
+        case 'unlock':
+          await unlockUser.mutateAsync(selectedUser.id)
           break
       }
     } finally {
@@ -137,24 +148,34 @@ export default function UsersPage() {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
-        const status = row.original.status
+        const user = row.original
+        const status = user.status
+        const locked = isUserLocked(user)
         return (
-          <Badge
-            variant={
-              status === 'ACTIVE'
-                ? 'default'
-                : status === 'SUSPENDED'
-                ? 'destructive'
-                : 'secondary'
-            }
-            className={
-              status === 'ACTIVE'
-                ? 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-100'
-                : ''
-            }
-          >
-            {status === 'ACTIVE' ? 'Active' : status === 'SUSPENDED' ? 'Suspended' : 'Pending'}
-          </Badge>
+          <div className="flex items-center gap-1">
+            <Badge
+              variant={
+                status === 'ACTIVE'
+                  ? 'default'
+                  : status === 'SUSPENDED'
+                  ? 'destructive'
+                  : 'secondary'
+              }
+              className={
+                status === 'ACTIVE'
+                  ? 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900 dark:text-green-100'
+                  : ''
+              }
+            >
+              {status === 'ACTIVE' ? 'Active' : status === 'SUSPENDED' ? 'Suspended' : 'Pending'}
+            </Badge>
+            {locked && (
+              <Badge variant="destructive" className="flex items-center gap-1">
+                <AlertTriangle className="h-3 w-3" />
+                Locked
+              </Badge>
+            )}
+          </div>
         )
       },
     },
@@ -253,6 +274,18 @@ export default function UsersPage() {
                 </a>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
+              {isUserLocked(user) && (
+                <DropdownMenuItem
+                  onClick={() => {
+                    setSelectedUser(user)
+                    setActionDialog('unlock')
+                  }}
+                  className="text-blue-600"
+                >
+                  <Unlock className="mr-2 h-4 w-4" />
+                  Unlock Account
+                </DropdownMenuItem>
+              )}
               {user.status === 'ACTIVE' ? (
                 <DropdownMenuItem
                   onClick={() => {
@@ -306,6 +339,12 @@ export default function UsersPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400">Manage all platform users</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin/users/locked">
+              <ShieldAlert className="mr-2 h-4 w-4" />
+              Locked Users
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href="/admin/users/admins">
               <Shield className="mr-2 h-4 w-4" />
@@ -397,6 +436,28 @@ export default function UsersPage() {
               className="bg-destructive hover:bg-destructive/90"
             >
               Delete User
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unlock Dialog */}
+      <AlertDialog open={actionDialog === 'unlock'} onOpenChange={() => setActionDialog(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unlock User Account</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to unlock the account for {selectedUser?.first_name} {selectedUser?.last_name}?
+              This will reset their failed login attempts ({selectedUser?.failed_login_attempts} attempts) and allow them to log in again.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleAction}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Unlock Account
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

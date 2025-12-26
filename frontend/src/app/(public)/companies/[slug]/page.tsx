@@ -5,6 +5,7 @@ import { CompanyHeader } from '@/components/companies/company-header'
 import { CompanyAbout } from '@/components/companies/company-about'
 import { CompanyLocations } from '@/components/companies/company-locations'
 import { CompanyBenefits } from '@/components/companies/company-benefits'
+import { CompanyMedia } from '@/components/companies/company-media'
 import { FollowButton } from '@/components/companies/follow-button'
 import { BackButton } from '@/components/shared/back-button'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
@@ -43,6 +44,9 @@ export default async function CompanyDetailPage({
 
         <div className="mt-8 space-y-8">
           <CompanyAbout company={company} />
+          {company.media && company.media.length > 0 && (
+            <CompanyMedia media={company.media} />
+          )}
           {company.locations && company.locations.length > 0 && (
             <CompanyLocations locations={company.locations} />
           )}

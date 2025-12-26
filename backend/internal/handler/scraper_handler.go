@@ -299,6 +299,56 @@ func (h *ScraperHandler) AnalyzeCareerPage(c *gin.Context) {
 	})
 }
 
+// AnalyzeCareerPageAI handles POST /admin/jobs/scrape/analyze-ai
+// @Summary Analyze a career page using AI to determine extraction strategy
+// @Description Uses Claude AI to analyze a career page and suggest the best scraping methods
+// @Tags Admin Jobs
+// @Accept json
+// @Produce json
+// @Param request body dto.ExtractLinksRequest true "Analyze request"
+// @Success 200 {object} map[string]interface{}
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /admin/jobs/scrape/analyze-ai [post]
+func (h *ScraperHandler) AnalyzeCareerPageAI(c *gin.Context) {
+	var req dto.ExtractLinksRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Invalid request: "+err.Error()))
+		return
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: URL must start with http:// or https://"))
+		return
+	}
+
+	// First, scrape the HTML content
+	htmlContent, err := h.scraperService.ScrapeHTML(c.Request.Context(), req.URL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "Failed to fetch page: " + err.Error(),
+		})
+		return
+	}
+
+	// Use AI to analyze the page
+	analysis, err := h.scraperService.AnalyzeCareerPageAI(c.Request.Context(), htmlContent, req.URL)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   "AI analysis failed: " + err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success":  true,
+		"analysis": analysis,
+	})
+}
+
 // TestScrape handles POST /admin/jobs/scrape/test
 // @Summary Test scraping a URL
 // @Description Test scraping a URL without saving
@@ -502,4 +552,46 @@ func (h *ScraperHandler) stripHTMLTags(html string) string {
 		result = strings.ReplaceAll(result, "  ", " ")
 	}
 	return strings.TrimSpace(result)
+}
+
+// ExtractFromAPI handles POST /admin/jobs/scrape/extract-from-api
+// @Summary Extract jobs from a specific API endpoint
+// @Description Directly fetch and extract jobs from a detected API endpoint
+// @Tags Admin Jobs
+// @Accept json
+// @Produce json
+// @Param request body dto.ExtractFromAPIRequest true "Extract from API request"
+// @Success 200 {object} dto.ExtractLinksResponse
+// @Failure 400 {object} response.ErrorResponse
+// @Failure 500 {object} response.ErrorResponse
+// @Router /admin/jobs/scrape/extract-from-api [post]
+func (h *ScraperHandler) ExtractFromAPI(c *gin.Context) {
+	var req dto.ExtractFromAPIRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Invalid request: "+err.Error()))
+		return
+	}
+
+	// Validate URL format
+	if !strings.HasPrefix(req.APIEndpoint, "http://") && !strings.HasPrefix(req.APIEndpoint, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: API endpoint must start with http:// or https://"))
+		return
+	}
+
+	if !strings.HasPrefix(req.BaseURL, "http://") && !strings.HasPrefix(req.BaseURL, "https://") {
+		response.BadRequest(c, errors.New("VALIDATION_ERROR: Base URL must start with http:// or https://"))
+		return
+	}
+
+	// Extract jobs from the API endpoint using the job link pattern from AI analysis
+	result, err := h.scraperService.ExtractJobsFromAPIEndpoint(c.Request.Context(), req.APIEndpoint, req.BaseURL, req.JobLinkPattern)
+	if err != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success": false,
+			"error":   err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }

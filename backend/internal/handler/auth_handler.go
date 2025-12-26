@@ -1,6 +1,9 @@
 package handler
 
 import (
+	"context"
+
+	"job-platform/internal/cache"
 	"job-platform/internal/domain"
 	"job-platform/internal/middleware"
 	"job-platform/internal/service"
@@ -14,6 +17,7 @@ type AuthHandler struct {
 	authService  *service.AuthService
 	tokenService *service.TokenService
 	userService  *service.UserService
+	cacheService *cache.CacheService
 }
 
 // NewAuthHandler creates a new auth handler
@@ -21,11 +25,13 @@ func NewAuthHandler(
 	authService *service.AuthService,
 	tokenService *service.TokenService,
 	userService *service.UserService,
+	cacheService *cache.CacheService,
 ) *AuthHandler {
 	return &AuthHandler{
 		authService:  authService,
 		tokenService: tokenService,
 		userService:  userService,
+		cacheService: cacheService,
 	}
 }
 
@@ -183,6 +189,59 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	}
 
 	response.OK(c, "Logout successful", nil)
+}
+
+// LogoutAllDevices logs out user from all devices by revoking all tokens
+func (h *AuthHandler) LogoutAllDevices(c *gin.Context) {
+	// Get current user from context
+	user, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		response.Unauthorized(c, domain.ErrInvalidToken)
+		return
+	}
+
+	// Revoke all refresh tokens for this user from the database
+	if err := h.tokenService.RevokeAllUserTokens(user.ID); err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	// Also invalidate all sessions in Redis cache
+	ctx := context.Background()
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_ = h.cacheService.InvalidateAllUserSessions(ctx, user.ID.String())
+	}
+
+	response.OK(c, "Logged out from all devices successfully", nil)
+}
+
+// GetActiveSessions returns the count of active sessions for the current user
+func (h *AuthHandler) GetActiveSessions(c *gin.Context) {
+	// Get current user from context
+	user, err := middleware.GetUserFromContext(c)
+	if err != nil {
+		response.Unauthorized(c, domain.ErrInvalidToken)
+		return
+	}
+
+	// Get session count from cache if available
+	var sessionCount int64
+	ctx := context.Background()
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		sessionCount, _ = h.cacheService.GetUserSessionCount(ctx, user.ID.String())
+	}
+
+	// Get token count from database as well
+	tokenCount, err := h.tokenService.GetActiveTokenCount(user.ID)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Active sessions retrieved", gin.H{
+		"cache_sessions":    sessionCount,
+		"database_sessions": tokenCount,
+	})
 }
 
 // RefreshToken handles token refresh

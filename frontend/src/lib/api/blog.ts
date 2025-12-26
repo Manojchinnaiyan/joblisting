@@ -318,4 +318,12 @@ export const adminBlogApi = {
     )
     return response.data
   },
+
+  // Search indexing
+  reindexBlogs: async (): Promise<{ success: boolean; message: string; indexed_count: number }> => {
+    const response = await apiClient.post<{ success: boolean; message: string; indexed_count: number }>(
+      '/admin/blogs/reindex'
+    )
+    return response.data
+  },
 }

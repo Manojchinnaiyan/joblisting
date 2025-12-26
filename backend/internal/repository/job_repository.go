@@ -170,6 +170,13 @@ func (r *JobRepository) IncrementViewCount(jobID uuid.UUID) error {
 		Update("views_count", gorm.Expr("views_count + 1")).Error
 }
 
+// IncrementViewCountBy increments the view count for a job by a specific amount
+func (r *JobRepository) IncrementViewCountBy(jobID uuid.UUID, count int) error {
+	return r.db.Model(&domain.Job{}).
+		Where("id = ?", jobID).
+		Update("views_count", gorm.Expr("views_count + ?", count)).Error
+}
+
 // IncrementApplicationsCount increments the applications count for a job
 func (r *JobRepository) IncrementApplicationsCount(jobID uuid.UUID) error {
 	return r.db.Model(&domain.Job{}).

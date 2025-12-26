@@ -197,4 +197,8 @@ export const adminUsersApi = {
   async revokeUserSessions(id: string): Promise<void> {
     await apiClient.post(`/admin/users/${id}/revoke-sessions`)
   },
+
+  async unlockUser(id: string): Promise<void> {
+    await apiClient.post(`/admin/users/${id}/unlock`)
+  },
 }

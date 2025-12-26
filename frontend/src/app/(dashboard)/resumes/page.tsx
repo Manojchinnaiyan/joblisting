@@ -8,6 +8,7 @@ import { useResumes, useUploadResume, useSetPrimaryResume, useDeleteResume } fro
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { format } from 'date-fns'
 import type { Resume } from '@/types/resume'
+import { resumesApi } from '@/lib/api/resumes'
 import { toast } from 'sonner'
 
 export default function ResumesPage() {
@@ -64,13 +65,11 @@ export default function ResumesPage() {
   }
 
   const handleDownload = async (resume: Resume) => {
-    if (!resume.download_url) {
-      toast.error('Download URL not available')
-      return
-    }
-
     try {
-      const response = await fetch(resume.download_url)
+      // Fetch the signed download URL from the backend
+      const downloadUrl = await resumesApi.getResumeDownloadUrl(resume.id)
+
+      const response = await fetch(downloadUrl)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -168,7 +167,7 @@ export default function ResumesPage() {
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Uploaded {format(new Date(resume.created_at), 'MMM d, yyyy')}
+                      Uploaded {format(new Date(resume.uploaded_at), 'MMM d, yyyy')}
                     </p>
                   </div>
 

@@ -12,11 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"job-platform/internal/cache"
 	"job-platform/internal/config"
 	"job-platform/internal/cron"
 	"job-platform/internal/database"
 	"job-platform/internal/repository"
 	"job-platform/internal/router"
+	"job-platform/internal/search"
 	"job-platform/internal/service"
 	"job-platform/internal/storage"
 
@@ -54,16 +56,26 @@ func main() {
 	}
 	log.Println("✅ Connected to Redis")
 
+	// Initialize Cache Service
+	cacheService := cache.NewCacheService(redisClient)
+	if cacheService.IsAvailable() {
+		log.Println("✅ Cache service initialized")
+	} else {
+		log.Println("⚠️  Cache service not available")
+	}
+
 	// Initialize MinIO
 	minioConfig := &storage.MinioConfig{
 		Endpoint:        cfg.MinioEndpoint,
 		AccessKey:       cfg.MinioAccessKey,
 		SecretKey:       cfg.MinioSecretKey,
 		UseSSL:          cfg.MinioUseSSL,
+		PublicURL:       cfg.MinioPublicURL,
 		BucketResumes:   cfg.MinioBucketResumes,
 		BucketAvatars:   cfg.MinioBucketAvatars,
 		BucketCerts:     cfg.MinioBucketCerts,
 		BucketPortfolio: cfg.MinioBucketPortfolios,
+		BucketCompanies: cfg.MinioBucketCompanies,
 	}
 
 	minioClient, err := storage.NewMinioClient(minioConfig)
@@ -79,8 +91,28 @@ func main() {
 		log.Println("✅ MinIO buckets initialized")
 	}
 
-	// Setup router with MinIO client
-	r := router.SetupRouter(cfg, db, redisClient, minioClient)
+	// Initialize MeiliSearch
+	var meiliClient *search.MeiliClient
+	if cfg.MeiliHost != "" {
+		meiliConfig := search.MeiliConfig{
+			Host:      cfg.MeiliHost,
+			MasterKey: cfg.MeiliMasterKey,
+		}
+		meiliClient, err = search.NewMeiliClient(meiliConfig)
+		if err != nil {
+			log.Printf("⚠️  Warning: Failed to connect to MeiliSearch: %v", err)
+		} else {
+			// Initialize indexes
+			if err := meiliClient.InitIndexes(context.Background()); err != nil {
+				log.Printf("⚠️  Warning: Failed to initialize MeiliSearch indexes: %v", err)
+			}
+		}
+	} else {
+		log.Println("⚠️  MeiliSearch not configured (MEILI_HOST not set)")
+	}
+
+	// Setup router with MinIO, MeiliSearch, and Cache clients
+	r := router.SetupRouter(cfg, db, redisClient, minioClient, meiliClient, cacheService)
 
 	// Initialize job repositories and services for cron
 	jobRepo := repository.NewJobRepository(db)
@@ -88,6 +120,7 @@ func main() {
 	applicationRepo := repository.NewApplicationRepository(db)
 	jobViewRepo := repository.NewJobViewRepository(db)
 	userRepo := repository.NewUserRepository(db)
+	blogRepo := repository.NewBlogRepository(db)
 
 	jobService := service.NewJobService(
 		jobRepo,
@@ -108,6 +141,10 @@ func main() {
 	// Start cron scheduler
 	cronScheduler := cron.NewJobCronScheduler(jobService)
 	cronScheduler.Start()
+
+	// Start view sync scheduler (syncs Redis view counts to DB every 5 minutes)
+	viewSyncScheduler := cron.NewViewSyncScheduler(cacheService, jobRepo, blogRepo, cache.ViewCountSyncPeriod)
+	viewSyncScheduler.Start()
 
 	// Create HTTP server
 	addr := fmt.Sprintf("%s:%s", cfg.AppHost, cfg.AppPort)
@@ -134,8 +171,9 @@ func main() {
 	<-quit
 	log.Println("🛑 Shutting down server...")
 
-	// Stop cron scheduler
+	// Stop cron schedulers
 	cronScheduler.Stop()
+	viewSyncScheduler.Stop()
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useQueryClient } from '@tanstack/react-query'
-import { scraperApi, ScrapedJob, ExtractedJobLink, ImportQueue, ImportJob, LinkExtractionTask } from '@/lib/api/admin/scraper'
+import { scraperApi, ScrapedJob, ExtractedJobLink, ImportQueue, ImportJob, LinkExtractionTask, URLAnalysisResult } from '@/lib/api/admin/scraper'
 import { adminJobsKeys } from '@/hooks/admin/use-admin-jobs'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Loader2, Link2, AlertTriangle, Check, ExternalLink, X, Edit2, Save, Building2, List, LinkIcon, Clock, CheckCircle2, XCircle, Pause, Play, Trash2, RefreshCw, RotateCcw } from 'lucide-react'
+import { Loader2, Link2, AlertTriangle, Check, ExternalLink, X, Edit2, Save, Building2, List, LinkIcon, Clock, CheckCircle2, XCircle, Pause, Play, Trash2, RefreshCw, RotateCcw, Brain, Code, Zap, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
 const JOB_TYPES = [
@@ -67,6 +67,25 @@ export function JobScraper() {
   const [activeQueues, setActiveQueues] = useState<ImportQueue[]>([])
   const [refreshingQueues, setRefreshingQueues] = useState(false)
   const hasInvalidatedRef = useRef(false)
+
+  // AI Analysis state
+  const [analyzeUrl, setAnalyzeUrl] = useState('')
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<URLAnalysisResult | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
+  const [showSteps, setShowSteps] = useState(false)
+  const [showChallenges, setShowChallenges] = useState(false)
+  const [extractingFromAPI, setExtractingFromAPI] = useState(false)
+
+  // Tab control state
+  const [activeTab, setActiveTab] = useState('single')
+
+  // Store last analysis for bulk extraction
+  const [lastAnalysis, setLastAnalysis] = useState<URLAnalysisResult | null>(null)
+
+  // Paste URLs directly state
+  const [pastedUrls, setPastedUrls] = useState('')
+  const [bulkMethod, setBulkMethod] = useState<'paste' | 'extract'>('paste')
 
   const handlePreview = async () => {
     if (!url.trim()) {
@@ -501,6 +520,106 @@ export function JobScraper() {
     }
   }
 
+  // AI Analysis handler
+  const handleAnalyzeURL = async () => {
+    if (!analyzeUrl.trim()) {
+      setAnalysisError('Please enter a URL')
+      return
+    }
+
+    if (!analyzeUrl.startsWith('http://') && !analyzeUrl.startsWith('https://')) {
+      setAnalysisError('URL must start with http:// or https://')
+      return
+    }
+
+    setAnalyzing(true)
+    setAnalysisError(null)
+    setAnalysisResult(null)
+
+    try {
+      const response = await scraperApi.analyzeCareerPageAI(analyzeUrl)
+      if (response.success && response.analysis) {
+        setAnalysisResult(response.analysis)
+        toast({
+          title: 'Analysis Complete',
+          description: `Detected ${response.analysis.platform} platform with ${response.analysis.job_loading_method} loading`,
+        })
+      } else {
+        setAnalysisError(response.error || 'Analysis failed')
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to analyze URL'
+      setAnalysisError(errorMessage)
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
+  const clearAnalysis = () => {
+    setAnalyzeUrl('')
+    setAnalysisResult(null)
+    setAnalysisError(null)
+    setShowSteps(false)
+    setShowChallenges(false)
+  }
+
+  // Handle pasted URLs - parse and start import
+  const handlePastedUrlsImport = async () => {
+    const urls = pastedUrls
+      .split('\n')
+      .map(u => u.trim())
+      .filter(u => u.startsWith('http://') || u.startsWith('https://'))
+
+    if (urls.length === 0) {
+      toast({
+        title: 'No valid URLs',
+        description: 'Please paste job URLs (one per line) starting with http:// or https://',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    try {
+      setStartingImport(true)
+      const titles = urls.map(() => '') // Empty titles, will be extracted during import
+
+      const response = await scraperApi.createImportQueue({
+        source_url: 'manual-paste',
+        urls,
+        titles,
+      })
+
+      if (response.success) {
+        toast({
+          title: 'Import Started',
+          description: `Background import started for ${urls.length} jobs. You can navigate away - the import will continue.`,
+        })
+
+        // Clear the textarea
+        setPastedUrls('')
+
+        // Refresh queues immediately
+        await fetchQueues()
+      }
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start import'
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive',
+      })
+    } finally {
+      setStartingImport(false)
+    }
+  }
+
+  // Count valid URLs in pasted text
+  const validUrlCount = pastedUrls
+    .split('\n')
+    .map(u => u.trim())
+    .filter(u => u.startsWith('http://') || u.startsWith('https://'))
+    .length
+
   // Get status badge color
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -521,15 +640,19 @@ export function JobScraper() {
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="single" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="single" className="flex items-center gap-2">
             <Link2 className="h-4 w-4" />
-            Single Job URL
+            Single Job
           </TabsTrigger>
           <TabsTrigger value="bulk" className="flex items-center gap-2">
             <List className="h-4 w-4" />
-            Extract from Listing
+            Bulk Extract
+          </TabsTrigger>
+          <TabsTrigger value="analyze" className="flex items-center gap-2">
+            <Brain className="h-4 w-4" />
+            AI Analyze
           </TabsTrigger>
         </TabsList>
 
@@ -1026,62 +1149,148 @@ export function JobScraper() {
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <List className="h-5 w-5" />
-                Extract Job Links from Listing Page
-              </CardTitle>
-              <CardDescription>
-                Paste a job listing page URL (like a company&apos;s careers page) to extract all job links and bulk import them.
-                Auto-detects whether jobs are loaded via API or HTML.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <Input
-                    placeholder="https://company.com/careers/all-jobs..."
-                    value={listingUrl}
-                    onChange={(e) => setListingUrl(e.target.value)}
-                    disabled={extractingLinks || startingImport}
-                  />
-                </div>
-                <Button
-                  onClick={handleExtractLinks}
-                  disabled={extractingLinks || startingImport || !listingUrl.trim()}
-                >
-                  {extractingLinks ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Extracting...
-                    </>
-                  ) : (
-                    'Extract Links'
-                  )}
-                </Button>
-              </div>
+          {/* Method Selection */}
+          <div className="flex gap-2 mb-4">
+            <Button
+              variant={bulkMethod === 'paste' ? 'default' : 'outline'}
+              onClick={() => setBulkMethod('paste')}
+              className="flex-1"
+            >
+              <LinkIcon className="mr-2 h-4 w-4" />
+              Paste URLs (Recommended)
+            </Button>
+            <Button
+              variant={bulkMethod === 'extract' ? 'default' : 'outline'}
+              onClick={() => setBulkMethod('extract')}
+              className="flex-1"
+            >
+              <Zap className="mr-2 h-4 w-4" />
+              Auto-Extract from Page
+            </Button>
+          </div>
 
-              {/* Extraction in progress indicator */}
-              {extractingLinks && activeExtractionTask && (
+          {/* Paste URLs Method */}
+          {bulkMethod === 'paste' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LinkIcon className="h-5 w-5" />
+                  Paste Job URLs
+                </CardTitle>
+                <CardDescription>
+                  Paste job posting URLs (one per line). This is the most reliable method -
+                  copy job links from any career page and paste them here.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Textarea
+                  placeholder={`https://company.com/jobs/software-engineer
+https://company.com/jobs/product-manager
+https://anothercompany.com/careers/job-123
+...`}
+                  value={pastedUrls}
+                  onChange={(e) => setPastedUrls(e.target.value)}
+                  rows={10}
+                  className="font-mono text-sm"
+                  disabled={startingImport}
+                />
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    {validUrlCount > 0 ? (
+                      <span className="text-green-600 font-medium">{validUrlCount} valid URL{validUrlCount !== 1 ? 's' : ''} detected</span>
+                    ) : (
+                      'Paste job URLs above (one per line)'
+                    )}
+                  </p>
+                  <Button
+                    onClick={handlePastedUrlsImport}
+                    disabled={startingImport || validUrlCount === 0}
+                  >
+                    {startingImport ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Starting Import...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="mr-2 h-4 w-4" />
+                        Import {validUrlCount} Job{validUrlCount !== 1 ? 's' : ''}
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Auto-Extract Method */}
+          {bulkMethod === 'extract' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <List className="h-5 w-5" />
+                  Auto-Extract from Career Page
+                </CardTitle>
+                <CardDescription>
+                  Paste a career listing page URL to automatically extract job links.
+                  Works best with static HTML pages. SPA/JavaScript-heavy sites may not work well.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <Input
+                      placeholder="https://company.com/careers/all-jobs..."
+                      value={listingUrl}
+                      onChange={(e) => setListingUrl(e.target.value)}
+                      disabled={extractingLinks || startingImport}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleExtractLinks}
+                    disabled={extractingLinks || startingImport || !listingUrl.trim()}
+                  >
+                    {extractingLinks ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      'Extract Links'
+                    )}
+                  </Button>
+                </div>
+
+                {/* Extraction in progress indicator */}
+                {extractingLinks && activeExtractionTask && (
+                  <Alert className="mt-4">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertTitle>Extracting Links</AlertTitle>
+                    <AlertDescription>
+                      Scanning page and extracting job links. This runs in the background and may take up to a minute for large job boards...
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {extractError && (
+                  <Alert variant="destructive" className="mt-4">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertTitle>Error</AlertTitle>
+                    <AlertDescription>{extractError}</AlertDescription>
+                  </Alert>
+                )}
+
                 <Alert className="mt-4">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <AlertTitle>Extracting Links</AlertTitle>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Tip</AlertTitle>
                   <AlertDescription>
-                    Scanning page and extracting job links. This runs in the background and may take up to a minute for large job boards...
+                    If auto-extraction doesn&apos;t work, try the &quot;Paste URLs&quot; method instead.
+                    Open the career page in your browser, copy the job links manually, and paste them.
                   </AlertDescription>
                 </Alert>
-              )}
-
-              {extractError && (
-                <Alert variant="destructive" className="mt-4">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{extractError}</AlertDescription>
-                </Alert>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Extracted Links */}
           {extractedLinks.length > 0 && (
@@ -1183,6 +1392,449 @@ export function JobScraper() {
                 </div>
               </CardContent>
             </Card>
+          )}
+        </TabsContent>
+
+        {/* AI Analyze Tab */}
+        <TabsContent value="analyze" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5" />
+                AI URL Analysis
+              </CardTitle>
+              <CardDescription>
+                Use Claude AI to analyze a career page and discover the best way to extract job listings.
+                Get CSS selectors, API patterns, and step-by-step extraction guides.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <Input
+                    placeholder="https://company.com/careers..."
+                    value={analyzeUrl}
+                    onChange={(e) => setAnalyzeUrl(e.target.value)}
+                    disabled={analyzing}
+                  />
+                </div>
+                <Button onClick={handleAnalyzeURL} disabled={analyzing || !analyzeUrl.trim()}>
+                  {analyzing ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="mr-2 h-4 w-4" />
+                      Analyze
+                    </>
+                  )}
+                </Button>
+              </div>
+
+              {analysisError && (
+                <Alert variant="destructive" className="mt-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{analysisError}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Analysis Results */}
+          {analysisResult && (
+            <div className="space-y-4">
+              {/* Overview Card */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      Analysis Results
+                      <Badge variant="outline" className="ml-2">
+                        {Math.round(analysisResult.confidence * 100)}% confidence
+                      </Badge>
+                    </CardTitle>
+                    <CardDescription className="truncate max-w-[500px]">
+                      {analysisResult.url}
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={clearAnalysis}>
+                    <X className="mr-2 h-4 w-4" />
+                    Clear
+                  </Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Site Type</Label>
+                      <p className="font-medium">{analysisResult.site_type.replace('_', ' ')}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Platform</Label>
+                      <Badge variant="secondary">{analysisResult.platform}</Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Loading Method</Label>
+                      <Badge variant={analysisResult.job_loading_method === 'spa' || analysisResult.job_loading_method === 'ajax' ? 'default' : 'outline'}>
+                        {analysisResult.job_loading_method.toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Est. Jobs</Label>
+                      <p className="font-medium">{analysisResult.total_jobs_estimate || 'Unknown'}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Technical Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Code className="h-5 w-5" />
+                    Technical Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {analysisResult.job_list_selector && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Job List Selector</Label>
+                        <code className="block p-2 bg-muted rounded text-sm font-mono break-all">
+                          {analysisResult.job_list_selector}
+                        </code>
+                      </div>
+                    )}
+                    {analysisResult.job_link_selector && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Job Link Selector</Label>
+                        <code className="block p-2 bg-muted rounded text-sm font-mono break-all">
+                          {analysisResult.job_link_selector}
+                        </code>
+                      </div>
+                    )}
+                    {analysisResult.job_link_pattern && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Job URL Pattern</Label>
+                        <code className="block p-2 bg-muted rounded text-sm font-mono break-all">
+                          {analysisResult.job_link_pattern}
+                        </code>
+                      </div>
+                    )}
+                    {analysisResult.api_endpoint_pattern && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">API Endpoint Pattern</Label>
+                        <code className="block p-2 bg-muted rounded text-sm font-mono break-all">
+                          {analysisResult.api_endpoint_pattern}
+                        </code>
+                      </div>
+                    )}
+                    {analysisResult.pagination_type !== 'none' && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Pagination</Label>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline">{analysisResult.pagination_type}</Badge>
+                          {analysisResult.pagination_selector && (
+                            <code className="text-xs bg-muted px-2 py-1 rounded">
+                              {analysisResult.pagination_selector}
+                            </code>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {analysisResult.search_form_selector && (
+                      <div className="space-y-1">
+                        <Label className="text-xs text-muted-foreground">Search Form Selector</Label>
+                        <code className="block p-2 bg-muted rounded text-sm font-mono break-all">
+                          {analysisResult.search_form_selector}
+                        </code>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Extraction Methods */}
+              {analysisResult.extraction_methods && analysisResult.extraction_methods.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Zap className="h-5 w-5" />
+                      Recommended Extraction Methods
+                    </CardTitle>
+                    <CardDescription>
+                      Methods listed in order of preference
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex flex-wrap gap-2">
+                      {analysisResult.extraction_methods.map((method, index) => (
+                        <Badge
+                          key={index}
+                          variant={index === 0 ? 'default' : 'secondary'}
+                          className="text-sm"
+                        >
+                          {index === 0 && '⭐ '}
+                          {method.replace('_', ' ')}
+                        </Badge>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Extraction Steps */}
+              {analysisResult.extraction_steps && analysisResult.extraction_steps.length > 0 && (
+                <Card>
+                  <CardHeader
+                    className="cursor-pointer"
+                    onClick={() => setShowSteps(!showSteps)}
+                  >
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <CheckCircle2 className="h-5 w-5" />
+                        Step-by-Step Guide
+                      </span>
+                      {showSteps ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </CardTitle>
+                  </CardHeader>
+                  {showSteps && (
+                    <CardContent>
+                      <ol className="list-decimal list-inside space-y-2">
+                        {analysisResult.extraction_steps.map((step, index) => (
+                          <li key={index} className="text-sm">{step}</li>
+                        ))}
+                      </ol>
+                    </CardContent>
+                  )}
+                </Card>
+              )}
+
+              {/* Challenges */}
+              {analysisResult.challenges && analysisResult.challenges.length > 0 && (
+                <Card>
+                  <CardHeader
+                    className="cursor-pointer"
+                    onClick={() => setShowChallenges(!showChallenges)}
+                  >
+                    <CardTitle className="flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <AlertCircle className="h-5 w-5 text-orange-500" />
+                        Potential Challenges
+                      </span>
+                      {showChallenges ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                    </CardTitle>
+                  </CardHeader>
+                  {showChallenges && (
+                    <CardContent>
+                      <ul className="space-y-2">
+                        {analysisResult.challenges.map((challenge, index) => (
+                          <li key={index} className="flex items-start gap-2 text-sm">
+                            <AlertTriangle className="h-4 w-4 text-orange-500 mt-0.5 flex-shrink-0" />
+                            {challenge}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  )}
+                </Card>
+              )}
+
+              {/* Extracted Job Links */}
+              {analysisResult.all_extracted_links && analysisResult.all_extracted_links.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <LinkIcon className="h-5 w-5" />
+                      Extracted Job Links ({analysisResult.all_extracted_links.length} found)
+                    </CardTitle>
+                    <CardDescription>
+                      These are real job URLs extracted from the page HTML
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <ScrollArea className="h-[200px]">
+                      <ul className="space-y-2">
+                        {analysisResult.all_extracted_links.map((link, index) => (
+                          <li key={index}>
+                            <a
+                              href={link}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-primary hover:underline flex items-center gap-1"
+                            >
+                              <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                              <span className="truncate">{link}</span>
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notes */}
+              {analysisResult.notes && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>AI Notes</AlertTitle>
+                  <AlertDescription>{analysisResult.notes}</AlertDescription>
+                </Alert>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex justify-end gap-4 flex-wrap">
+                {/* Extract via API - shown when API endpoint is detected */}
+                {analysisResult.api_endpoint_pattern && (
+                  <Button
+                    variant="default"
+                    onClick={async () => {
+                      setExtractingFromAPI(true)
+                      try {
+                        // Extract the base URL from the analyze URL
+                        const url = new URL(analyzeUrl)
+                        const baseUrl = `${url.protocol}//${url.host}`
+
+                        const response = await scraperApi.extractFromAPI(
+                          analysisResult.api_endpoint_pattern,
+                          baseUrl,
+                          analysisResult.job_link_pattern  // Pass the URL pattern for dynamic job URL construction
+                        )
+
+                        if (response.success && response.links && response.links.length > 0) {
+                          // Show extracted links for review instead of auto-importing
+                          setExtractedLinks(response.links)
+                          setSelectedLinks(new Set(response.links.map(l => l.url)))
+                          setListingUrl(analyzeUrl)
+                          setSourceType(response.message || 'Extracted from API')
+                          setLastAnalysis(analysisResult)
+
+                          toast({
+                            title: 'Links Extracted',
+                            description: `Found ${response.links.length} job links from API. Review and select which ones to import.`,
+                          })
+
+                          // Switch to bulk tab to review links
+                          clearAnalysis()
+                          setActiveTab('bulk')
+                        } else {
+                          toast({
+                            title: 'No Jobs Found',
+                            description: response.message || 'No jobs could be extracted from the API endpoint',
+                            variant: 'destructive',
+                          })
+                        }
+                      } catch (err: unknown) {
+                        const errorMessage = err instanceof Error ? err.message : 'Failed to extract from API'
+                        toast({
+                          title: 'Error',
+                          description: errorMessage,
+                          variant: 'destructive',
+                        })
+                      } finally {
+                        setExtractingFromAPI(false)
+                      }
+                    }}
+                    disabled={extractingFromAPI || startingImport}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    {extractingFromAPI ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Extracting from API...
+                      </>
+                    ) : (
+                      <>
+                        <Code className="mr-2 h-4 w-4" />
+                        Extract via API
+                      </>
+                    )}
+                  </Button>
+                )}
+                {/* Review all extracted job links */}
+                {analysisResult.all_extracted_links && analysisResult.all_extracted_links.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      // Show extracted links for review instead of auto-importing
+                      const links = analysisResult.all_extracted_links.map(url => ({
+                        url,
+                        title: ''
+                      }))
+
+                      // Set extracted links and auto-select all
+                      setExtractedLinks(links)
+                      setSelectedLinks(new Set(links.map(l => l.url)))
+                      setListingUrl(analyzeUrl)
+                      setLastAnalysis(analysisResult)
+                      setSourceType(analysisResult.job_loading_method)
+
+                      toast({
+                        title: 'Links Ready for Review',
+                        description: `${links.length} job links loaded. Review and select which ones to import.`,
+                      })
+
+                      // Switch to bulk tab to review links
+                      clearAnalysis()
+                      setActiveTab('bulk')
+                    }}
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Review {analysisResult.all_extracted_links.length} Jobs
+                  </Button>
+                )}
+                {/* Fallback: If no extracted links, show sample links button */}
+                {(!analysisResult.all_extracted_links || analysisResult.all_extracted_links.length === 0) &&
+                 analysisResult.sample_job_links && analysisResult.sample_job_links.length > 0 && (
+                  <Button
+                    onClick={() => {
+                      // Set the sample job links as extracted links
+                      const links = analysisResult.sample_job_links.map(url => ({
+                        url,
+                        title: ''
+                      }))
+                      setExtractedLinks(links)
+                      setSelectedLinks(new Set(links.map(l => l.url)))
+                      setListingUrl(analyzeUrl)
+                      setLastAnalysis(analysisResult)
+                      setSourceType(analysisResult.job_loading_method)
+                      clearAnalysis()
+                      setActiveTab('bulk')
+                      toast({
+                        title: 'Links loaded',
+                        description: `${links.length} job links from analysis ready for import`,
+                      })
+                    }}
+                  >
+                    <Zap className="mr-2 h-4 w-4" />
+                    Import {analysisResult.sample_job_links.length} Sample Jobs
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Load extracted links if available, otherwise just switch tab
+                    if (analysisResult.all_extracted_links && analysisResult.all_extracted_links.length > 0) {
+                      const links = analysisResult.all_extracted_links.map(url => ({
+                        url,
+                        title: ''
+                      }))
+                      setExtractedLinks(links)
+                      setSelectedLinks(new Set(links.map(l => l.url)))
+                      setSourceType(analysisResult.job_loading_method)
+                    }
+                    setListingUrl(analyzeUrl)
+                    setLastAnalysis(analysisResult)
+                    clearAnalysis()
+                    setActiveTab('bulk')
+                  }}
+                >
+                  Review in Bulk Extract
+                </Button>
+              </div>
+            </div>
           )}
         </TabsContent>
       </Tabs>

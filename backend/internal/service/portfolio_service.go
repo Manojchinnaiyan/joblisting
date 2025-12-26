@@ -285,7 +285,7 @@ func (s *PortfolioService) UploadThumbnail(projectID, userID uuid.UUID, file *mu
 
 	// Generate unique filename
 	filename := storage.GenerateUniqueFileName(file.Filename)
-	path := storage.GenerateFilePath(userID, "portfolios", filename)
+	path := storage.GenerateFilePath(userID, filename)
 
 	// Delete old thumbnail if exists
 	if project.ThumbnailURL != nil && *project.ThumbnailURL != "" {
@@ -330,7 +330,7 @@ func (s *PortfolioService) AddProjectImage(projectID, userID uuid.UUID, file *mu
 
 	// Generate unique filename
 	filename := storage.GenerateUniqueFileName(file.Filename)
-	path := storage.GenerateFilePath(userID, "portfolios", filename)
+	path := storage.GenerateFilePath(userID, filename)
 
 	// Upload to MinIO
 	result, err := s.minioClient.UploadFile("portfolios", file, path)

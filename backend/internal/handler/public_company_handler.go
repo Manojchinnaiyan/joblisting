@@ -1,12 +1,15 @@
 package handler
 
 import (
+	"context"
+	"job-platform/internal/cache"
 	"job-platform/internal/domain"
 	"job-platform/internal/dto"
 	"job-platform/internal/middleware"
 	"job-platform/internal/service"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +22,7 @@ type PublicCompanyHandler struct {
 	mediaService    *service.MediaService
 	reviewService   *service.ReviewService
 	followerService *service.FollowerService
+	cacheService    *cache.CacheService
 }
 
 // NewPublicCompanyHandler creates a new public company handler
@@ -29,6 +33,7 @@ func NewPublicCompanyHandler(
 	mediaService *service.MediaService,
 	reviewService *service.ReviewService,
 	followerService *service.FollowerService,
+	cacheService *cache.CacheService,
 ) *PublicCompanyHandler {
 	return &PublicCompanyHandler{
 		companyService:  companyService,
@@ -37,6 +42,7 @@ func NewPublicCompanyHandler(
 		mediaService:    mediaService,
 		reviewService:   reviewService,
 		followerService: followerService,
+		cacheService:    cacheService,
 	}
 }
 
@@ -100,6 +106,19 @@ func (h *PublicCompanyHandler) ListCompanies(c *gin.Context) {
 		filters["search"] = *req.Search
 	}
 
+	// Build cache key
+	cacheKey := h.buildCompanyListCacheKey(req)
+	ctx := context.Background()
+
+	// Try cache first
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		var cached dto.CompanyListResponse
+		if err := h.cacheService.GetCachedCompanyList(ctx, cacheKey, &cached); err == nil {
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+	}
+
 	offset := (req.Page - 1) * req.Limit
 	companies, total, err := h.companyService.ListCompanies(filters, req.Limit, offset)
 	if err != nil {
@@ -108,7 +127,46 @@ func (h *PublicCompanyHandler) ListCompanies(c *gin.Context) {
 	}
 
 	response := dto.ToCompanyListResponse(companies, total, req.Page, req.Limit)
+
+	// Cache the response
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_ = h.cacheService.CacheCompanyList(ctx, cacheKey, response)
+	}
+
 	c.JSON(http.StatusOK, response)
+}
+
+// buildCompanyListCacheKey creates a unique cache key based on filters
+func (h *PublicCompanyHandler) buildCompanyListCacheKey(req dto.ListCompaniesRequest) string {
+	parts := []string{
+		"p:" + strconv.Itoa(req.Page),
+		"l:" + strconv.Itoa(req.Limit),
+	}
+	if req.Status != nil {
+		parts = append(parts, "st:"+*req.Status)
+	}
+	if req.Industry != nil {
+		parts = append(parts, "ind:"+*req.Industry)
+	}
+	if req.CompanySize != nil {
+		parts = append(parts, "sz:"+*req.CompanySize)
+	}
+	if req.IsVerified != nil {
+		parts = append(parts, "ver:"+strconv.FormatBool(*req.IsVerified))
+	}
+	if req.IsFeatured != nil {
+		parts = append(parts, "feat:"+strconv.FormatBool(*req.IsFeatured))
+	}
+	if req.City != nil {
+		parts = append(parts, "city:"+*req.City)
+	}
+	if req.Country != nil {
+		parts = append(parts, "country:"+*req.Country)
+	}
+	if req.Search != nil {
+		parts = append(parts, "q:"+*req.Search)
+	}
+	return strings.Join(parts, "|")
 }
 
 // GetCompanyBySlug godoc
@@ -195,6 +253,18 @@ func (h *PublicCompanyHandler) GetFeaturedCompanies(c *gin.Context) {
 		limit = 10
 	}
 
+	ctx := context.Background()
+	cacheKey := "featured:" + strconv.Itoa(limit)
+
+	// Try cache first
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		var cached []dto.CompanyResponse
+		if err := h.cacheService.GetCachedCompanyList(ctx, cacheKey, &cached); err == nil {
+			c.JSON(http.StatusOK, cached)
+			return
+		}
+	}
+
 	companies, err := h.companyService.GetFeaturedCompanies(limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -204,6 +274,11 @@ func (h *PublicCompanyHandler) GetFeaturedCompanies(c *gin.Context) {
 	responses := make([]dto.CompanyResponse, len(companies))
 	for i, company := range companies {
 		responses[i] = dto.ToCompanyResponse(company)
+	}
+
+	// Cache the response
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_ = h.cacheService.CacheCompanyList(ctx, cacheKey, responses)
 	}
 
 	c.JSON(http.StatusOK, responses)

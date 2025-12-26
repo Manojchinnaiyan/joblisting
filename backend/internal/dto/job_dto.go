@@ -166,21 +166,26 @@ type BulkScrapeRequest struct {
 
 // ScrapedJobResponse represents extracted job data from a URL
 type ScrapedJobResponse struct {
-	Title           string   `json:"title"`
-	Company         string   `json:"company"`
-	CompanyLogo     string   `json:"company_logo,omitempty"`
-	Location        string   `json:"location"`
-	Description     string   `json:"description"`
-	Requirements    string   `json:"requirements"`
-	Salary          string   `json:"salary"`
-	JobType         string   `json:"job_type"`
-	ExperienceLevel string   `json:"experience_level"`
-	Skills          []string `json:"skills"`
-	OriginalURL     string   `json:"original_url"`
-	City            string   `json:"city,omitempty"`
-	State           string   `json:"state,omitempty"`
-	Country         string   `json:"country,omitempty"`
-	Benefits        []string `json:"benefits,omitempty"`
+	Title               string   `json:"title"`
+	Company             string   `json:"company"`
+	CompanyLogo         string   `json:"company_logo,omitempty"`
+	Location            string   `json:"location"`
+	Description         string   `json:"description"`
+	Requirements        string   `json:"requirements"`
+	Salary              string   `json:"salary"`
+	SalaryMin           int      `json:"salary_min,omitempty"`
+	SalaryMax           int      `json:"salary_max,omitempty"`
+	SalaryCurrency      string   `json:"salary_currency,omitempty"`
+	ApplicationDeadline string   `json:"application_deadline,omitempty"`
+	PostedDate          string   `json:"posted_date,omitempty"`
+	JobType             string   `json:"job_type"`
+	ExperienceLevel     string   `json:"experience_level"`
+	Skills              []string `json:"skills"`
+	OriginalURL         string   `json:"original_url"`
+	City                string   `json:"city,omitempty"`
+	State               string   `json:"state,omitempty"`
+	Country             string   `json:"country,omitempty"`
+	Benefits            []string `json:"benefits,omitempty"`
 }
 
 // CreateFromScrapedRequest represents a request to create job from scraped data
@@ -215,6 +220,15 @@ type BulkScrapeResult struct {
 // ExtractLinksRequest represents a request to extract job links from a listing page
 type ExtractLinksRequest struct {
 	URL string `json:"url" binding:"required,url"`
+}
+
+// ExtractFromAPIRequest represents a request to extract jobs from a specific API endpoint
+// Includes analysis data from Claude AI to dynamically construct job URLs
+type ExtractFromAPIRequest struct {
+	APIEndpoint    string `json:"api_endpoint" binding:"required,url"`
+	BaseURL        string `json:"base_url" binding:"required,url"`
+	JobLinkPattern string `json:"job_link_pattern,omitempty"` // URL pattern like "/search-and-apply/{id}" or "/jobs/{slug}"
+	PaginationType string `json:"pagination_type,omitempty"`  // "none", "numbered", "load_more", "api_based"
 }
 
 // ExtractedJobLink represents a single extracted job link

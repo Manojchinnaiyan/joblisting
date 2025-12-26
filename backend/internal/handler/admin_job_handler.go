@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"context"
 	"job-platform/internal/domain"
 	"job-platform/internal/dto"
 	"job-platform/internal/middleware"
+	"job-platform/internal/repository"
 	"job-platform/internal/service"
 	"job-platform/internal/util/response"
 	"strconv"
@@ -18,6 +20,7 @@ type AdminJobHandler struct {
 	jobService         *service.JobService
 	applicationService *service.ApplicationService
 	categoryService    *service.JobCategoryService
+	searchService      *service.SearchService
 }
 
 // NewAdminJobHandler creates a new admin job handler
@@ -25,11 +28,13 @@ func NewAdminJobHandler(
 	jobService *service.JobService,
 	applicationService *service.ApplicationService,
 	categoryService *service.JobCategoryService,
+	searchService *service.SearchService,
 ) *AdminJobHandler {
 	return &AdminJobHandler{
 		jobService:         jobService,
 		applicationService: applicationService,
 		categoryService:    categoryService,
+		searchService:      searchService,
 	}
 }
 
@@ -799,4 +804,54 @@ func (h *AdminJobHandler) ReorderCategories(c *gin.Context) {
 	}
 
 	response.OK(c, "Categories reordered successfully", nil)
+}
+
+// ReindexJobs reindexes all jobs to MeiliSearch
+// POST /api/v1/admin/jobs/reindex
+func (h *AdminJobHandler) ReindexJobs(c *gin.Context) {
+	if h.searchService == nil || !h.searchService.IsAvailable() {
+		response.BadRequest(c, domain.ErrSearchFailed)
+		return
+	}
+
+	// Get all active jobs using GetFilteredJobs with no filters
+	jobs, _, err := h.jobService.GetFilteredJobs(repository.JobFilters{}, 10000, 0)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	// Reindex all jobs
+	ctx := context.Background()
+	if err := h.searchService.ReindexAllJobs(ctx, jobs); err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Jobs reindexed successfully", gin.H{
+		"indexed_count": len(jobs),
+	})
+}
+
+// GetSearchStats returns search index statistics
+// GET /api/v1/admin/jobs/search-stats
+func (h *AdminJobHandler) GetSearchStats(c *gin.Context) {
+	if h.searchService == nil || !h.searchService.IsAvailable() {
+		response.OK(c, "Search stats retrieved", gin.H{
+			"available": false,
+			"message":   "MeiliSearch is not configured",
+		})
+		return
+	}
+
+	stats, err := h.searchService.GetStats()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Search stats retrieved", gin.H{
+		"available": true,
+		"stats":     stats,
+	})
 }

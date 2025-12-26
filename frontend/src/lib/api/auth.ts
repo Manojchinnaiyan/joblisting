@@ -75,4 +75,14 @@ export const authApi = {
   getGoogleAuthUrl: (role: 'JOB_SEEKER' | 'EMPLOYER' = 'JOB_SEEKER'): string => {
     return `${process.env.NEXT_PUBLIC_API_URL}/auth/oauth/google?role=${role}`
   },
+
+  // Session Management
+  logoutAllDevices: async (): Promise<void> => {
+    await apiClient.post('/auth/logout-all-devices')
+  },
+
+  getActiveSessions: async (): Promise<{ cache_sessions: number; database_sessions: number }> => {
+    const response = await apiClient.get<ApiResponse<{ cache_sessions: number; database_sessions: number }>>('/auth/sessions')
+    return response.data.data!
+  },
 }

@@ -145,6 +145,22 @@ export function useRevokeUserSessions() {
   })
 }
 
+export function useUnlockUser() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (id: string) => adminUsersApi.unlockUser(id),
+    onSuccess: (_, id) => {
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.lists() })
+      queryClient.invalidateQueries({ queryKey: adminUsersKeys.detail(id) })
+      toast.success('User account unlocked successfully')
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to unlock user')
+    },
+  })
+}
+
 // Aliases for page imports
 export const useUpdateUser = useUpdateAdminUser
 export const useDeleteUser = useDeleteAdminUser

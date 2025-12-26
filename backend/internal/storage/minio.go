@@ -20,10 +20,12 @@ type MinioConfig struct {
 	AccessKey       string
 	SecretKey       string
 	UseSSL          bool
+	PublicURL       string // External URL for accessing files (e.g., http://localhost:9000)
 	BucketResumes   string
 	BucketAvatars   string
 	BucketCerts     string
 	BucketPortfolio string
+	BucketCompanies string
 }
 
 // MinioClient wraps minio.Client with custom methods
@@ -52,9 +54,10 @@ type FileInfo struct {
 // NewMinioClient creates a new MinIO client
 func NewMinioClient(config *MinioConfig) (*MinioClient, error) {
 	client, err := minio.New(config.Endpoint, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""),
-		Secure: config.UseSSL,
-		Region: "us-east-1",
+		Creds:        credentials.NewStaticV4(config.AccessKey, config.SecretKey, ""),
+		Secure:       config.UseSSL,
+		Region:       "us-east-1",
+		BucketLookup: minio.BucketLookupPath, // Force path-style access for Docker/local MinIO
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create minio client: %w", err)
@@ -73,6 +76,7 @@ func (m *MinioClient) InitBuckets() error {
 		m.config.BucketAvatars,
 		m.config.BucketCerts,
 		m.config.BucketPortfolio,
+		m.config.BucketCompanies,
 	}
 
 	for _, bucket := range buckets {
@@ -128,11 +132,15 @@ func (m *MinioClient) UploadFile(bucket string, file *multipart.FileHeader, path
 		return nil, fmt.Errorf("failed to upload file: %w", err)
 	}
 
+	// Construct the public URL
+	publicURL := m.GetPublicURL(bucket, path)
+
 	return &UploadResult{
 		Bucket:      bucket,
 		Path:        path,
 		Size:        info.Size,
 		ContentType: contentType,
+		URL:         publicURL,
 	}, nil
 }
 
@@ -154,11 +162,15 @@ func (m *MinioClient) UploadFromReader(bucket, path string, reader io.Reader, si
 		return nil, fmt.Errorf("failed to upload from reader: %w", err)
 	}
 
+	// Construct the public URL
+	publicURL := m.GetPublicURL(bucket, path)
+
 	return &UploadResult{
 		Bucket:      bucket,
 		Path:        path,
 		Size:        info.Size,
 		ContentType: contentType,
+		URL:         publicURL,
 	}, nil
 }
 
@@ -242,6 +254,20 @@ func (m *MinioClient) GetConfig() *MinioConfig {
 	return m.config
 }
 
+// GetPublicURL constructs a public URL for accessing a file
+func (m *MinioClient) GetPublicURL(bucket, path string) string {
+	// Use PublicURL if configured, otherwise construct from endpoint
+	baseURL := m.config.PublicURL
+	if baseURL == "" {
+		protocol := "http"
+		if m.config.UseSSL {
+			protocol = "https"
+		}
+		baseURL = fmt.Sprintf("%s://%s", protocol, m.config.Endpoint)
+	}
+	return fmt.Sprintf("%s/%s/%s", baseURL, bucket, path)
+}
+
 // ValidateFile validates a file against allowed types and size limits
 func (m *MinioClient) ValidateFile(file *multipart.FileHeader, allowedTypes []string, maxSizeMB int64) error {
 	// Check file size
@@ -293,11 +319,13 @@ func GenerateUniqueFileName(originalName string) string {
 	return fmt.Sprintf("%s_%s%s", uuid.New().String(), name, ext)
 }
 
-// GenerateFilePath generates a organized file path with date hierarchy
-func GenerateFilePath(userID uuid.UUID, bucket, filename string) string {
+// GenerateFilePath generates an organized file path with date hierarchy
+// Structure: {userID}/{year}/{month}/{filename}
+// The bucket is not included in the path as it's passed separately to MinIO
+func GenerateFilePath(userID uuid.UUID, filename string) string {
 	now := time.Now()
 	year := now.Format("2006")
 	month := now.Format("01")
 
-	return fmt.Sprintf("%s/%s/%s/%s/%s", bucket, userID.String(), year, month, filename)
+	return fmt.Sprintf("%s/%s/%s/%s", userID.String(), year, month, filename)
 }

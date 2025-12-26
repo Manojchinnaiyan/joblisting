@@ -130,6 +130,12 @@ func (r *BlogRepository) IncrementViewCount(id uuid.UUID) error {
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error
 }
 
+// IncrementViewCountBy increments the view count of a blog by a specific amount
+func (r *BlogRepository) IncrementViewCountBy(id uuid.UUID, count int) error {
+	return r.db.Model(&domain.Blog{}).Where("id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + ?", count)).Error
+}
+
 // SlugExists checks if a slug already exists
 func (r *BlogRepository) SlugExists(slug string) (bool, error) {
 	var count int64
