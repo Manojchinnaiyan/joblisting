@@ -97,29 +97,24 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 
 	var html string
 	var apiJobData map[string]interface{}
+	var usedSPAScraping bool
 
-	// Check if this is a known SPA site that requires API capture
-	if s.isSPAJobDetailSite(jobURL) {
-		// For SPA sites, use chromedp with network capture to get API data
-		log.Printf("🔄 Detected SPA site, using network capture for: %s", jobURL)
-		spaHTML, capturedData, spaErr := s.scrapeJobDetailWithNetworkCapture(ctx, jobURL)
-		if spaErr != nil {
-			log.Printf("⚠️ SPA scrape failed: %v, falling back to regular scrape", spaErr)
-		} else {
-			html = spaHTML
-			if capturedData != nil {
-				apiJobData = capturedData
-				log.Printf("✅ Captured API job data for SPA site")
-			}
-		}
+	// First, try regular scraping
+	var scrapeErr error
+	html, scrapeErr = s.scrapeHTML(ctx, jobURL)
+	if scrapeErr != nil {
+		log.Printf("⚠️ Regular scrape failed: %v, trying SPA approach", scrapeErr)
 	}
 
-	// If we don't have HTML yet, scrape it
-	if html == "" {
-		var scrapeErr error
-		html, scrapeErr = s.scrapeHTML(ctx, jobURL)
-		if scrapeErr != nil {
-			return nil, nil, fmt.Errorf("failed to scrape page: %w", scrapeErr)
+	// Check if we got content
+	if len(html) < 100 {
+		// Try SPA scraping as fallback
+		log.Printf("🔄 Content too short, trying SPA/network capture for: %s", jobURL)
+		spaHTML, capturedData, spaErr := s.scrapeJobDetailWithNetworkCapture(ctx, jobURL)
+		if spaErr == nil && len(spaHTML) > 100 {
+			html = spaHTML
+			apiJobData = capturedData
+			usedSPAScraping = true
 		}
 	}
 
@@ -127,9 +122,51 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 		return nil, nil, fmt.Errorf("page content too short, might be blocked or empty")
 	}
 
+	// Check if the page uses an iframe for job content
+	iframeURL := s.extractJobIframeSrc(html, jobURL)
+	if iframeURL != "" {
+		log.Printf("🔗 Detected iframe job content, following: %s", iframeURL)
+
+		// Always try SPA approach for iframe URLs first (they're usually SPAs)
+		log.Printf("🔄 Scraping iframe URL with network capture: %s", iframeURL)
+		spaHTML, capturedData, spaErr := s.scrapeJobDetailWithNetworkCapture(ctx, iframeURL)
+		if spaErr != nil {
+			log.Printf("⚠️ SPA scrape of iframe failed: %v, trying regular scrape", spaErr)
+			// Fallback to regular scrape
+			iframeHTML, iframeErr := s.scrapeHTML(ctx, iframeURL)
+			if iframeErr == nil && len(iframeHTML) > 100 {
+				html = iframeHTML
+				warnings = append(warnings, fmt.Sprintf("Job content loaded from iframe: %s", iframeURL))
+			}
+		} else {
+			if len(spaHTML) > 100 {
+				html = spaHTML
+			}
+			if capturedData != nil {
+				apiJobData = capturedData
+				log.Printf("✅ Captured API job data from iframe")
+			}
+			usedSPAScraping = true
+			warnings = append(warnings, fmt.Sprintf("Job content loaded from iframe (SPA): %s", iframeURL))
+		}
+	}
+
 	// Check if AI service is configured
 	if !s.aiService.IsConfigured() {
 		return nil, nil, fmt.Errorf("AI service not configured: ANTHROPIC_API_KEY environment variable not set")
+	}
+
+	// If we didn't capture API data and this is a hash-based URL, try direct API call
+	if apiJobData == nil {
+		jobID, baseHost := s.extractJobIDFromHashURL(jobURL)
+		if jobID != "" {
+			log.Printf("🔍 Extracted job ID from hash URL: %s", jobID)
+			directData, directErr := s.tryDirectAPICall(ctx, jobID, baseHost, iframeURL)
+			if directErr == nil && directData != nil {
+				apiJobData = directData
+				log.Printf("✅ Got job data via direct API call")
+			}
+		}
 	}
 
 	// If we have API job data, convert it to extracted job format
@@ -142,6 +179,27 @@ func (s *ScraperService) ScrapeJobURL(ctx context.Context, jobURL string) (*dto.
 	// Extract job details using AI (will enhance API data if available)
 	if extractedJob == nil || extractedJob.Title == "" || extractedJob.Description == "" {
 		aiExtracted, aiErr := s.aiService.ExtractJobFromHTML(ctx, html, jobURL)
+
+		// Check if extraction quality is poor and we haven't tried SPA scraping yet
+		if aiErr == nil && aiExtracted != nil && s.isLowQualityExtraction(aiExtracted) && !usedSPAScraping {
+			log.Printf("⚠️ Low quality extraction detected, trying SPA approach")
+			// Try SPA scraping
+			spaHTML, capturedData, spaErr := s.scrapeJobDetailWithNetworkCapture(ctx, jobURL)
+			if spaErr == nil {
+				if len(spaHTML) > 100 {
+					html = spaHTML
+				}
+				if capturedData != nil {
+					apiJobData = capturedData
+					extractedJob = s.convertAPIDataToExtractedJob(apiJobData, jobURL)
+				}
+				// Re-extract with AI using SPA content
+				aiExtracted, aiErr = s.aiService.ExtractJobFromHTML(ctx, html, jobURL)
+				usedSPAScraping = true
+				_ = usedSPAScraping // Mark as used
+			}
+		}
+
 		if aiErr != nil {
 			if extractedJob != nil && extractedJob.Title != "" {
 				// Use API data even if AI fails
@@ -4246,6 +4304,96 @@ func (s *ScraperService) BulkScrapeJobs(ctx context.Context, urls []string) *dto
 	}
 }
 
+// isLowQualityExtraction checks if the AI extraction result is poor quality
+// indicating the page content might need SPA/JavaScript rendering
+func (s *ScraperService) isLowQualityExtraction(job *ExtractedJob) bool {
+	if job == nil {
+		return true
+	}
+
+	// Check for empty or very short description
+	if len(job.Description) < 100 {
+		log.Printf("📊 Low quality: description too short (%d chars)", len(job.Description))
+		return true
+	}
+
+	// Check for iframe content in description
+	lowerDesc := strings.ToLower(job.Description)
+	if strings.Contains(lowerDesc, "<iframe") || strings.Contains(lowerDesc, "this content is blocked") {
+		log.Printf("📊 Low quality: iframe or blocked content detected in description")
+		return true
+	}
+
+	// Check for generic "How we Hire" type content without real job details
+	genericPhrases := []string{
+		"how we hire",
+		"our hiring process",
+		"interview process",
+		"application process",
+		"meet the team",
+	}
+	genericCount := 0
+	for _, phrase := range genericPhrases {
+		if strings.Contains(lowerDesc, phrase) {
+			genericCount++
+		}
+	}
+	// If multiple generic phrases and no real job content indicators
+	jobContentIndicators := []string{
+		"responsibilities",
+		"requirements",
+		"qualifications",
+		"experience",
+		"skills",
+		"duties",
+		"role",
+	}
+	jobContentCount := 0
+	for _, indicator := range jobContentIndicators {
+		if strings.Contains(lowerDesc, indicator) {
+			jobContentCount++
+		}
+	}
+	if genericCount >= 2 && jobContentCount < 2 {
+		log.Printf("📊 Low quality: too much generic content (%d generic, %d job indicators)", genericCount, jobContentCount)
+		return true
+	}
+
+	// Check if description looks like a table row (common for list pages)
+	// Pattern: short text with multiple separators (|, tabs) and numbers
+	if len(job.Description) < 200 {
+		separatorCount := strings.Count(job.Description, "|") + strings.Count(job.Description, "\t")
+		if separatorCount >= 3 {
+			log.Printf("📊 Low quality: description looks like table row")
+			return true
+		}
+	}
+
+	// Check for job listing page content (not actual job details)
+	listingPageIndicators := []string{
+		"current openings",
+		"all jobs",
+		"job listings",
+		"search jobs",
+		"filter by",
+		"requisition id",
+		"requisition title",
+		"org unit",
+	}
+	listingCount := 0
+	for _, indicator := range listingPageIndicators {
+		if strings.Contains(lowerDesc, indicator) {
+			listingCount++
+		}
+	}
+	if listingCount >= 2 {
+		log.Printf("📊 Low quality: content looks like job listing page (%d listing indicators)", listingCount)
+		return true
+	}
+
+	return false
+}
+
 // isSPAJobDetailSite checks if a URL is from a known SPA site that requires network capture
 // for job detail pages (where content is loaded via JavaScript/API calls)
 func (s *ScraperService) isSPAJobDetailSite(jobURL string) bool {
@@ -4281,7 +4429,131 @@ func (s *ScraperService) isSPAJobDetailSite(jobURL string) bool {
 		return true
 	}
 
+	// MyNextHire - SPA used by Swiggy and others
+	if strings.Contains(lowerURL, "mynexthire.com") {
+		return true
+	}
+
+	// Darwinbox - SPA ATS platform
+	if strings.Contains(lowerURL, "darwinbox.io") || strings.Contains(lowerURL, "darwinbox.in") {
+		return true
+	}
+
 	return false
+}
+
+// extractJobIframeSrc extracts the src URL from job-related iframes in HTML
+// This handles career pages that embed job content in iframes (e.g., mynexthire, smartrecruiters)
+func (s *ScraperService) extractJobIframeSrc(html string, pageURL string) string {
+	lowerHTML := strings.ToLower(html)
+
+	// Check if this page likely uses iframe for job content
+	if !strings.Contains(lowerHTML, "<iframe") {
+		return ""
+	}
+
+	// Known iframe-based job providers
+	iframeJobProviders := []string{
+		"mynexthire.com",
+		"smartrecruiters.com",
+		"icims.com",
+		"taleo.net",
+		"oraclecloud.com",
+		"darwinbox.io",
+		"zohorecruit.com",
+		"freshteam.com",
+		"recruitee.com",
+		"breezy.hr",
+		"ashbyhq.com",
+		"workable.com",
+	}
+
+	// Extract all iframe src URLs
+	iframeSrcPatterns := []*regexp.Regexp{
+		// Standard iframe src with quotes
+		regexp.MustCompile(`(?i)<iframe[^>]+src=["']([^"']+)["']`),
+		// iframe src without quotes
+		regexp.MustCompile(`(?i)<iframe[^>]+src=([^\s>]+)`),
+	}
+
+	for _, pattern := range iframeSrcPatterns {
+		matches := pattern.FindAllStringSubmatch(html, -1)
+		for _, match := range matches {
+			if len(match) < 2 {
+				continue
+			}
+
+			iframeSrc := strings.TrimSpace(match[1])
+			// Decode HTML entities (e.g., &amp; -> &)
+			iframeSrc = strings.ReplaceAll(iframeSrc, "&amp;", "&")
+			iframeSrc = strings.ReplaceAll(iframeSrc, "&lt;", "<")
+			iframeSrc = strings.ReplaceAll(iframeSrc, "&gt;", ">")
+			iframeSrc = strings.ReplaceAll(iframeSrc, "&quot;", "\"")
+			iframeSrc = strings.ReplaceAll(iframeSrc, "&#39;", "'")
+			lowerSrc := strings.ToLower(iframeSrc)
+
+			// Check if this iframe is from a known job provider
+			for _, provider := range iframeJobProviders {
+				if strings.Contains(lowerSrc, provider) {
+					// Resolve relative URLs
+					resolvedURL := s.resolveURL(iframeSrc, pageURL)
+					if resolvedURL != "" {
+						log.Printf("📋 Found job iframe from provider: %s", provider)
+						return resolvedURL
+					}
+				}
+			}
+
+			// Also check for job-related keywords in the iframe src
+			jobKeywords := []string{"job", "career", "position", "vacancy", "apply", "requisition", "opening"}
+			for _, keyword := range jobKeywords {
+				if strings.Contains(lowerSrc, keyword) {
+					// Make sure it's not a generic tracking iframe
+					if !strings.Contains(lowerSrc, "tracking") &&
+						!strings.Contains(lowerSrc, "analytics") &&
+						!strings.Contains(lowerSrc, "pixel") &&
+						!strings.Contains(lowerSrc, "facebook") &&
+						!strings.Contains(lowerSrc, "google") {
+						resolvedURL := s.resolveURL(iframeSrc, pageURL)
+						if resolvedURL != "" {
+							log.Printf("📋 Found job iframe with keyword: %s", keyword)
+							return resolvedURL
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return ""
+}
+
+// resolveURL resolves a potentially relative URL against a base URL
+func (s *ScraperService) resolveURL(rawURL string, baseURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	// Already absolute URL
+	if strings.HasPrefix(rawURL, "http://") || strings.HasPrefix(rawURL, "https://") {
+		return rawURL
+	}
+
+	// Parse base URL
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return ""
+	}
+
+	// Parse relative URL
+	ref, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	// Resolve
+	resolved := base.ResolveReference(ref)
+	return resolved.String()
 }
 
 // scrapeJobDetailWithNetworkCapture scrapes a job detail page using chromedp with network
@@ -4330,7 +4602,19 @@ func (s *ScraperService) scrapeJobDetailWithNetworkCapture(ctx context.Context, 
 		"/details",
 		"/jobdetails",
 		"/job-details",
+		// MyNextHire API patterns
+		"/employer/api/",
+		"/api/job/",
+		"/api/careers/",
+		"/api/requisition/",
+		"getJobDetails",
+		"getRequisition",
+		"jobDetail",
+		// Darwinbox patterns
+		"/darwinbox/",
+		"/careers/api/",
 	}
+	_ = jobDetailPatterns // Silence unused warning - patterns used for logging/debugging
 
 	// Set up network listener
 	chromedp.ListenTarget(timeoutCtx, func(ev interface{}) {
@@ -4465,7 +4749,160 @@ func (s *ScraperService) scrapeJobDetailWithNetworkCapture(ctx context.Context, 
 	err := chromedp.Run(timeoutCtx,
 		chromedp.Navigate(jobURL),
 		chromedp.WaitReady("body"),
-		chromedp.Sleep(3*time.Second), // Wait for SPA to render and API calls to complete
+		chromedp.Sleep(3*time.Second), // Initial wait for SPA to render
+	)
+
+	if err != nil {
+		return "", nil, fmt.Errorf("chromedp navigation failed: %w", err)
+	}
+
+	// Check if URL has hash parameters (common for SPA job detail pages)
+	parsedURL, _ := url.Parse(jobURL)
+	hasHashParams := parsedURL != nil && parsedURL.Fragment != "" && strings.Contains(parsedURL.Fragment, "jd=")
+
+	if hasHashParams {
+		log.Printf("🔗 Detected hash-based SPA URL with job params, triggering navigation...")
+
+		// For hash-based SPAs like MyNextHire, we need to trigger the hash change
+		// and wait for the job detail view to load
+		chromedp.Run(timeoutCtx, chromedp.Evaluate(`
+			// Trigger hashchange event to ensure SPA processes the job detail
+			if (window.location.hash) {
+				window.dispatchEvent(new HashChangeEvent('hashchange'));
+			}
+			// Also try triggering a popstate for history-based routing
+			window.dispatchEvent(new PopStateEvent('popstate'));
+		`, nil))
+
+		chromedp.Run(timeoutCtx, chromedp.Sleep(2*time.Second))
+
+		// Check if we're still on a listing page and need to click a job item
+		var isListingPage bool
+		chromedp.Run(timeoutCtx, chromedp.Evaluate(`
+			// Check if we see listing indicators without job detail content
+			const listingIndicators = document.body.innerText.match(/Current Openings|All Jobs|Job Listings/i);
+			const hasJobDetailView = document.querySelector('.job-detail, .job-details, [class*="jobDetail"], [class*="job-description"], [role="dialog"], .modal-body, .requisition-detail');
+			return listingIndicators && !hasJobDetailView;
+		`, &isListingPage))
+
+		if isListingPage {
+			log.Printf("📋 Still on listing page, looking for job item to click...")
+
+			// Try to click on the first job item that might open the detail view
+			jobItemSelectors := []string{
+				"tr[class*='job']",
+				"tr[class*='requisition']",
+				".job-item",
+				".job-card",
+				".job-row",
+				"[class*='jobCard']",
+				"[class*='requisition-row']",
+				"a[href*='jd=']",
+				"[onclick*='job']",
+				"tbody tr:first-child",
+			}
+
+			for _, selector := range jobItemSelectors {
+				var clicked bool
+				err := chromedp.Run(timeoutCtx, chromedp.ActionFunc(func(ctx context.Context) error {
+					var exists bool
+					if err := chromedp.Evaluate(fmt.Sprintf(`document.querySelector('%s') !== null`, selector), &exists).Do(ctx); err != nil || !exists {
+						return nil
+					}
+					// Click the element
+					if err := chromedp.Click(selector, chromedp.NodeVisible).Do(ctx); err == nil {
+						clicked = true
+						log.Printf("✅ Clicked job item: %s", selector)
+					}
+					return nil
+				}))
+				if err == nil && clicked {
+					chromedp.Run(timeoutCtx, chromedp.Sleep(3*time.Second)) // Wait for modal/detail to load
+					break
+				}
+			}
+		}
+	}
+
+	// Wait additional time for API calls to complete
+	chromedp.Run(timeoutCtx, chromedp.Sleep(2*time.Second))
+
+	// For hash-based SPAs, wait for job detail content to appear
+	// Look for common job detail selectors
+	jobDetailSelectors := []string{
+		".job-description",
+		".job-detail",
+		".job-details",
+		"[class*='jobDescription']",
+		"[class*='job-desc']",
+		"[class*='requisition']",
+		".modal-body",
+		".dialog-content",
+		"[role='dialog']",
+		".requisition-detail",
+		"[class*='JobDetail']",
+		".job-content",
+	}
+
+	// Try to find and wait for any job detail element
+	foundDetailElement := false
+	for _, selector := range jobDetailSelectors {
+		var exists bool
+		chromedp.Run(timeoutCtx, chromedp.Evaluate(fmt.Sprintf(`document.querySelector('%s') !== null`, selector), &exists))
+		if exists {
+			log.Printf("✅ Found job detail element: %s", selector)
+			chromedp.Run(timeoutCtx, chromedp.Sleep(2*time.Second)) // Additional wait for content
+			foundDetailElement = true
+			break
+		}
+	}
+
+	// If we still haven't found job detail content, try extracting job ID from URL and making direct API call
+	if !foundDetailElement && hasHashParams {
+		log.Printf("⚠️ No job detail element found, trying to extract job data from page state...")
+
+		// Try to get job data from Angular/React state or window variables
+		var jobDataFromState map[string]interface{}
+		chromedp.Run(timeoutCtx, chromedp.Evaluate(`
+			// Try to find job data in common SPA state locations
+			let jobData = null;
+
+			// Angular scope
+			if (typeof angular !== 'undefined') {
+				const scope = angular.element(document.body).scope();
+				if (scope && scope.jobDetail) jobData = scope.jobDetail;
+				if (scope && scope.requisition) jobData = scope.requisition;
+				if (scope && scope.job) jobData = scope.job;
+			}
+
+			// React state (via __REACT_DEVTOOLS_GLOBAL_HOOK__)
+			// Check window for exposed data
+			if (window.__JOB_DATA__) jobData = window.__JOB_DATA__;
+			if (window.jobData) jobData = window.jobData;
+			if (window.requisitionData) jobData = window.requisitionData;
+
+			// MyNextHire specific - check for data in ng-scope elements
+			const ngScopeEl = document.querySelector('[ng-controller*="job"], [ng-controller*="requisition"]');
+			if (ngScopeEl && typeof angular !== 'undefined') {
+				const s = angular.element(ngScopeEl).scope();
+				if (s && s.jobDetails) jobData = s.jobDetails;
+			}
+
+			jobData;
+		`, &jobDataFromState))
+
+		if len(jobDataFromState) > 0 {
+			capturedMutex.Lock()
+			if capturedJobData == nil {
+				capturedJobData = jobDataFromState
+				log.Printf("✅ Captured job data from page state")
+			}
+			capturedMutex.Unlock()
+		}
+	}
+
+	// Get the final HTML
+	err = chromedp.Run(timeoutCtx,
 		chromedp.OuterHTML("html", &html),
 	)
 
@@ -4537,6 +4974,134 @@ func (s *ScraperService) looksLikeJobDetailData(data map[string]interface{}) boo
 
 	// Need at least title + (description or location) to be considered job data
 	return hasTitle && (hasDesc || hasLoc)
+}
+
+// extractJobIDFromHashURL extracts the job ID from a hash-based URL like #/careers?jd=BASE64_ENCODED_ID
+func (s *ScraperService) extractJobIDFromHashURL(jobURL string) (string, string) {
+	parsedURL, err := url.Parse(jobURL)
+	if err != nil {
+		return "", ""
+	}
+
+	fragment := parsedURL.Fragment
+	if fragment == "" {
+		return "", ""
+	}
+
+	// Parse the fragment as URL path with query params
+	// e.g., "/careers?jd=BASE64&loc=bangalore"
+	if idx := strings.Index(fragment, "?"); idx != -1 {
+		queryPart := fragment[idx+1:]
+		values, err := url.ParseQuery(queryPart)
+		if err != nil {
+			return "", ""
+		}
+
+		// Get the job ID (usually in 'jd' parameter, base64 encoded)
+		if jd := values.Get("jd"); jd != "" {
+			// Try to decode base64
+			decoded, err := base64.StdEncoding.DecodeString(jd)
+			if err != nil {
+				// Try URL-safe base64
+				decoded, err = base64.URLEncoding.DecodeString(jd)
+				if err != nil {
+					// Return as-is if not base64
+					return jd, parsedURL.Host
+				}
+			}
+			return string(decoded), parsedURL.Host
+		}
+
+		// Also check for 'id', 'jobId', 'requisitionId' parameters
+		for _, param := range []string{"id", "jobId", "requisitionId", "req"} {
+			if id := values.Get(param); id != "" {
+				return id, parsedURL.Host
+			}
+		}
+	}
+
+	return "", ""
+}
+
+// tryDirectAPICall attempts to fetch job details directly from common API endpoints
+// This is useful when the SPA scraping doesn't trigger the job detail view properly
+func (s *ScraperService) tryDirectAPICall(ctx context.Context, jobID string, baseHost string, iframeURL string) (map[string]interface{}, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("no job ID provided")
+	}
+
+	// Determine the API base URL
+	apiBaseURL := ""
+	if iframeURL != "" {
+		parsedIframe, _ := url.Parse(iframeURL)
+		if parsedIframe != nil {
+			apiBaseURL = fmt.Sprintf("%s://%s", parsedIframe.Scheme, parsedIframe.Host)
+		}
+	}
+	if apiBaseURL == "" && baseHost != "" {
+		apiBaseURL = fmt.Sprintf("https://%s", baseHost)
+	}
+	if apiBaseURL == "" {
+		return nil, fmt.Errorf("could not determine API base URL")
+	}
+
+	log.Printf("🔍 Trying direct API call for job ID: %s at %s", jobID, apiBaseURL)
+
+	// Common API patterns for job details
+	apiPatterns := []string{
+		"/employer/api/job/%s",
+		"/api/v1/jobs/%s",
+		"/api/jobs/%s",
+		"/api/requisition/%s",
+		"/careers/api/job/%s",
+		"/job-api/job/%s",
+		"/api/v1/requisition/%s",
+	}
+
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	for _, pattern := range apiPatterns {
+		apiURL := apiBaseURL + fmt.Sprintf(pattern, url.PathEscape(jobID))
+		log.Printf("🔗 Trying API endpoint: %s", apiURL)
+
+		req, err := http.NewRequestWithContext(ctx, "GET", apiURL, nil)
+		if err != nil {
+			continue
+		}
+
+		req.Header.Set("Accept", "application/json")
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			continue
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			continue
+		}
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(body, &result); err != nil {
+			continue
+		}
+
+		// Check if this looks like job data
+		if s.looksLikeJobDetailData(result) {
+			log.Printf("✅ Found job data via direct API call: %s", apiURL)
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("no API endpoint returned valid job data")
 }
 
 // convertAPIDataToExtractedJob converts captured API data to ExtractedJob format

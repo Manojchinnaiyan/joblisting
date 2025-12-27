@@ -528,7 +528,10 @@ Rules:
 6. For description: Include the FULL job description. Do NOT truncate. Include company info and role details.
 7. For requirements: Include ALL qualifications, responsibilities, and requirements.
 8. CRITICAL: You MUST complete the entire JSON response. Do not stop mid-response.
-9. Return ONLY valid JSON, no markdown formatting or extra text`, url, cleanedHTML)
+9. Return ONLY valid JSON, no markdown formatting or extra text
+10. IGNORE any iframe HTML tags - they contain external content that is loaded separately
+11. IGNORE generic company sections like "How we Hire", "Our Hiring Process", "Life at [Company]" - focus ONLY on the specific job details
+12. If the page shows "This content is blocked" or similar messages instead of actual job content, return empty strings for those fields`, url, cleanedHTML)
 
 	messages := []ClaudeMessage{
 		{
@@ -1164,12 +1167,31 @@ func (s *AIService) cleanHTML(html string) string {
 	noscriptRegex := regexp.MustCompile(`(?is)<noscript[^>]*>.*?</noscript>`)
 	html = noscriptRegex.ReplaceAllString(html, "")
 
+	// Remove iframe tags (content is loaded separately, shouldn't be in job description)
+	iframeRegex := regexp.MustCompile(`(?is)<iframe[^>]*>.*?</iframe>`)
+	html = iframeRegex.ReplaceAllString(html, "")
+
+	// Remove self-closing iframes
+	iframeSelfClosingRegex := regexp.MustCompile(`(?is)<iframe[^>]*/?>`)
+	html = iframeSelfClosingRegex.ReplaceAllString(html, "")
+
 	// Remove header and footer navigation (common noise)
 	headerRegex := regexp.MustCompile(`(?is)<header[^>]*>.*?</header>`)
 	html = headerRegex.ReplaceAllString(html, "")
 
 	footerRegex := regexp.MustCompile(`(?is)<footer[^>]*>.*?</footer>`)
 	html = footerRegex.ReplaceAllString(html, "")
+
+	// Remove generic "How we Hire" and similar non-job-specific sections
+	genericSections := []string{
+		`(?is)<section[^>]*(?:how-we-hire|hiring-process|our-process)[^>]*>.*?</section>`,
+		`(?is)<div[^>]*(?:how-we-hire|hiring-process|our-process)[^>]*>.*?</div>`,
+		`(?is)(?:How we Hire|Our Hiring Process|How We Hire at)[^<]*(?:<[^>]*>)*(?:.*?){0,500}(?:Apply|Interview|Assessment|Offer)`,
+	}
+	for _, pattern := range genericSections {
+		regex := regexp.MustCompile(pattern)
+		html = regex.ReplaceAllString(html, "")
+	}
 
 	// Collapse multiple whitespace
 	whitespaceRegex := regexp.MustCompile(`\s+`)
