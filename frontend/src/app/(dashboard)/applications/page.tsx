@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Briefcase, Search, Filter } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -15,6 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useApplications } from '@/hooks/use-applications'
+import { CompanyLogo } from '@/components/shared/company-logo'
 import { format } from 'date-fns'
 import type { ApplicationStatus } from '@/types/application'
 
@@ -154,21 +154,12 @@ export default function ApplicationsPage() {
               <Card className="hover:bg-accent transition-colors">
                 <CardContent className="p-6">
                   <div className="flex items-start gap-4">
-                    {application.job?.company_logo_url ? (
-                      <Image
-                        src={application.job.company_logo_url}
-                        alt={application.job.company_name}
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-lg font-bold text-primary">
-                          {(application.job?.company_name || 'C').charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                    <CompanyLogo
+                      src={application.job?.company_logo_url}
+                      alt={application.job?.company_name || 'Company'}
+                      size="md"
+                      fallbackLetter={application.job?.company_name || 'C'}
+                    />
 
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold truncate">

@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { MapPin, Bookmark, Briefcase } from 'lucide-react'
@@ -26,6 +29,40 @@ function DefaultLogo({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
   )
 }
 
+// Company logo with fallback to default on error
+function CompanyLogo({
+  src,
+  alt,
+  size = 'md'
+}: {
+  src: string | null | undefined
+  alt: string
+  size?: 'sm' | 'md' | 'lg'
+}) {
+  const [hasError, setHasError] = useState(false)
+
+  const sizeConfig = {
+    sm: { width: 40, height: 40, className: 'rounded-lg object-contain shrink-0 w-9 h-9 sm:w-10 sm:h-10' },
+    md: { width: 48, height: 48, className: 'rounded-lg object-contain shrink-0 w-10 h-10 sm:w-12 sm:h-12' },
+    lg: { width: 64, height: 64, className: 'rounded-xl object-contain shrink-0 w-16 h-16' },
+  }
+
+  if (!src || hasError) {
+    return <DefaultLogo size={size} />
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={sizeConfig[size].width}
+      height={sizeConfig[size].height}
+      className={sizeConfig[size].className}
+      onError={() => setHasError(true)}
+    />
+  )
+}
+
 interface JobCardProps {
   job: Job
   onSave?: (jobId: string) => void
@@ -49,17 +86,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-start gap-5">
           {/* Company Logo */}
-          {job.company_logo_url ? (
-            <Image
-              src={job.company_logo_url}
-              alt={job.company_name}
-              width={64}
-              height={64}
-              className="rounded-xl object-contain shrink-0 w-16 h-16"
-            />
-          ) : (
-            <DefaultLogo size="lg" />
-          )}
+          <CompanyLogo src={job.company_logo_url} alt={job.company_name} size="lg" />
 
           {/* Main Content */}
           <div className="flex-1 min-w-0">
@@ -146,17 +173,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start gap-3 sm:gap-4">
           {/* Company Logo */}
-          {job.company_logo_url ? (
-            <Image
-              src={job.company_logo_url}
-              alt={job.company_name}
-              width={48}
-              height={48}
-              className="rounded-lg object-contain shrink-0 w-10 h-10 sm:w-12 sm:h-12"
-            />
-          ) : (
-            <DefaultLogo size="md" />
-          )}
+          <CompanyLogo src={job.company_logo_url} alt={job.company_name} size="md" />
 
           {/* Job Info */}
           <div className="flex-1 min-w-0 overflow-hidden">
@@ -243,17 +260,7 @@ function JobCardCompact({ job }: { job: Job }) {
       <CardContent className="p-3 sm:p-4">
         <div className="flex items-start gap-3">
           {/* Company Logo */}
-          {job.company_logo_url ? (
-            <Image
-              src={job.company_logo_url}
-              alt={job.company_name}
-              width={40}
-              height={40}
-              className="rounded-lg object-contain shrink-0 w-9 h-9 sm:w-10 sm:h-10"
-            />
-          ) : (
-            <DefaultLogo size="sm" />
-          )}
+          <CompanyLogo src={job.company_logo_url} alt={job.company_name} size="sm" />
 
           {/* Job Info */}
           <div className="flex-1 min-w-0 overflow-hidden">

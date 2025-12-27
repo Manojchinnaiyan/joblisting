@@ -6,9 +6,9 @@ import Link from 'next/link'
 import { ArrowLeft, MapPin, Briefcase, DollarSign, Clock, FileText, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { useApplication, useWithdrawApplication } from '@/hooks/use-applications'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+import { CompanyLogo } from '@/components/shared/company-logo'
 import { format } from 'date-fns'
 import type { ApplicationStatus } from '@/types/application'
 
@@ -76,14 +76,12 @@ export default function ApplicationDetailPage({
       {/* Header */}
       <div className="flex items-start justify-between">
         <div className="flex gap-4">
-          {application.job?.company_logo_url && (
-            /* eslint-disable-next-line @next/next/no-img-element */
-            <img
-              src={application.job.company_logo_url}
-              alt={application.job.company_name}
-              className="h-16 w-16 rounded-lg object-cover"
-            />
-          )}
+          <CompanyLogo
+            src={application.job?.company_logo_url}
+            alt={application.job?.company_name || 'Company'}
+            size="lg"
+            fallbackLetter={application.job?.company_name || 'C'}
+          />
           <div>
             <h1 className="text-3xl font-bold">{application.job?.title}</h1>
             <p className="text-xl text-muted-foreground mt-1">

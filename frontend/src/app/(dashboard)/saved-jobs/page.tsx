@@ -2,14 +2,12 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Bookmark, MapPin, Briefcase, DollarSign, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { useSavedJobs, useUnsaveJob } from '@/hooks/use-saved-jobs'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
-import { format } from 'date-fns'
+import { CompanyLogo } from '@/components/shared/company-logo'
 
 export default function SavedJobsPage() {
   const [page, setPage] = useState(1)
@@ -65,21 +63,12 @@ export default function SavedJobsPage() {
               <Card key={job.id} className="hover:bg-accent transition-colors">
                 <CardContent className="p-4 sm:p-6">
                   <div className="flex flex-col sm:flex-row items-start gap-4">
-                    {job.company_logo_url ? (
-                      <Image
-                        src={job.company_logo_url}
-                        alt={job.company_name}
-                        width={48}
-                        height={48}
-                        className="h-12 w-12 rounded-lg object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-lg font-bold text-primary">
-                          {job.company_name?.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
-                    )}
+                    <CompanyLogo
+                      src={job.company_logo_url}
+                      alt={job.company_name}
+                      size="md"
+                      fallbackLetter={job.company_name}
+                    />
 
                     <div className="flex-1 min-w-0">
                       <Link href={`/jobs/${job.slug}`} className="group">

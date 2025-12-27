@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from 'react'
 import Image from 'next/image'
 import { MapPin, Clock, Briefcase, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -6,6 +9,33 @@ import { Separator } from '@/components/ui/separator'
 import { SalaryDisplay } from './salary-display'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Job } from '@/types/job'
+
+function DefaultLogo() {
+  return (
+    <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-lg bg-primary flex items-center justify-center shrink-0">
+      <Briefcase className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
+    </div>
+  )
+}
+
+function CompanyLogo({ src, alt }: { src: string | null | undefined; alt: string }) {
+  const [hasError, setHasError] = useState(false)
+
+  if (!src || hasError) {
+    return <DefaultLogo />
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={80}
+      height={80}
+      className="rounded object-contain w-16 h-16 sm:w-20 sm:h-20"
+      onError={() => setHasError(true)}
+    />
+  )
+}
 
 interface JobDetailProps {
   job: Job
@@ -17,19 +47,7 @@ export function JobDetail({ job, mobileActions }: JobDetailProps) {
     <div className="space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
-        {job.company_logo_url ? (
-          <Image
-            src={job.company_logo_url}
-            alt={job.company_name}
-            width={80}
-            height={80}
-            className="rounded object-contain w-16 h-16 sm:w-20 sm:h-20"
-          />
-        ) : (
-          <div className="h-16 w-16 sm:h-20 sm:w-20 rounded-lg bg-primary flex items-center justify-center shrink-0">
-            <Briefcase className="h-8 w-8 sm:h-10 sm:w-10 text-primary-foreground" />
-          </div>
-        )}
+        <CompanyLogo src={job.company_logo_url} alt={job.company_name} />
         <div className="flex-1 min-w-0">
           <h1 className="text-xl sm:text-2xl md:text-3xl font-bold break-words">{job.title}</h1>
           <p className="text-base sm:text-lg md:text-xl text-muted-foreground mt-1 sm:mt-2">{job.company_name}</p>
