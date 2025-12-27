@@ -24,6 +24,7 @@ export default function robots(): MetadataRoute.Robots {
           '/forgot-password',
           '/reset-password',
           '/verify-email',
+          '/tag/',  // Old URLs from previous domain owner
         ],
       },
       {
@@ -39,6 +40,7 @@ export default function robots(): MetadataRoute.Robots {
           '/saved-jobs/',
           '/resumes/',
           '/api/',
+          '/tag/',  // Old URLs from previous domain owner
         ],
       },
     ],
