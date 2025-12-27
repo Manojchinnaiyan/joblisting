@@ -11,10 +11,11 @@ import { OrganizationStructuredData } from '@/components/seo/organization-struct
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Work Sans font for entire application
+// Only load weights actually used: 400 (normal), 500 (medium), 600 (semibold), 700 (bold)
 const workSans = Work_Sans({
   subsets: ['latin'],
-  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
-  variable: '--font-inter',
+  weight: ['400', '500', '600', '700'],
+  variable: '--font-work-sans',
   display: 'swap',
 })
 
