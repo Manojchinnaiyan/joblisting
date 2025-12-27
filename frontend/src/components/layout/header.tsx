@@ -25,8 +25,11 @@ import { NotificationBell } from '@/components/notifications/notification-bell'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Header() {
-  const { user, isAuthenticated, logout: userLogout, refreshToken } = useAuthStore()
+  const { user, isAuthenticated, logout: userLogout, refreshToken, _hasHydrated } = useAuthStore()
   const { logout: adminLogout } = useAdminAuthStore()
+
+  // Don't render auth-dependent UI until zustand has hydrated to prevent hydration mismatch
+  const showAuthUI = _hasHydrated
 
   const handleLogout = async () => {
     try {
@@ -57,7 +60,7 @@ export function Header() {
 
           <div className="flex items-center gap-4">
             <ThemeToggle />
-            {!isAuthenticated && (
+            {showAuthUI && !isAuthenticated && (
               <div className="hidden sm:flex items-center gap-2">
                 <Button variant="ghost" size="sm" asChild>
                   <Link href="/register?role=employer">Hire Talent</Link>
@@ -67,7 +70,7 @@ export function Header() {
                 </Button>
               </div>
             )}
-            {isAuthenticated && user ? (
+            {showAuthUI && isAuthenticated && user ? (
               <>
                 <NotificationBell notificationsHref="/notifications" />
                 <DropdownMenu>
@@ -121,7 +124,7 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
               </>
-            ) : (
+            ) : showAuthUI ? (
               <>
                 <Button variant="ghost" asChild className="hidden sm:flex">
                   <Link href={ROUTES.LOGIN}>Log in</Link>
@@ -130,7 +133,7 @@ export function Header() {
                   <Link href={ROUTES.REGISTER}>Sign up</Link>
                 </Button>
               </>
-            )}
+            ) : null}
 
             <MobileNav />
           </div>

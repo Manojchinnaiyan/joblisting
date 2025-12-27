@@ -1,8 +1,8 @@
 import Link from 'next/link'
-import Image from 'next/image'
 import { Users, Briefcase, BadgeCheck } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { CompanyLogo } from '@/components/shared/company-logo'
 import type { Company } from '@/types/company'
 
 interface CompanyCardProps {
@@ -16,19 +16,12 @@ export function CompanyCard({ company }: CompanyCardProps) {
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
             {/* Company Logo */}
-            {company.logo_url ? (
-              <Image
-                src={company.logo_url}
-                alt={company.name}
-                width={56}
-                height={56}
-                className="rounded-lg object-contain shrink-0"
-              />
-            ) : (
-              <div className="h-14 w-14 rounded-lg bg-primary flex items-center justify-center shrink-0">
-                <Briefcase className="h-7 w-7 text-primary-foreground" />
-              </div>
-            )}
+            <CompanyLogo
+              src={company.logo_url}
+              alt={company.name}
+              size="lg"
+              fallbackLetter={company.name}
+            />
 
             {/* Company Info */}
             <div className="flex-1 min-w-0">
