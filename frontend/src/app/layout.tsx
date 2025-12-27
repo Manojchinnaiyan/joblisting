@@ -7,6 +7,7 @@ import { ThemeProvider } from '@/providers/theme-provider'
 import { AuthProvider } from '@/providers/auth-provider'
 import { Toaster } from '@/components/ui/toaster'
 import { CookieConsent } from '@/components/shared/cookie-consent'
+import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Work Sans font for entire application
@@ -115,8 +116,11 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
 })(window,document,'script','dataLayer','GTM-5F6RMCTV');`}
         </Script>
+        <OrganizationStructuredData />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/favicon.svg" />
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#2563eb" />
       </head>
