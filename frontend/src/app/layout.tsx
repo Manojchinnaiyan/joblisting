@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Work_Sans } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import Script from 'next/script'
 import './globals.css'
 import { QueryProvider } from '@/providers/query-provider'
@@ -10,12 +10,10 @@ import { CookieConsent } from '@/components/shared/cookie-consent'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
-// Work Sans font for entire application
-// Only load weights actually used: 400 (normal), 500 (medium), 600 (semibold), 700 (bold)
-const workSans = Work_Sans({
+// Inter font for entire application
+const inter = Inter({
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-work-sans',
+  variable: '--font-inter',
   display: 'swap',
 })
 
@@ -125,7 +123,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <link rel="manifest" href="/manifest.json" />
         <meta name="theme-color" content="#2563eb" />
       </head>
-      <body className={workSans.variable}>
+      <body className={inter.variable}>
         {/* Google Tag Manager (noscript) */}
         <noscript>
           <iframe
