@@ -40,8 +40,9 @@ export function CookieConsent() {
     // Check if user has already made a choice
     const consent = localStorage.getItem(COOKIE_CONSENT_KEY)
     if (!consent) {
-      // Delay cookie banner to avoid impacting LCP and initial page load
-      const timer = setTimeout(() => setShowBanner(true), 3000)
+      // Delay cookie banner to 5s to ensure LCP is measured before it appears
+      // LCP is typically measured within 2.5s of page load
+      const timer = setTimeout(() => setShowBanner(true), 5000)
       return () => clearTimeout(timer)
     } else {
       try {

@@ -28,9 +28,8 @@ export function FeaturedJobs() {
     fetchFeaturedJobs()
   }, [])
 
-  // Don't render anything until we know if there are jobs
-  // This prevents the flickering skeleton
-  if (isLoading || jobs.length === 0) {
+  // Don't render if no jobs after loading
+  if (!isLoading && jobs.length === 0) {
     return null
   }
 
@@ -44,11 +43,19 @@ export function FeaturedJobs() {
           </p>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {jobs.map((job) => (
-            <JobCard key={job.id} job={job} compact />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="h-[180px] bg-muted animate-pulse rounded-lg" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {jobs.map((job) => (
+              <JobCard key={job.id} job={job} compact />
+            ))}
+          </div>
+        )}
 
         <div className="text-center mt-6">
           <Button variant="outline" asChild>
