@@ -288,7 +288,7 @@ func (h *JobHandler) GetFeaturedJobs(c *gin.Context) {
 
 	// Cache for anonymous users (30 min TTL for featured jobs)
 	if userID == nil && h.cacheService != nil && h.cacheService.IsAvailable() {
-		_ = h.cacheService.CacheJobList(ctx, cacheKey, jobResponses)
+		_ = h.cacheService.CacheFeaturedJobs(ctx, cacheKey, jobResponses)
 	}
 
 	response.OK(c, "Featured jobs retrieved successfully", gin.H{

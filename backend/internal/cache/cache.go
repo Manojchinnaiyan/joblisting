@@ -27,15 +27,16 @@ const (
 
 // Default TTLs
 const (
-	DefaultJobTTL       = 10 * time.Minute
-	DefaultBlogTTL      = 10 * time.Minute
-	DefaultSearchTTL    = 5 * time.Minute
-	DefaultListTTL      = 2 * time.Minute
-	DefaultSessionTTL   = 24 * time.Hour
-	ViewCountSyncPeriod = 5 * time.Minute
-	DefaultCategoryTTL  = 1 * time.Hour  // Categories change rarely
-	DefaultCompanyTTL   = 15 * time.Minute
-	DefaultLocationTTL  = 30 * time.Minute // Locations change rarely
+	DefaultJobTTL        = 10 * time.Minute
+	DefaultBlogTTL       = 10 * time.Minute
+	DefaultSearchTTL     = 5 * time.Minute
+	DefaultListTTL       = 2 * time.Minute
+	DefaultFeaturedTTL   = 30 * time.Minute // Featured jobs change rarely
+	DefaultSessionTTL    = 24 * time.Hour
+	ViewCountSyncPeriod  = 5 * time.Minute
+	DefaultCategoryTTL   = 1 * time.Hour  // Categories change rarely
+	DefaultCompanyTTL    = 15 * time.Minute
+	DefaultLocationTTL   = 30 * time.Minute // Locations change rarely
 )
 
 // CacheService provides caching operations using Redis
@@ -136,6 +137,12 @@ func (c *CacheService) InvalidateAllJobCaches(ctx context.Context) error {
 func (c *CacheService) CacheJobList(ctx context.Context, cacheKey string, result interface{}) error {
 	key := PrefixJobList + cacheKey
 	return c.Set(ctx, key, result, DefaultListTTL)
+}
+
+// CacheFeaturedJobs stores featured jobs with longer TTL
+func (c *CacheService) CacheFeaturedJobs(ctx context.Context, cacheKey string, result interface{}) error {
+	key := PrefixJobList + cacheKey
+	return c.Set(ctx, key, result, DefaultFeaturedTTL)
 }
 
 // GetCachedJobList retrieves a job list from cache
