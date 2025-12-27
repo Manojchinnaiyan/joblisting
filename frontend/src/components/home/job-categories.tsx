@@ -66,7 +66,7 @@ export function JobCategories() {
         <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-4">
           {isLoading ? (
             Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className=" bg-muted animate-pulse rounded-lg" />
+              <div key={i} className="h-[140px] bg-muted animate-pulse rounded-lg" />
             ))
           ) : (
             categories.slice(0, 8).map((category) => {

@@ -40,8 +40,8 @@ export function CookieConsent() {
     // Check if user has already made a choice
     const consent = localStorage.getItem(COOKIE_CONSENT_KEY)
     if (!consent) {
-      // Small delay to prevent flash on page load
-      const timer = setTimeout(() => setShowBanner(true), 1000)
+      // Delay cookie banner to avoid impacting LCP and initial page load
+      const timer = setTimeout(() => setShowBanner(true), 3000)
       return () => clearTimeout(timer)
     } else {
       try {
