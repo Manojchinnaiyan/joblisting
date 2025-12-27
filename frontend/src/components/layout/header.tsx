@@ -16,17 +16,16 @@ import { Navbar } from './navbar'
 import { MobileNav } from './mobile-nav'
 import { Container } from './container'
 import { useAuthStore } from '@/store/auth-store'
+import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { authApi } from '@/lib/api/auth'
-import { ROUTES } from '@/lib/constants'
 import { getInitials } from '@/lib/utils'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { NotificationBell } from '@/components/notifications/notification-bell'
 import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Header() {
-  const { user, isAuthenticated, logout, refreshToken } = useAuthStore()
-  const router = useRouter()
+  const { user, isAuthenticated, logout: userLogout, refreshToken } = useAuthStore()
+  const { logout: adminLogout } = useAdminAuthStore()
 
   const handleLogout = async () => {
     try {
@@ -37,10 +36,12 @@ export function Header() {
       // Ignore API errors - we still want to clear local state
       console.error('Logout API error:', error)
     } finally {
-      // Always clear local state and redirect
-      logout()
-      router.push(ROUTES.HOME)
+      // Always clear local state (both user and admin) and redirect
+      userLogout()
+      adminLogout()
       toast.success('Logged out successfully')
+      // Use window.location for full page reload to ensure clean state
+      window.location.href = '/'
     }
   }
 

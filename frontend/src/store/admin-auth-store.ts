@@ -40,8 +40,10 @@ export const useAdminAuthStore = create<AdminAuthState>()(
         // Clear localStorage FIRST, synchronously, before any state changes
         // This prevents zustand persist from re-saving when we set state to null
         if (typeof window !== 'undefined') {
+          // Clear all auth-related storage
           localStorage.removeItem('admin-auth-storage')
           localStorage.removeItem('admin-sidebar-collapsed')
+          localStorage.removeItem('auth-storage') // Also clear user auth
           sessionStorage.clear()
         }
         // Then reset the state

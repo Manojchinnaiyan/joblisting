@@ -17,9 +17,11 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
+import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useProfile } from '@/hooks/use-profile'
 import { NotificationBell } from '@/components/notifications/notification-bell'
+import { toast } from 'sonner'
 
 const navigation = [
   {
@@ -70,8 +72,16 @@ const navigation = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { user, logout } = useAuthStore()
+  const { user, logout: userLogout } = useAuthStore()
+  const { logout: adminLogout } = useAdminAuthStore()
   const { data: profile } = useProfile()
+
+  const handleLogout = () => {
+    userLogout()
+    adminLogout()
+    toast.success('Logged out successfully')
+    window.location.href = '/'
+  }
 
   return (
     <div className="flex h-full w-64 flex-col border-r bg-card">
@@ -166,7 +176,7 @@ export function Sidebar() {
         <Button
           variant="outline"
           className="w-full justify-start"
-          onClick={logout}
+          onClick={handleLogout}
         >
           <LogOut className="mr-2 h-4 w-4" />
           Logout

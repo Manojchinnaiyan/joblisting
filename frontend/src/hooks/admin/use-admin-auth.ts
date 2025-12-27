@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { adminAuthApi, AdminUser } from '@/lib/api/admin/auth'
 import { useAdminAuthStore } from '@/store/admin-auth-store'
+import { useAuthStore } from '@/store/auth-store'
 import { useRouter } from 'next/navigation'
 
 export const adminAuthKeys = {
@@ -62,9 +63,9 @@ export function useVerifyAdmin2FA() {
 }
 
 export function useAdminLogout() {
-  const { logout, refreshToken } = useAdminAuthStore()
+  const { logout: adminLogout, refreshToken } = useAdminAuthStore()
+  const { logout: userLogout } = useAuthStore()
   const queryClient = useQueryClient()
-  const router = useRouter()
 
   return useMutation({
     mutationFn: () => {
@@ -74,15 +75,21 @@ export function useAdminLogout() {
       return Promise.resolve()
     },
     onSuccess: () => {
-      logout()
+      // Clear both admin and user auth stores
+      adminLogout()
+      userLogout()
       queryClient.clear()
       toast.success('Logged out successfully')
-      router.push('/login')
+      // Use window.location for full page reload to ensure clean state
+      window.location.href = '/'
     },
     onError: () => {
-      logout()
+      // Clear both admin and user auth stores
+      adminLogout()
+      userLogout()
       queryClient.clear()
-      router.push('/login')
+      // Use window.location for full page reload to ensure clean state
+      window.location.href = '/'
     },
   })
 }

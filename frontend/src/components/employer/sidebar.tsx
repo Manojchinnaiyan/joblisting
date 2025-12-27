@@ -19,12 +19,13 @@ import {
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useAuthStore } from '@/store/auth-store'
+import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useMyCompany } from '@/hooks/employer/use-company'
 import { Badge } from '@/components/ui/badge'
 import { authApi } from '@/lib/api/auth'
-import { useRouter } from 'next/navigation'
 import { NotificationBell } from '@/components/notifications/notification-bell'
+import { toast } from 'sonner'
 
 const navigation = [
   {
@@ -90,8 +91,8 @@ const navigation = [
 
 export function EmployerSidebar() {
   const pathname = usePathname()
-  const router = useRouter()
-  const { user, logout, refreshToken } = useAuthStore()
+  const { user, logout: userLogout, refreshToken } = useAuthStore()
+  const { logout: adminLogout } = useAdminAuthStore()
   const { data: company } = useMyCompany()
 
   const handleLogout = async () => {
@@ -102,8 +103,10 @@ export function EmployerSidebar() {
     } catch (error) {
       console.error('Logout API error:', error)
     } finally {
-      logout()
-      router.push('/')
+      userLogout()
+      adminLogout()
+      toast.success('Logged out successfully')
+      window.location.href = '/'
     }
   }
 
