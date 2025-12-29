@@ -6,7 +6,7 @@ import { QueryProvider } from '@/providers/query-provider'
 import { ThemeProvider } from '@/providers/theme-provider'
 import { AuthProvider } from '@/providers/auth-provider'
 import { Toaster } from '@/components/ui/toaster'
-import { CookieConsent } from '@/components/shared/cookie-consent'
+// import { CookieConsent } from '@/components/shared/cookie-consent'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
@@ -158,7 +158,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             <AuthProvider>
               {children}
               <Toaster />
-              <CookieConsent />
+              {/* <CookieConsent /> */}
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
