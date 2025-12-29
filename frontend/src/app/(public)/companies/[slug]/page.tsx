@@ -1,3 +1,4 @@
+import { Metadata } from 'next'
 import { Suspense } from 'react'
 import { notFound } from 'next/navigation'
 import { Container } from '@/components/layout/container'
@@ -11,11 +12,72 @@ import { BackButton } from '@/components/shared/back-button'
 import { LoadingSpinner } from '@/components/shared/loading-spinner'
 import { companiesApi } from '@/lib/api/companies'
 
+const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://jobsworld.in'
+
 async function getCompany(slug: string) {
   try {
     return await companiesApi.getCompanyBySlug(slug)
   } catch (error) {
     return null
+  }
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const company = await getCompany(slug)
+
+  if (!company) {
+    return {
+      title: 'Company Not Found',
+      description: 'The company you are looking for does not exist.',
+    }
+  }
+
+  const title = `${company.name} - Company Profile, Jobs & Culture`
+  const description = company.description
+    ? company.description.replace(/<[^>]*>/g, '').slice(0, 160)
+    : `Explore ${company.name} company profile. View open job positions, company culture, benefits, and more. Find your next career opportunity.`
+
+  return {
+    title,
+    description,
+    keywords: [
+      company.name,
+      `${company.name} jobs`,
+      `${company.name} careers`,
+      'company profile',
+      'job opportunities',
+      company.industry || 'hiring company',
+    ],
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: `${BASE_URL}/companies/${slug}`,
+      images: company.logo_url
+        ? [
+            {
+              url: company.logo_url,
+              width: 200,
+              height: 200,
+              alt: company.name,
+            },
+          ]
+        : undefined,
+    },
+    twitter: {
+      card: 'summary',
+      title,
+      description,
+      images: company.logo_url ? [company.logo_url] : undefined,
+    },
+    alternates: {
+      canonical: `${BASE_URL}/companies/${slug}`,
+    },
   }
 }
 

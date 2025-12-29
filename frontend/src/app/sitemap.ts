@@ -19,6 +19,11 @@ interface SitemapCategory {
   name: string
 }
 
+interface SitemapBlog {
+  slug: string
+  updated_at: string
+}
+
 async function getJobsForSitemap(): Promise<SitemapJob[]> {
   try {
     const response = await fetch(`${API_URL}/jobs/sitemap`, {
@@ -61,11 +66,29 @@ async function getCategoriesForSitemap(): Promise<SitemapCategory[]> {
   }
 }
 
+async function getBlogsForSitemap(): Promise<SitemapBlog[]> {
+  try {
+    const response = await fetch(`${API_URL}/blogs?page=1&page_size=1000`, {
+      next: { revalidate: 3600 }, // Revalidate every hour
+    })
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.data?.blogs?.map((blog: { slug: string; updated_at: string }) => ({
+      slug: blog.slug,
+      updated_at: blog.updated_at,
+    })) || []
+  } catch (error) {
+    console.error('Failed to fetch blogs for sitemap:', error)
+    return []
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [jobs, companies, categories] = await Promise.all([
+  const [jobs, companies, categories, blogs] = await Promise.all([
     getJobsForSitemap(),
     getCompaniesForSitemap(),
     getCategoriesForSitemap(),
+    getBlogsForSitemap(),
   ])
 
   // Static pages
@@ -144,5 +167,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...jobPages, ...companyPages, ...categoryPages]
+  // Blog pages
+  const blogPages: MetadataRoute.Sitemap = blogs.map((blog) => ({
+    url: `${BASE_URL}/blogs/${blog.slug}`,
+    lastModified: new Date(blog.updated_at),
+    changeFrequency: 'weekly' as const,
+    priority: 0.6,
+  }))
+
+  return [...staticPages, ...jobPages, ...companyPages, ...categoryPages, ...blogPages]
 }

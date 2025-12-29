@@ -57,7 +57,7 @@ export function JobApplyButton({ job }: JobApplyButtonProps) {
         <a
           href={job.original_url}
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener noreferrer nofollow"
         >
           Apply at {job.company_name}
           <ExternalLink className="ml-2 h-4 w-4" />

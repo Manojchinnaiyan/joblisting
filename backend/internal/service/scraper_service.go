@@ -4394,54 +4394,6 @@ func (s *ScraperService) isLowQualityExtraction(job *ExtractedJob) bool {
 	return false
 }
 
-// isSPAJobDetailSite checks if a URL is from a known SPA site that requires network capture
-// for job detail pages (where content is loaded via JavaScript/API calls)
-func (s *ScraperService) isSPAJobDetailSite(jobURL string) bool {
-	lowerURL := strings.ToLower(jobURL)
-
-	// TCS iBegin - AngularJS SPA
-	if strings.Contains(lowerURL, "ibegin.tcsapps.com") {
-		return true
-	}
-
-	// HCL Tech careers - also uses dynamic loading for job details
-	if strings.Contains(lowerURL, "careers.hcltech.com/job/") {
-		return true
-	}
-
-	// Workday job detail pages
-	if strings.Contains(lowerURL, "myworkday") || strings.Contains(lowerURL, "workday.com") {
-		return true
-	}
-
-	// SAP SuccessFactors
-	if strings.Contains(lowerURL, "successfactors.com") || strings.Contains(lowerURL, "jobs.sap.com") {
-		return true
-	}
-
-	// Greenhouse hosted pages (some are SPAs)
-	if strings.Contains(lowerURL, "boards.greenhouse.io") && strings.Contains(lowerURL, "/jobs/") {
-		return true
-	}
-
-	// Lever job pages
-	if strings.Contains(lowerURL, "jobs.lever.co") {
-		return true
-	}
-
-	// MyNextHire - SPA used by Swiggy and others
-	if strings.Contains(lowerURL, "mynexthire.com") {
-		return true
-	}
-
-	// Darwinbox - SPA ATS platform
-	if strings.Contains(lowerURL, "darwinbox.io") || strings.Contains(lowerURL, "darwinbox.in") {
-		return true
-	}
-
-	return false
-}
-
 // extractJobIframeSrc extracts the src URL from job-related iframes in HTML
 // This handles career pages that embed job content in iframes (e.g., mynexthire, smartrecruiters)
 func (s *ScraperService) extractJobIframeSrc(html string, pageURL string) string {
