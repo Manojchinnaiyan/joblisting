@@ -1,7 +1,8 @@
 import { MetadataRoute } from 'next'
 
 const BASE_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://jobsworld.in'
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api/v1'
+// Use production API URL for sitemap generation
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://jobsworld.in/api/v1'
 
 interface SitemapJob {
   slug: string
@@ -11,6 +12,11 @@ interface SitemapJob {
 interface SitemapCompany {
   slug: string
   updated_at: string
+}
+
+interface SitemapCategory {
+  slug: string
+  name: string
 }
 
 async function getJobsForSitemap(): Promise<SitemapJob[]> {
@@ -41,10 +47,25 @@ async function getCompaniesForSitemap(): Promise<SitemapCompany[]> {
   }
 }
 
+async function getCategoriesForSitemap(): Promise<SitemapCategory[]> {
+  try {
+    const response = await fetch(`${API_URL}/jobs/categories`, {
+      next: { revalidate: 3600 }, // Revalidate every hour
+    })
+    if (!response.ok) return []
+    const data = await response.json()
+    return data.data?.categories || []
+  } catch (error) {
+    console.error('Failed to fetch categories for sitemap:', error)
+    return []
+  }
+}
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [jobs, companies] = await Promise.all([
+  const [jobs, companies, categories] = await Promise.all([
     getJobsForSitemap(),
     getCompaniesForSitemap(),
+    getCategoriesForSitemap(),
   ])
 
   // Static pages
@@ -74,16 +95,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.5,
     },
     {
-      url: `${BASE_URL}/login`,
+      url: `${BASE_URL}/blogs`,
+      lastModified: new Date(),
+      changeFrequency: 'daily',
+      priority: 0.7,
+    },
+    {
+      url: `${BASE_URL}/privacy-policy`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.3,
     },
     {
-      url: `${BASE_URL}/register`,
+      url: `${BASE_URL}/terms-of-service`,
       lastModified: new Date(),
       changeFrequency: 'yearly',
       priority: 0.3,
+    },
+    {
+      url: `${BASE_URL}/contact`,
+      lastModified: new Date(),
+      changeFrequency: 'yearly',
+      priority: 0.4,
     },
   ]
 
@@ -103,5 +136,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.7,
   }))
 
-  return [...staticPages, ...jobPages, ...companyPages]
+  // Category pages
+  const categoryPages: MetadataRoute.Sitemap = categories.map((category) => ({
+    url: `${BASE_URL}/jobs?category=${category.slug}`,
+    lastModified: new Date(),
+    changeFrequency: 'daily' as const,
+    priority: 0.7,
+  }))
+
+  return [...staticPages, ...jobPages, ...companyPages, ...categoryPages]
 }
