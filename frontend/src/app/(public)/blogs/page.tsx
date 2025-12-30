@@ -1,6 +1,7 @@
 import { Metadata } from 'next'
 import { Suspense } from 'react'
 import { BlogsPageClient } from './blogs-page-client'
+import { BlogCategory, BlogListResponse } from '@/lib/api/blog'
 import { Loader2 } from 'lucide-react'
 
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'https://jobsworld.in/api/v1'
@@ -28,7 +29,7 @@ export const metadata: Metadata = {
   },
 }
 
-async function getInitialBlogs() {
+async function getInitialBlogs(): Promise<BlogListResponse | null> {
   try {
     const response = await fetch(`${API_URL}/blogs?page=1&page_size=12`, {
       next: { revalidate: 300 },
@@ -50,6 +51,28 @@ async function getInitialBlogs() {
   }
 }
 
+async function getCategories(): Promise<BlogCategory[]> {
+  try {
+    const response = await fetch(`${API_URL}/blog-categories`, {
+      next: { revalidate: 3600 }, // Cache for 1 hour
+      headers: {
+        'Accept': 'application/json',
+      },
+    })
+
+    if (!response.ok) {
+      console.error('Failed to fetch categories:', response.status)
+      return []
+    }
+
+    const data = await response.json()
+    return data.data || []
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+    return []
+  }
+}
+
 function BlogsPageFallback() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -65,11 +88,15 @@ function BlogsPageFallback() {
 }
 
 export default async function BlogsPage() {
-  const initialData = await getInitialBlogs()
+  // Fetch blogs and categories in parallel for SSR
+  const [initialData, categories] = await Promise.all([
+    getInitialBlogs(),
+    getCategories(),
+  ])
 
   return (
     <Suspense fallback={<BlogsPageFallback />}>
-      <BlogsPageClient initialData={initialData} />
+      <BlogsPageClient initialData={initialData} initialCategories={categories} />
     </Suspense>
   )
 }

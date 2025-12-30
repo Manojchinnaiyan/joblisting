@@ -16,11 +16,13 @@ import {
 
 interface BlogsPageClientProps {
   initialData: BlogListResponse | null
+  initialCategories: BlogCategory[]
 }
 
-export function BlogsPageClient({ initialData }: BlogsPageClientProps) {
+export function BlogsPageClient({ initialData, initialCategories }: BlogsPageClientProps) {
   const [blogs, setBlogs] = useState<Blog[]>(initialData?.blogs || [])
-  const [categories, setCategories] = useState<BlogCategory[]>([])
+  // Categories are now passed from server - no client-side fetch needed
+  const categories = initialCategories
   const [loading, setLoading] = useState(!initialData)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -76,18 +78,6 @@ export function BlogsPageClient({ initialData }: BlogsPageClientProps) {
       loadBlogs()
     }
   }, [loadBlogs, hasSearched, categoryFilter, page, initialData])
-
-  useEffect(() => {
-    async function loadCategories() {
-      try {
-        const cats = await blogApi.getCategories()
-        setCategories(cats)
-      } catch (error) {
-        console.error('Failed to load categories:', error)
-      }
-    }
-    loadCategories()
-  }, [])
 
   const handleCategoryChange = (value: string) => {
     setCategoryFilter(value)
