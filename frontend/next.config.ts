@@ -30,7 +30,7 @@ const nextConfig: NextConfig = {
               "font-src 'self' https://*.gstatic.com https://*.googleapis.com data:",
               "img-src 'self' data: blob: https: http:",
               "connect-src 'self' http://localhost:* https://*.google.com https://*.googleapis.com https://*.googletagmanager.com https://*.google-analytics.com https://*.googlesyndication.com https://*.doubleclick.net https://*.adtrafficquality.google https://adtrafficquality.google https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://pagead2.googlesyndication.com https://jobsworld.in https://www.jobsworld.in https://*.jobsworld.in wss://jobsworld.in wss://www.jobsworld.in wss://*.jobsworld.in https://static.cloudflareinsights.com https://*.cloudflareinsights.com https://*.cloudflare.com",
-              "frame-src 'self' https://*.google.com https://*.googletagmanager.com https://*.googlesyndication.com https://*.doubleclick.net https://*.cloudflare.com",
+              "frame-src 'self' https://*.google.com https://*.googletagmanager.com https://*.googlesyndication.com https://*.doubleclick.net https://*.adtrafficquality.google https://adtrafficquality.google https://ep1.adtrafficquality.google https://ep2.adtrafficquality.google https://*.cloudflare.com",
               "object-src 'none'",
               "base-uri 'self'",
             ].join('; '),
