@@ -46,7 +46,6 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
   const [categoryName, setCategoryName] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
-  const [hasFiltersOrSearch, setHasFiltersOrSearch] = useState(false)
 
   // Parse URL params for filters
   const getInitialFilters = useCallback((): JobFiltersType => {
@@ -79,18 +78,14 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
   const [filters, setFilters] = useState<JobFiltersType>(getInitialFilters)
   const [mobileFilters, setMobileFilters] = useState<JobFiltersType>(filters)
 
-  // Check if there are any filters or search query from URL
-  useEffect(() => {
-    const hasFilters = !!(
-      searchParams.get('q') ||
-      searchParams.get('location') ||
-      searchParams.get('category') ||
-      searchParams.get('experience_level') ||
-      searchParams.get('job_type') ||
-      searchParams.get('workplace_type')
-    )
-    setHasFiltersOrSearch(hasFilters)
-  }, [searchParams])
+  // Check if there are any active filters (from state, not just URL)
+  const hasActiveFilters = !!(
+    filters.location ||
+    filters.category ||
+    filters.experience_level?.length ||
+    filters.job_type?.length ||
+    filters.workplace_type?.length
+  )
 
   // Update filters when URL params change (e.g., clicking Fresher Jobs or Internships)
   useEffect(() => {
@@ -162,12 +157,12 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
 
   // Fetch jobs when search query, filters, or page changes
   useEffect(() => {
-    // Always fetch if there's a search query (even if initialData exists)
-    const shouldFetch = searchQuery?.trim() || hasFiltersOrSearch || currentPage > 1 || !initialData
+    // Always fetch if there's a search query, active filters, or page > 1
+    const shouldFetch = searchQuery?.trim() || hasActiveFilters || currentPage > 1 || !initialData
     if (shouldFetch) {
       fetchJobs()
     }
-  }, [fetchJobs, searchQuery, hasFiltersOrSearch, currentPage, initialData])
+  }, [fetchJobs, searchQuery, hasActiveFilters, currentPage, initialData])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
