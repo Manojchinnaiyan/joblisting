@@ -44,7 +44,8 @@ async function getInitialBlogs(): Promise<BlogListResponse | null> {
     }
 
     const data = await response.json()
-    return data.data || null
+    // API returns { blogs, page, page_size, total, total_pages } directly at root level
+    return data as BlogListResponse
   } catch (error) {
     console.error('Error fetching initial blogs:', error)
     return null
@@ -66,7 +67,8 @@ async function getCategories(): Promise<BlogCategory[]> {
     }
 
     const data = await response.json()
-    return data.data || []
+    // API returns array of categories directly at root level
+    return Array.isArray(data) ? data : []
   } catch (error) {
     console.error('Error fetching categories:', error)
     return []
