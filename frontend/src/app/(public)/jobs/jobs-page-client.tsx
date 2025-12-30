@@ -46,6 +46,7 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
   const [categoryName, setCategoryName] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(false)
 
   // Parse URL params for filters
   const getInitialFilters = useCallback((): JobFiltersType => {
@@ -147,6 +148,7 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
 
       setJobs(data.jobs)
       setPagination(data.pagination)
+      setHasFetchedOnce(true)
     } catch (err) {
       setError('Failed to load jobs')
       toast.error('Failed to load jobs')
@@ -157,12 +159,16 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
 
   // Fetch jobs when search query, filters, or page changes
   useEffect(() => {
-    // Always fetch if there's a search query, active filters, or page > 1
-    const shouldFetch = searchQuery?.trim() || hasActiveFilters || currentPage > 1 || !initialData
+    // Always fetch if:
+    // - there's a search query or active filters
+    // - page > 1
+    // - no initial data
+    // - we've fetched before (user has interacted, so always refetch on changes)
+    const shouldFetch = searchQuery?.trim() || hasActiveFilters || currentPage > 1 || !initialData || hasFetchedOnce
     if (shouldFetch) {
       fetchJobs()
     }
-  }, [fetchJobs, searchQuery, hasActiveFilters, currentPage, initialData])
+  }, [fetchJobs, searchQuery, hasActiveFilters, currentPage, initialData, hasFetchedOnce])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
