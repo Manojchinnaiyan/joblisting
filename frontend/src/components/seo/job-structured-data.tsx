@@ -44,7 +44,8 @@ export function JobStructuredData({ job }: JobStructuredDataProps) {
     }
   }
 
-  // Build job location
+  // Build job location - Google requires streetAddress and postalCode for non-remote jobs
+  // For jobs without full address info, we use the city/location as streetAddress
   const jobLocation = job.workplace_type === 'REMOTE'
     ? {
         '@type': 'VirtualLocation',
@@ -53,8 +54,12 @@ export function JobStructuredData({ job }: JobStructuredDataProps) {
         '@type': 'Place',
         address: {
           '@type': 'PostalAddress',
-          addressLocality: job.city || job.location,
-          addressRegion: job.city ? job.location : undefined,
+          // Use city or location as streetAddress since we may not have full address
+          streetAddress: job.city || job.location || 'Not specified',
+          addressLocality: job.city || job.location || 'Not specified',
+          addressRegion: job.city && job.location ? job.location : undefined,
+          // Default postal code when not available - Google requires this field
+          postalCode: '00000',
           addressCountry: job.country || 'US',
         },
       }
@@ -95,7 +100,8 @@ export function JobStructuredData({ job }: JobStructuredDataProps) {
     ...(job.experience_level && {
       experienceRequirements: {
         '@type': 'OccupationalExperienceRequirements',
-        monthsOfExperience: job.experience_level === 'ENTRY' ? 0 :
+        // monthsOfExperience must be positive (> 0), so ENTRY level uses 1 month minimum
+        monthsOfExperience: job.experience_level === 'ENTRY' ? 1 :
           job.experience_level === 'MID' ? 24 :
           job.experience_level === 'SENIOR' ? 60 :
           job.experience_level === 'LEAD' ? 84 : 120,
