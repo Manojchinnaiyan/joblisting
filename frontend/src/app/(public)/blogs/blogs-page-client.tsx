@@ -23,13 +23,15 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
   const [blogs, setBlogs] = useState<Blog[]>(initialData?.blogs || [])
   // Categories are now passed from server - no client-side fetch needed
   const categories = initialCategories
-  const [loading, setLoading] = useState(!initialData)
+  // Never show loading on initial render - we have SSR data (or empty state if SSR failed)
+  const [loading, setLoading] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [page, setPage] = useState(1)
   const [totalPages, setTotalPages] = useState(initialData?.total_pages || 0)
-  const [hasSearched, setHasSearched] = useState(false)
+  // Track if user has interacted - only fetch client-side after user interaction
+  const [userInteracted, setUserInteracted] = useState(false)
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const pageSize = 12
@@ -40,10 +42,12 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
       clearTimeout(debounceTimerRef.current)
     }
     debounceTimerRef.current = setTimeout(() => {
-      setDebouncedSearch(searchInput)
-      setPage(1)
-      if (searchInput) {
-        setHasSearched(true)
+      if (searchInput !== debouncedSearch) {
+        setDebouncedSearch(searchInput)
+        setPage(1)
+        if (searchInput) {
+          setUserInteracted(true)
+        }
       }
     }, 300)
 
@@ -52,7 +56,7 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
         clearTimeout(debounceTimerRef.current)
       }
     }
-  }, [searchInput])
+  }, [searchInput, debouncedSearch])
 
   const loadBlogs = useCallback(async () => {
     setLoading(true)
@@ -73,16 +77,22 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
   }, [page, debouncedSearch, categoryFilter])
 
   useEffect(() => {
-    // Only fetch if user has searched/filtered or changed page
-    if (hasSearched || categoryFilter !== 'all' || page > 1 || !initialData) {
+    // IMPORTANT: Only fetch client-side when user has interacted (search, filter, pagination)
+    // This prevents Googlebot from seeing client-side API calls on initial page load
+    if (userInteracted) {
       loadBlogs()
     }
-  }, [loadBlogs, hasSearched, categoryFilter, page, initialData])
+  }, [loadBlogs, userInteracted, debouncedSearch, categoryFilter, page])
 
   const handleCategoryChange = (value: string) => {
     setCategoryFilter(value)
     setPage(1)
-    setHasSearched(true)
+    setUserInteracted(true)
+  }
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage)
+    setUserInteracted(true)
   }
 
   return (
@@ -153,7 +163,7 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
             <div className="flex items-center justify-center gap-4 mt-12">
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => handlePageChange(Math.max(1, page - 1))}
                 disabled={page === 1}
               >
                 Previous
@@ -163,7 +173,7 @@ export function BlogsPageClient({ initialData, initialCategories }: BlogsPageCli
               </span>
               <Button
                 variant="outline"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
                 disabled={page >= totalPages}
               >
                 Next
