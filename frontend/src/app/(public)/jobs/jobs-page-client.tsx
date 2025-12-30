@@ -160,12 +160,14 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
     }
   }, [filters, currentPage, searchQuery])
 
-  // Only fetch if there are filters/search or page changed, otherwise use initial data
+  // Fetch jobs when search query, filters, or page changes
   useEffect(() => {
-    if (hasFiltersOrSearch || currentPage > 1 || !initialData) {
+    // Always fetch if there's a search query (even if initialData exists)
+    const shouldFetch = searchQuery?.trim() || hasFiltersOrSearch || currentPage > 1 || !initialData
+    if (shouldFetch) {
       fetchJobs()
     }
-  }, [fetchJobs, hasFiltersOrSearch, currentPage, initialData])
+  }, [fetchJobs, searchQuery, hasFiltersOrSearch, currentPage, initialData])
 
   const handleSearch = (query: string) => {
     setSearchQuery(query)
