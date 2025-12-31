@@ -317,6 +317,23 @@ func (s *ImportQueueService) processJob(ctx context.Context, queue *ImportQueue,
 		return
 	}
 
+	// Validate scraped data - reject low quality extractions
+	if scrapedJob.Title == "" || len(scrapedJob.Description) < 100 {
+		s.mu.Lock()
+		job.Status = ImportStatusFailed
+		if scrapedJob.Title == "" {
+			job.Error = "Failed to extract job title from page"
+		} else {
+			job.Error = "Failed to extract sufficient job description from page"
+		}
+		job.UpdatedAt = time.Now()
+		queue.Failed++
+		queue.UpdatedAt = time.Now()
+		s.mu.Unlock()
+		log.Printf("❌ Low quality extraction for %s: title=%q, desc_len=%d", job.URL, scrapedJob.Title, len(scrapedJob.Description))
+		return
+	}
+
 	// Convert scraped data to job input
 	input := scrapedDataToInput(scrapedJob)
 
