@@ -10,6 +10,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
 import { GTMScript } from '@/components/analytics/gtm-script'
+import { HydrationFix } from '@/components/utils/hydration-fix'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -161,6 +162,7 @@ export default function RootLayout({
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
+        <HydrationFix />
         <GTMScript />
         <AdSenseScript />
       </body>
