@@ -139,7 +139,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
         <meta name="theme-color" content="#2563eb" />
         <meta name="google-adsense-account" content="ca-pub-2850705628908256" />
       </head>
-      <body className={inter.variable}>
+      <body className={inter.variable} suppressHydrationWarning>
         <NextTopLoader
           color="#2563eb"
           initialPosition={0.08}
