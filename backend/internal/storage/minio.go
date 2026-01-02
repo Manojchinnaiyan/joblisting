@@ -20,7 +20,7 @@ type MinioConfig struct {
 	AccessKey       string
 	SecretKey       string
 	UseSSL          bool
-	PublicURL       string // External URL for accessing files (e.g., http://localhost:9000)
+	PublicURL       string // External URL for accessing files (e.g., https://jobsworld.in)
 	BucketResumes   string
 	BucketAvatars   string
 	BucketCerts     string
