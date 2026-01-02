@@ -69,15 +69,15 @@ export default function ResumesPage() {
       // Fetch the signed download URL from the backend
       const downloadUrl = await resumesApi.getResumeDownloadUrl(resume.id)
 
-      const response = await fetch(downloadUrl)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
+      // Open the download URL directly - this avoids CORS issues
+      // The browser will handle the download natively
       const a = document.createElement('a')
-      a.href = url
-      a.download = resume.file_name
+      a.href = downloadUrl
+      a.download = resume.original_name || resume.file_name
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
       document.body.appendChild(a)
       a.click()
-      window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
       toast.error('Failed to download resume')
@@ -96,14 +96,14 @@ export default function ResumesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Resumes</h1>
-          <p className="text-muted-foreground mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold">Resumes</h1>
+          <p className="text-muted-foreground mt-1 text-sm sm:text-base">
             Upload and manage your resumes
           </p>
         </div>
-        <Button onClick={handleUploadClick} disabled={uploadResume.isPending}>
+        <Button onClick={handleUploadClick} disabled={uploadResume.isPending} className="w-full sm:w-auto">
           <Upload className="mr-2 h-4 w-4" />
           {uploadResume.isPending ? 'Uploading...' : 'Upload Resume'}
         </Button>
@@ -150,36 +150,41 @@ export default function ResumesPage() {
         <div className="space-y-3">
           {resumes.map((resume) => (
             <Card key={resume.id} className={resume.is_primary ? 'border-primary' : ''}>
-              <CardContent className="p-6">
-                <div className="flex items-start gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <FileText className="h-6 w-6 text-primary" />
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2">
-                      <h3 className="font-semibold truncate">{resume.file_name}</h3>
-                      {resume.is_primary && (
-                        <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium flex-shrink-0">
-                          <CheckCircle className="h-3 w-3" />
-                          Primary
-                        </div>
-                      )}
+              <CardContent className="p-4 sm:p-6">
+                <div className="flex flex-col gap-4">
+                  {/* Icon and Info Row */}
+                  <div className="flex items-start gap-3">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Uploaded {format(new Date(resume.uploaded_at), 'MMM d, yyyy')}
-                    </p>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <h3 className="font-semibold text-sm sm:text-base break-all sm:truncate max-w-full">{resume.original_name || resume.file_name}</h3>
+                        {resume.is_primary && (
+                          <div className="flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium w-fit flex-shrink-0">
+                            <CheckCircle className="h-3 w-3" />
+                            Primary
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                        Uploaded {format(new Date(resume.uploaded_at), 'MMM d, yyyy')}
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="flex gap-2 flex-shrink-0">
+                  {/* Action Buttons - Full width on mobile */}
+                  <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2">
                     {!resume.is_primary && (
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleSetPrimary(resume.id)}
                         disabled={setPrimaryResume.isPending}
+                        className="col-span-2 sm:col-span-1"
                       >
-                        <Star className="mr-2 h-4 w-4" />
+                        <Star className="mr-1.5 h-4 w-4" />
                         Set Primary
                       </Button>
                     )}
@@ -188,15 +193,16 @@ export default function ResumesPage() {
                       size="sm"
                       onClick={() => handleDownload(resume)}
                     >
-                      <Download className="mr-2 h-4 w-4" />
+                      <Download className="mr-1.5 h-4 w-4" />
                       Download
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => setDeleteId(resume.id)}
+                      className="text-destructive hover:text-destructive"
                     >
-                      <Trash2 className="mr-2 h-4 w-4" />
+                      <Trash2 className="mr-1.5 h-4 w-4" />
                       Delete
                     </Button>
                   </div>

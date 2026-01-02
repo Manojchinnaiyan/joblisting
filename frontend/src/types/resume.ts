@@ -2,6 +2,7 @@ export interface Resume {
   id: string
   user_id: string
   file_name: string
+  original_name: string
   title: string
   file_size: number
   mime_type: string

@@ -14,17 +14,18 @@ type UploadResumeRequest struct {
 
 // ResumeResponse represents a resume response
 type ResumeResponse struct {
-	ID            uuid.UUID  `json:"id"`
-	UserID        uuid.UUID  `json:"user_id"`
-	FileName      string     `json:"file_name"`
-	FileSize      int64      `json:"file_size"`
-	MimeType      string     `json:"mime_type"`
-	IsPrimary     bool       `json:"is_primary"`
-	Title         string     `json:"title"`
-	DownloadCount int        `json:"download_count"`
-	UploadedAt    time.Time  `json:"uploaded_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	DownloadURL   *string    `json:"download_url,omitempty"`
+	ID            uuid.UUID `json:"id"`
+	UserID        uuid.UUID `json:"user_id"`
+	FileName      string    `json:"file_name"`
+	OriginalName  string    `json:"original_name"`
+	FileSize      int64     `json:"file_size"`
+	MimeType      string    `json:"mime_type"`
+	IsPrimary     bool      `json:"is_primary"`
+	Title         string    `json:"title"`
+	DownloadCount int       `json:"download_count"`
+	UploadedAt    time.Time `json:"uploaded_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	DownloadURL   *string   `json:"download_url,omitempty"`
 }
 
 // ResumeListResponse contains list of resumes
@@ -62,6 +63,7 @@ func ToResumeResponse(resume *domain.Resume) *ResumeResponse {
 		ID:            resume.ID,
 		UserID:        resume.UserID,
 		FileName:      resume.FileName,
+		OriginalName:  resume.OriginalName,
 		FileSize:      resume.FileSize,
 		MimeType:      resume.MimeType,
 		IsPrimary:     resume.IsPrimary,

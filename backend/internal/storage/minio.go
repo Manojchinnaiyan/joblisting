@@ -176,6 +176,40 @@ func (m *MinioClient) UploadFromReader(bucket, path string, reader io.Reader, si
 
 // GetSignedURL generates a presigned URL for downloading a file
 func (m *MinioClient) GetSignedURL(bucket, path string, expiry time.Duration) (string, error) {
+	// Create a new MinIO client with the public URL endpoint for presigned URLs
+	// This ensures the signature is generated for the public URL, not internal hostname
+	if m.config.PublicURL != "" {
+		// Parse the public URL to get host
+		publicEndpoint := m.config.PublicURL
+		// Remove protocol prefix
+		publicEndpoint = strings.TrimPrefix(publicEndpoint, "http://")
+		publicEndpoint = strings.TrimPrefix(publicEndpoint, "https://")
+
+		// Create client with public endpoint for generating presigned URL
+		publicClient, err := minio.New(publicEndpoint, &minio.Options{
+			Creds:        credentials.NewStaticV4(m.config.AccessKey, m.config.SecretKey, ""),
+			Secure:       m.config.UseSSL,
+			Region:       "us-east-1",
+			BucketLookup: minio.BucketLookupPath,
+		})
+		if err != nil {
+			return "", fmt.Errorf("failed to create public minio client: %w", err)
+		}
+
+		url, err := publicClient.PresignedGetObject(
+			context.Background(),
+			bucket,
+			path,
+			expiry,
+			nil,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate signed URL: %w", err)
+		}
+		return url.String(), nil
+	}
+
+	// Fallback to regular client if no public URL configured
 	url, err := m.client.PresignedGetObject(
 		context.Background(),
 		bucket,
@@ -186,7 +220,6 @@ func (m *MinioClient) GetSignedURL(bucket, path string, expiry time.Duration) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)
 	}
-
 	return url.String(), nil
 }
 
@@ -297,7 +330,8 @@ func (m *MinioClient) ValidateFile(file *multipart.FileHeader, allowedTypes []st
 	return nil
 }
 
-// GenerateUniqueFileName generates a unique filename with UUID prefix
+// GenerateUniqueFileName generates a sanitized filename (without UUID prefix)
+// The UUID is added in the path structure instead for cleaner filenames
 func GenerateUniqueFileName(originalName string) string {
 	ext := filepath.Ext(originalName)
 	name := strings.TrimSuffix(originalName, ext)
@@ -316,16 +350,18 @@ func GenerateUniqueFileName(originalName string) string {
 		name = name[:50]
 	}
 
-	return fmt.Sprintf("%s_%s%s", uuid.New().String(), name, ext)
+	return fmt.Sprintf("%s%s", name, ext)
 }
 
-// GenerateFilePath generates an organized file path with date hierarchy
-// Structure: {userID}/{year}/{month}/{filename}
+// GenerateFilePath generates an organized file path with date hierarchy and UUID
+// Structure: {userID}/{year}/{month}/{uuid}/{filename}
+// The UUID in the path ensures uniqueness while keeping the filename clean
 // The bucket is not included in the path as it's passed separately to MinIO
 func GenerateFilePath(userID uuid.UUID, filename string) string {
 	now := time.Now()
 	year := now.Format("2006")
 	month := now.Format("01")
+	fileUUID := uuid.New().String()
 
-	return fmt.Sprintf("%s/%s/%s/%s", userID.String(), year, month, filename)
+	return fmt.Sprintf("%s/%s/%s/%s/%s", userID.String(), year, month, fileUUID, filename)
 }

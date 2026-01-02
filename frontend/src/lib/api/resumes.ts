@@ -48,11 +48,8 @@ export const resumesApi = {
     await apiClient.delete(`/jobseeker/me/resumes/${id}`)
   },
 
-  setPrimaryResume: async (id: string): Promise<Resume> => {
-    const response = await apiClient.put<ApiResponse<{ resume: Resume }>>(
-      `/jobseeker/me/resumes/${id}/primary`
-    )
-    return response.data.data.resume
+  setPrimaryResume: async (id: string): Promise<void> => {
+    await apiClient.put(`/jobseeker/me/resumes/${id}/primary`)
   },
 
   getResumeDownloadUrl: async (id: string): Promise<string> => {

@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthStore } from '@/store/auth-store'
 import { Sidebar } from '@/components/dashboard/sidebar'
 import { MobileNav } from '@/components/dashboard/mobile-nav'
+import { cn } from '@/lib/utils'
+
+const SIDEBAR_COLLAPSED_KEY = 'sidebar-collapsed'
 
 export default function DashboardLayout({
   children,
@@ -14,6 +17,23 @@ export default function DashboardLayout({
   const router = useRouter()
   const { user, isAuthenticated, _hasHydrated } = useAuthStore()
   const hasRedirected = useRef(false)
+  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [hasLoadedCollapsed, setHasLoadedCollapsed] = useState(false)
+
+  // Load sidebar collapsed state from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY)
+    if (saved !== null) {
+      setIsCollapsed(saved === 'true')
+    }
+    setHasLoadedCollapsed(true)
+  }, [])
+
+  // Save sidebar collapsed state to localStorage
+  const handleCollapsedChange = (collapsed: boolean) => {
+    setIsCollapsed(collapsed)
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed))
+  }
 
   useEffect(() => {
     // Prevent multiple redirects
@@ -76,18 +96,27 @@ export default function DashboardLayout({
     <div className="flex h-full min-h-screen">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:block lg:fixed lg:inset-y-0 lg:z-50">
-        <Sidebar />
+        <Sidebar
+          isCollapsed={isCollapsed}
+          onCollapsedChange={handleCollapsedChange}
+        />
       </aside>
 
       {/* Mobile Navigation */}
       <MobileNav />
 
       {/* Main Content */}
-      <main className="flex-1 lg:pl-64">
+      <main className={cn(
+        "flex-1 transition-all duration-300",
+        isCollapsed ? "lg:pl-16" : "lg:pl-64"
+      )}>
         {/* Mobile top padding */}
         <div className="lg:hidden h-16" />
 
-        <div className="w-full max-w-7xl mx-auto px-6 py-6 pb-20 lg:pb-6">
+        <div className={cn(
+          "w-full mx-auto px-4 sm:px-6 py-6 pb-20 lg:pb-6 transition-all duration-300",
+          isCollapsed ? "max-w-[1600px]" : "max-w-7xl"
+        )}>
           {children}
         </div>
       </main>
