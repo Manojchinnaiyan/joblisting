@@ -176,40 +176,8 @@ func (m *MinioClient) UploadFromReader(bucket, path string, reader io.Reader, si
 
 // GetSignedURL generates a presigned URL for downloading a file
 func (m *MinioClient) GetSignedURL(bucket, path string, expiry time.Duration) (string, error) {
-	// Create a new MinIO client with the public URL endpoint for presigned URLs
-	// This ensures the signature is generated for the public URL, not internal hostname
-	if m.config.PublicURL != "" {
-		// Parse the public URL to get host
-		publicEndpoint := m.config.PublicURL
-		// Remove protocol prefix
-		publicEndpoint = strings.TrimPrefix(publicEndpoint, "http://")
-		publicEndpoint = strings.TrimPrefix(publicEndpoint, "https://")
-
-		// Create client with public endpoint for generating presigned URL
-		publicClient, err := minio.New(publicEndpoint, &minio.Options{
-			Creds:        credentials.NewStaticV4(m.config.AccessKey, m.config.SecretKey, ""),
-			Secure:       m.config.UseSSL,
-			Region:       "us-east-1",
-			BucketLookup: minio.BucketLookupPath,
-		})
-		if err != nil {
-			return "", fmt.Errorf("failed to create public minio client: %w", err)
-		}
-
-		url, err := publicClient.PresignedGetObject(
-			context.Background(),
-			bucket,
-			path,
-			expiry,
-			nil,
-		)
-		if err != nil {
-			return "", fmt.Errorf("failed to generate signed URL: %w", err)
-		}
-		return url.String(), nil
-	}
-
-	// Fallback to regular client if no public URL configured
+	// Generate the presigned URL using internal MinIO endpoint
+	// The signature is based on the bucket/path which nginx proxies directly
 	url, err := m.client.PresignedGetObject(
 		context.Background(),
 		bucket,
@@ -220,6 +188,23 @@ func (m *MinioClient) GetSignedURL(bucket, path string, expiry time.Duration) (s
 	if err != nil {
 		return "", fmt.Errorf("failed to generate signed URL: %w", err)
 	}
+
+	// If PublicURL is configured, replace the internal hostname with public URL
+	// The path stays the same (e.g., /resumes/user-id/file.pdf) so signature remains valid
+	// Nginx proxies /{bucket}/... directly to MinIO with Host header set to minio:9000
+	if m.config.PublicURL != "" {
+		urlStr := url.String()
+		// Replace internal endpoint with public URL
+		// Internal: http://minio:9000/resumes/path/file.pdf?signature...
+		// Public:   https://jobsworld.in/resumes/path/file.pdf?signature...
+		internalBase := fmt.Sprintf("http://%s", m.config.Endpoint)
+		if m.config.UseSSL {
+			internalBase = fmt.Sprintf("https://%s", m.config.Endpoint)
+		}
+		urlStr = strings.Replace(urlStr, internalBase, m.config.PublicURL, 1)
+		return urlStr, nil
+	}
+
 	return url.String(), nil
 }
 
