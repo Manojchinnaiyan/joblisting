@@ -69,16 +69,23 @@ export default function ResumesPage() {
       // Fetch the signed download URL from the backend
       const downloadUrl = await resumesApi.getResumeDownloadUrl(resume.id)
 
-      // Open the download URL directly - this avoids CORS issues
-      // The browser will handle the download natively
+      // Fetch the file and create a blob for direct download
+      // This avoids opening a new tab and works with CORS
+      const response = await fetch(downloadUrl)
+      if (!response.ok) throw new Error('Download failed')
+
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+
       const a = document.createElement('a')
-      a.href = downloadUrl
+      a.href = blobUrl
       a.download = resume.original_name || resume.file_name
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
+
+      // Clean up the blob URL
+      URL.revokeObjectURL(blobUrl)
     } catch (error) {
       toast.error('Failed to download resume')
     }

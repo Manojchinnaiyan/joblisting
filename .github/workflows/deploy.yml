@@ -361,6 +361,7 @@ jobs:
           MINIO_ACCESS_KEY=${{ secrets.MINIO_ACCESS_KEY }}
           MINIO_SECRET_KEY=${{ secrets.MINIO_SECRET_KEY }}
           MINIO_BUCKET_NAME=resumes
+          MINIO_PUBLIC_URL=https://jobsworld.in
           # JWT
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           JWT_ACCESS_EXPIRY=15m
