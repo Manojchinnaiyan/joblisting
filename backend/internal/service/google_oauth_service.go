@@ -184,10 +184,22 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 
 			// Update Google ID if not set
 			if user.GoogleID == nil {
+				// Check if this Google ID is already linked to another account
+				var existingGoogleUser domain.User
+				if err := tx.Where("google_id = ? AND id != ? AND deleted_at IS NULL", userInfo.ID, user.ID).First(&existingGoogleUser).Error; err == nil {
+					// Google ID exists on another account - this shouldn't happen normally
+					// Clear the old link and assign to current user
+					if err := tx.Model(&existingGoogleUser).Update("google_id", nil).Error; err != nil {
+						return fmt.Errorf("failed to unlink google from old account: %w", err)
+					}
+				}
 				user.GoogleID = &userInfo.ID
 				if err := tx.Save(user).Error; err != nil {
 					return err
 				}
+			} else if *user.GoogleID != userInfo.ID {
+				// User has a different Google ID - this means they're trying to login with a different Google account
+				return fmt.Errorf("this email is already linked to a different Google account")
 			}
 
 			// Check if profile exists, create if not
@@ -205,39 +217,57 @@ func (s *GoogleOAuthService) AuthenticateUser(ctx context.Context, code, ipAddre
 				}
 			}
 		} else if result.Error == gorm.ErrRecordNotFound {
-			// Create new user
-			isNewUser = true
-			user = &domain.User{
-				ID:            uuid.New(),
-				Email:         userInfo.Email,
-				Password:      "", // No password for OAuth users
-				FirstName:     userInfo.GivenName,
-				LastName:      userInfo.FamilyName,
-				Role:          role, // Use role from OAuth state
-				Status:        domain.StatusActive,
-				AuthProvider:  domain.AuthProviderGoogle,
-				GoogleID:      &userInfo.ID,
-				EmailVerified: true, // Google already verified
-				EmailVerifiedAt: func() *time.Time {
-					t := time.Now()
-					return &t
-				}(),
+			// Check if Google ID is already used by another account (with different email)
+			var existingGoogleUser domain.User
+			if err := tx.Where("google_id = ? AND deleted_at IS NULL", userInfo.ID).First(&existingGoogleUser).Error; err == nil {
+				// Google ID exists - user is trying to create new account but Google is linked elsewhere
+				// This can happen if user changed their Google account email
+				// Update the existing account's email and use that account
+				existingGoogleUser.Email = userInfo.Email
+				existingGoogleUser.FirstName = userInfo.GivenName
+				existingGoogleUser.LastName = userInfo.FamilyName
+				if err := tx.Save(&existingGoogleUser).Error; err != nil {
+					return fmt.Errorf("failed to update existing google user: %w", err)
+				}
+				user = &existingGoogleUser
+				isNewUser = false
+			} else {
+				// Create new user
+				isNewUser = true
+				user = &domain.User{
+					ID:            uuid.New(),
+					Email:         userInfo.Email,
+					Password:      "", // No password for OAuth users
+					FirstName:     userInfo.GivenName,
+					LastName:      userInfo.FamilyName,
+					Role:          role, // Use role from OAuth state
+					Status:        domain.StatusActive,
+					AuthProvider:  domain.AuthProviderGoogle,
+					GoogleID:      &userInfo.ID,
+					EmailVerified: true, // Google already verified
+					EmailVerifiedAt: func() *time.Time {
+						t := time.Now()
+						return &t
+					}(),
+				}
+
+				if err := tx.Create(user).Error; err != nil {
+					return fmt.Errorf("failed to create user: %w", err)
+				}
 			}
 
-			if err := tx.Create(user).Error; err != nil {
-				return fmt.Errorf("failed to create user: %w", err)
-			}
+			// Create user profile with proper defaults (only for new users)
+			if isNewUser {
+				profile := &domain.UserProfile{
+					ID:                  uuid.New(),
+					UserID:              user.ID,
+					Visibility:          domain.VisibilityEmployersOnly,
+					OpenToOpportunities: true,
+				}
 
-			// Create user profile with proper defaults
-			profile := &domain.UserProfile{
-				ID:                  uuid.New(),
-				UserID:              user.ID,
-				Visibility:          domain.VisibilityEmployersOnly,
-				OpenToOpportunities: true,
-			}
-
-			if err := tx.Create(profile).Error; err != nil {
-				return fmt.Errorf("failed to create profile: %w", err)
+				if err := tx.Create(profile).Error; err != nil {
+					return fmt.Errorf("failed to create profile: %w", err)
+				}
 			}
 		} else {
 			return result.Error
