@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster'
 // import { CookieConsent } from '@/components/shared/cookie-consent'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
+import { GTMScript } from '@/components/analytics/gtm-script'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -114,16 +115,6 @@ export default function RootLayout({
         <link rel="preconnect" href="https://www.accenture.com" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        {/* Google Tag Manager - using dangerouslySetInnerHTML to avoid data-nscript attribute */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','GTM-5F6RMCTV');`,
-          }}
-        />
         <OrganizationStructuredData />
         <link rel="icon" href="/favicon.ico" sizes="48x48" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -147,7 +138,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
           shadow="0 0 10px #2563eb,0 0 5px #2563eb"
           zIndex={9999}
         />
-        {/* Google Tag Manager (noscript) */}
+        {/* Google Tag Manager (noscript) - for users without JavaScript */}
         <noscript>
           <iframe
             src="https://www.googletagmanager.com/ns.html?id=GTM-5F6RMCTV"
@@ -156,7 +147,6 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        {/* End Google Tag Manager (noscript) */}
         <ThemeProvider
           attribute="class"
           defaultTheme="light"
@@ -171,6 +161,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
             </AuthProvider>
           </QueryProvider>
         </ThemeProvider>
+        <GTMScript />
         <AdSenseScript />
       </body>
     </html>
