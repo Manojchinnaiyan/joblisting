@@ -22,7 +22,6 @@ import { ROUTES } from '@/lib/constants'
 import { getInitials } from '@/lib/utils'
 import { toast } from 'sonner'
 import { NotificationBell } from '@/components/notifications/notification-bell'
-import { ThemeToggle } from '@/components/theme-toggle'
 
 export function Header() {
   const { user, isAuthenticated, logout: userLogout, refreshToken, _hasHydrated } = useAuthStore()
@@ -59,7 +58,6 @@ export function Header() {
           </div>
 
           <div className="flex items-center gap-4">
-            <ThemeToggle />
             {showAuthUI && !isAuthenticated && (
               <div className="hidden sm:flex items-center gap-2">
                 <Button variant="ghost" size="sm" asChild>

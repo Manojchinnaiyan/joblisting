@@ -17,7 +17,6 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 import { AdminSidebar } from './sidebar'
 import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { useAdminLogout } from '@/hooks/admin/use-admin-auth'
-import { ThemeToggle } from '@/components/theme-toggle'
 import Link from 'next/link'
 
 interface AdminHeaderProps {
@@ -67,9 +66,6 @@ export function AdminHeader({ title }: AdminHeaderProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Theme toggle */}
-        <ThemeToggle />
-
         {/* Notifications */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

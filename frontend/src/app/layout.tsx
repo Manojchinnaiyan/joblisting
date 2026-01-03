@@ -3,14 +3,12 @@ import { Inter } from 'next/font/google'
 import NextTopLoader from 'nextjs-toploader'
 import './globals.css'
 import { QueryProvider } from '@/providers/query-provider'
-import { ThemeProvider } from '@/providers/theme-provider'
 import { AuthProvider } from '@/providers/auth-provider'
 import { Toaster } from '@/components/ui/toaster'
 // import { CookieConsent } from '@/components/shared/cookie-consent'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
 import { GTMScript } from '@/components/analytics/gtm-script'
-import { HydrationFix } from '@/components/utils/hydration-fix'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -109,7 +107,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         {/* Preconnect to external origins for faster resource loading */}
         <link rel="preconnect" href="https://s3.smartdreamers.com" />
@@ -126,7 +124,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#2563eb" />
         <meta name="google-adsense-account" content="ca-pub-2850705628908256" />
       </head>
-      <body className={inter.variable} suppressHydrationWarning>
+      <body className={inter.variable}>
         <NextTopLoader
           color="#2563eb"
           initialPosition={0.08}
@@ -148,21 +146,13 @@ export default function RootLayout({
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="light"
-          enableSystem={false}
-          disableTransitionOnChange
-        >
-          <QueryProvider>
-            <AuthProvider>
-              {children}
-              <Toaster />
-              {/* <CookieConsent /> */}
-            </AuthProvider>
-          </QueryProvider>
-        </ThemeProvider>
-        <HydrationFix />
+        <QueryProvider>
+          <AuthProvider>
+            {children}
+            <Toaster />
+            {/* <CookieConsent /> */}
+          </AuthProvider>
+        </QueryProvider>
         <GTMScript />
         <AdSenseScript />
       </body>
