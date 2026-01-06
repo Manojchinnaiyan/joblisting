@@ -14,7 +14,7 @@ export function BlogCard({ blog }: BlogCardProps) {
     : null
 
   return (
-    <Link href={`/blogs/${blog.slug}`}>
+    <Link href={`/blogs/${blog.slug}`} target="_blank" rel="noopener noreferrer">
       <article className="border rounded-lg overflow-hidden hover:shadow-lg transition-shadow bg-card">
         {/* Featured Image */}
         {blog.featured_image ? (

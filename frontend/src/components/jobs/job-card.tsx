@@ -92,7 +92,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <Link href={`/jobs/${job.slug}`}>
+                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer">
                   <h3 className="font-semibold text-lg group-hover:text-primary transition-colors line-clamp-1">
                     {job.title}
                   </h3>
@@ -179,7 +179,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <Link href={`/jobs/${job.slug}`}>
+                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer">
                   <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors line-clamp-2 sm:line-clamp-1">
                     {job.title}
                   </h3>
@@ -264,7 +264,7 @@ function JobCardCompact({ job }: { job: Job }) {
 
           {/* Job Info */}
           <div className="flex-1 min-w-0 overflow-hidden">
-            <Link href={`/jobs/${job.slug}`}>
+            <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer">
               <h3 className="font-semibold text-sm group-hover:text-primary transition-colors line-clamp-2">
                 {job.title}
               </h3>

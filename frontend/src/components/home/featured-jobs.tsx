@@ -9,11 +9,20 @@ import { JobCard } from '@/components/jobs/job-card'
 import { jobsApi } from '@/lib/api/jobs'
 import type { Job } from '@/types/job'
 
-export function FeaturedJobs() {
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+interface FeaturedJobsProps {
+  initialJobs?: Job[]
+}
+
+export function FeaturedJobs({ initialJobs }: FeaturedJobsProps) {
+  const [jobs, setJobs] = useState<Job[]>(initialJobs || [])
+  const [isLoading, setIsLoading] = useState(!initialJobs || initialJobs.length === 0)
 
   useEffect(() => {
+    // Only fetch if we don't have initial data
+    if (initialJobs && initialJobs.length > 0) {
+      return
+    }
+
     const fetchFeaturedJobs = async () => {
       try {
         const data = await jobsApi.getFeaturedJobs(6)
@@ -26,7 +35,7 @@ export function FeaturedJobs() {
     }
 
     fetchFeaturedJobs()
-  }, [])
+  }, [initialJobs])
 
   // Don't render if no jobs after loading
   if (!isLoading && jobs.length === 0) {

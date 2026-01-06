@@ -28,11 +28,27 @@ const iconMap: Record<string, any> = {
   operations: Settings,
 }
 
-export function JobCategories() {
-  const [categories, setCategories] = useState<{ id: string; name: string; slug: string; count: number }[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+interface Category {
+  id: string
+  name: string
+  slug: string
+  count: number
+}
+
+interface JobCategoriesProps {
+  initialCategories?: Category[]
+}
+
+export function JobCategories({ initialCategories }: JobCategoriesProps) {
+  const [categories, setCategories] = useState<Category[]>(initialCategories || [])
+  const [isLoading, setIsLoading] = useState(!initialCategories || initialCategories.length === 0)
 
   useEffect(() => {
+    // Only fetch if we don't have initial data
+    if (initialCategories && initialCategories.length > 0) {
+      return
+    }
+
     const fetchCategories = async () => {
       try {
         const data = await jobsApi.getCategories()
@@ -45,7 +61,7 @@ export function JobCategories() {
     }
 
     fetchCategories()
-  }, [])
+  }, [initialCategories])
 
   // If no categories after loading, don't render the section at all
   // This prevents initial flash - we start with loading state
