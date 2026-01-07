@@ -1,6 +1,6 @@
 // Resume Builder Types
 
-export type ResumeTemplate = 'professional' | 'modern' | 'minimal'
+export type ResumeTemplate = 'professional' | 'modern' | 'minimal' | 'creative' | 'executive' | 'tech'
 
 export interface ResumePersonalInfo {
   firstName: string
@@ -112,6 +112,21 @@ export const TEMPLATE_OPTIONS: { value: ResumeTemplate; label: string; descripti
     value: 'minimal',
     label: 'Minimal',
     description: 'Clean and simple, focuses on content over design',
+  },
+  {
+    value: 'creative',
+    label: 'Creative',
+    description: 'Bold header with accent colors, great for creative fields',
+  },
+  {
+    value: 'executive',
+    label: 'Executive',
+    description: 'Elegant two-column layout for senior/leadership roles',
+  },
+  {
+    value: 'tech',
+    label: 'Tech',
+    description: 'Developer-focused with prominent skills section',
   },
 ]
 

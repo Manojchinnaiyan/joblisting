@@ -8,6 +8,7 @@ import {
   User,
   FileText,
   FilePlus2,
+  FileEdit,
   Briefcase,
   Bookmark,
   Building2,
@@ -72,6 +73,11 @@ const navigation = [
     name: 'Resume Builder',
     href: '/resume-builder',
     icon: FilePlus2,
+  },
+  {
+    name: 'Cover Letter',
+    href: '/cover-letter-builder',
+    icon: FileEdit,
   },
   {
     name: 'Applications',
