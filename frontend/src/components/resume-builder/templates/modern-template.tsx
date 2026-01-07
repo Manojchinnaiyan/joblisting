@@ -281,9 +281,19 @@ export function ModernTemplate({ data, settings }: ModernTemplateProps) {
           {skills.length > 0 && (
             <View style={styles.sidebarSection}>
               <Text style={styles.sidebarTitle}>Skills</Text>
-              {skills.map((skill) => (
-                <Text key={skill.id} style={styles.skillItem}>• {skill.name}</Text>
-              ))}
+              <Text style={styles.skillItem}>
+                {skills.map((skill) => `• ${skill.name}`).join('   ')}
+              </Text>
+            </View>
+          )}
+
+          {/* Languages in sidebar */}
+          {data.languages && data.languages.length > 0 && (
+            <View style={styles.sidebarSection}>
+              <Text style={styles.sidebarTitle}>Languages</Text>
+              <Text style={styles.skillItem}>
+                {data.languages.map((lang) => `• ${lang.name}`).join('   ')}
+              </Text>
             </View>
           )}
 

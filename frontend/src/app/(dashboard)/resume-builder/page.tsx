@@ -43,6 +43,7 @@ function getEmptyResumeData(): ResumeData {
     experience: [],
     education: [],
     skills: [],
+    languages: [],
     certifications: [],
     projects: [],
   }
@@ -122,6 +123,7 @@ export default function ResumeBuilderPage() {
         name: skill.name || '',
         level: skill.level || 'INTERMEDIATE',
       })),
+      languages: [],
       certifications: certifications.map((cert: any) => ({
         id: cert.id,
         name: cert.name || '',

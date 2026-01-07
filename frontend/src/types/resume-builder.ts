@@ -46,6 +46,12 @@ export interface ResumeSkill {
   level?: 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT'
 }
 
+export interface ResumeLanguage {
+  id: string
+  name: string
+  proficiency?: 'BASIC' | 'CONVERSATIONAL' | 'PROFESSIONAL' | 'FLUENT' | 'NATIVE'
+}
+
 export interface ResumeCertification {
   id: string
   name: string
@@ -70,6 +76,7 @@ export interface ResumeData {
   experience: ResumeExperience[]
   education: ResumeEducation[]
   skills: ResumeSkill[]
+  languages: ResumeLanguage[]
   certifications: ResumeCertification[]
   projects: ResumeProject[]
 }
@@ -87,7 +94,7 @@ export const DEFAULT_RESUME_SETTINGS: ResumeSettings = {
   primaryColor: '#2563eb',
   showPhoto: false,
   showSkillLevels: true,
-  sectionsOrder: ['experience', 'education', 'skills', 'certifications', 'projects'],
+  sectionsOrder: ['experience', 'education', 'skills', 'languages', 'certifications', 'projects'],
 }
 
 export const TEMPLATE_OPTIONS: { value: ResumeTemplate; label: string; description: string }[] = [

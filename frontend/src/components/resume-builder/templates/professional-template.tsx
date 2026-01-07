@@ -288,7 +288,17 @@ export function ProfessionalTemplate({ data }: ProfessionalTemplateProps) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Skills</Text>
             <Text style={styles.skillsText}>
-              {skills.map((skill) => skill.name).join(' • ')}
+              {skills.map((skill) => `• ${skill.name}`).join('   ')}
+            </Text>
+          </View>
+        )}
+
+        {/* Languages */}
+        {data.languages && data.languages.length > 0 && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Languages</Text>
+            <Text style={styles.skillsText}>
+              {data.languages.map((lang) => `• ${lang.name}`).join('   ')}
             </Text>
           </View>
         )}

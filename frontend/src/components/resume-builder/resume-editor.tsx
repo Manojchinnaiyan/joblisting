@@ -24,6 +24,7 @@ import type {
   ResumeExperience,
   ResumeEducation,
   ResumeSkill,
+  ResumeLanguage,
   ResumeCertification,
   ResumeProject,
 } from '@/types/resume-builder'
@@ -146,6 +147,34 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
 
   const reorderSkills = (items: ResumeSkill[]) => {
     onDataChange({ ...data, skills: items })
+  }
+
+  // Language handlers
+  const addLanguage = () => {
+    const newLanguage: ResumeLanguage = {
+      id: crypto.randomUUID(),
+      name: '',
+      proficiency: 'PROFESSIONAL',
+    }
+    onDataChange({ ...data, languages: [...(data.languages || []), newLanguage] })
+  }
+
+  const updateLanguage = (id: string, updates: Partial<ResumeLanguage>) => {
+    onDataChange({
+      ...data,
+      languages: (data.languages || []).map((lang) => (lang.id === id ? { ...lang, ...updates } : lang)),
+    })
+  }
+
+  const removeLanguage = (id: string) => {
+    onDataChange({
+      ...data,
+      languages: (data.languages || []).filter((lang) => lang.id !== id),
+    })
+  }
+
+  const reorderLanguages = (items: ResumeLanguage[]) => {
+    onDataChange({ ...data, languages: items })
   }
 
   // Certification handlers
@@ -586,6 +615,59 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
               <Button variant="outline" onClick={addSkill} className="w-full">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Skill
+              </Button>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
+
+      {/* Languages */}
+      <Collapsible open={openSections.includes('languages')} onOpenChange={() => toggleSection('languages')}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <CardTitle className="text-lg">
+                Languages ({(data.languages || []).length})
+              </CardTitle>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4">
+              <SortableList items={data.languages || []} onReorder={reorderLanguages}>
+                {(language) => (
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 pl-8 mb-3 sm:mb-2">
+                    <Input
+                      value={language.name}
+                      onChange={(e) => updateLanguage(language.id, { name: e.target.value })}
+                      placeholder="English"
+                      className="flex-1"
+                    />
+                    <div className="flex items-center gap-2">
+                      <Select
+                        value={language.proficiency}
+                        onValueChange={(value) => updateLanguage(language.id, { proficiency: value as ResumeLanguage['proficiency'] })}
+                      >
+                        <SelectTrigger className="w-full sm:w-[140px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BASIC">Basic</SelectItem>
+                          <SelectItem value="CONVERSATIONAL">Conversational</SelectItem>
+                          <SelectItem value="PROFESSIONAL">Professional</SelectItem>
+                          <SelectItem value="FLUENT">Fluent</SelectItem>
+                          <SelectItem value="NATIVE">Native</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button variant="ghost" size="sm" onClick={() => removeLanguage(language.id)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </SortableList>
+              <Button variant="outline" onClick={addLanguage} className="w-full">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Language
               </Button>
             </CardContent>
           </CollapsibleContent>
