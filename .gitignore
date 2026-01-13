@@ -6,6 +6,7 @@
 *.dylib
 bin/
 tmp/
+backend/main
 
 # Test binary
 *.test
