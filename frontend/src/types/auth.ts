@@ -7,11 +7,13 @@ export interface User {
   status: UserStatus
   email_verified: boolean
   avatar_url?: string
+  auth_provider?: AuthProvider
   created_at: string
 }
 
 export type UserRole = 'JOB_SEEKER' | 'EMPLOYER' | 'ADMIN'
 export type UserStatus = 'ACTIVE' | 'SUSPENDED'
+export type AuthProvider = 'EMAIL' | 'GOOGLE'
 
 export interface AuthTokens {
   access_token: string

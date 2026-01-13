@@ -30,6 +30,11 @@ type CreateProfileRequest struct {
 
 // UpdateProfileRequest contains fields for updating a profile
 type UpdateProfileRequest struct {
+	// User fields (will be updated on User model)
+	FirstName *string `json:"first_name"`
+	LastName  *string `json:"last_name"`
+
+	// Profile fields
 	Headline               *string  `json:"headline"`
 	Bio                    *string  `json:"bio"`
 	City                   *string  `json:"city"`
@@ -37,9 +42,13 @@ type UpdateProfileRequest struct {
 	Country                *string  `json:"country"`
 	Phone                  *string  `json:"phone"`
 	DateOfBirth            *string  `json:"date_of_birth"` // YYYY-MM-DD
+	CurrentTitle           *string  `json:"current_title"`
+	CurrentCompany         *string  `json:"current_company"`
 	LinkedInURL            *string  `json:"linkedin_url"`
 	GitHubURL              *string  `json:"github_url"`
 	PortfolioURL           *string  `json:"portfolio_url"`
+	WebsiteURL             *string  `json:"website_url"`
+	TotalExperienceYears   *float32 `json:"total_experience_years"`
 	PreferredJobTypes      []string `json:"preferred_job_types"`
 	DesiredSalaryMin       *int     `json:"desired_salary_min"`
 	DesiredSalaryMax       *int     `json:"desired_salary_max"`
@@ -65,9 +74,12 @@ type ProfileResponse struct {
 	Country                *string    `json:"country"`
 	Phone                  *string    `json:"phone"`
 	DateOfBirth            *time.Time `json:"date_of_birth"`
+	CurrentTitle           *string    `json:"current_title"`
+	CurrentCompany         *string    `json:"current_company"`
 	LinkedInURL            *string    `json:"linkedin_url"`
 	GitHubURL              *string    `json:"github_url"`
 	PortfolioURL           *string    `json:"portfolio_url"`
+	WebsiteURL             *string    `json:"website_url"`
 	TotalExperienceYears   *float32   `json:"total_experience_years"`
 	PreferredJobTypes      []string   `json:"preferred_job_types"`
 	DesiredSalaryMin       *int       `json:"desired_salary_min"`
@@ -183,17 +195,20 @@ func ToProfileResponse(profile *domain.UserProfile) *ProfileResponse {
 		Country:                profile.Country,
 		Phone:                  profile.Phone,
 		DateOfBirth:            profile.DateOfBirth,
+		CurrentTitle:           profile.CurrentTitle,
+		CurrentCompany:         profile.CurrentCompany,
 		LinkedInURL:            profile.LinkedInURL,
-		GitHubURL:              profile.GithubURL, // Note: GithubURL not GitHubURL in domain
+		GitHubURL:              profile.GithubURL,
 		PortfolioURL:           profile.PortfolioURL,
+		WebsiteURL:             profile.WebsiteURL,
 		TotalExperienceYears:   profile.TotalExperienceYears,
 		PreferredJobTypes:      profile.PreferredJobTypes,
-		DesiredSalaryMin:       profile.ExpectedSalaryMin, // ExpectedSalaryMin not DesiredSalaryMin
-		DesiredSalaryMax:       profile.ExpectedSalaryMax, // ExpectedSalaryMax not DesiredSalaryMax
+		DesiredSalaryMin:       profile.ExpectedSalaryMin,
+		DesiredSalaryMax:       profile.ExpectedSalaryMax,
 		WillingToRelocate:      profile.WillingToRelocate,
-		OpenToRemote:           false, // Not in domain model
+		OpenToRemote:           false,
 		AvailableFrom:          profile.AvailableFrom,
-		PreferredWorkLocations: profile.PreferredWorkplaceTypes, // PreferredWorkplaceTypes not PreferredWorkLocations
+		PreferredWorkLocations: profile.PreferredWorkplaceTypes,
 		CompletenessScore:      profile.CompletenessScore,
 		Visibility:             string(profile.Visibility),
 		ShowEmail:              profile.ShowEmail,

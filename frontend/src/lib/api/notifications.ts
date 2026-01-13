@@ -61,6 +61,7 @@ export interface NotificationsResponse {
   }
 }
 
+/* Notifications API - Commented out
 export const notificationsApi = {
   getNotifications: async (page: number = 1, perPage: number = 20): Promise<NotificationsResponse> => {
     const response = await apiClient.get<ApiResponse<NotificationsResponse>>(
@@ -103,5 +104,73 @@ export const notificationsApi = {
       prefs
     )
     return response.data.data!.preferences
+  },
+}
+*/
+
+// Placeholder API that returns empty data - can be uncommented when backend is ready
+export const notificationsApi = {
+  getNotifications: async (_page: number = 1, _perPage: number = 20): Promise<NotificationsResponse> => {
+    return { notifications: [], pagination: { page: 1, per_page: 20, total: 0, total_pages: 0 } }
+  },
+
+  getUnreadCount: async (): Promise<number> => {
+    return 0
+  },
+
+  markAsRead: async (_id: string): Promise<void> => {},
+
+  markAllAsRead: async (): Promise<void> => {},
+
+  deleteNotification: async (_id: string): Promise<void> => {},
+
+  clearReadNotifications: async (): Promise<void> => {},
+
+  getPreferences: async (): Promise<NotificationPreferences> => {
+    return {
+      user_id: '',
+      email_application_status: false,
+      email_new_application: false,
+      email_new_job: false,
+      email_job_expiring: false,
+      email_profile_viewed: false,
+      email_company_review: false,
+      email_team_invitation: false,
+      email_job_moderation: false,
+      email_company_verification: false,
+      app_application_status: false,
+      app_new_application: false,
+      app_new_job: false,
+      app_job_expiring: false,
+      app_profile_viewed: false,
+      app_company_review: false,
+      app_team_invitation: false,
+      app_job_moderation: false,
+      app_company_verification: false,
+    }
+  },
+
+  updatePreferences: async (_prefs: Partial<NotificationPreferences>): Promise<NotificationPreferences> => {
+    return {
+      user_id: '',
+      email_application_status: false,
+      email_new_application: false,
+      email_new_job: false,
+      email_job_expiring: false,
+      email_profile_viewed: false,
+      email_company_review: false,
+      email_team_invitation: false,
+      email_job_moderation: false,
+      email_company_verification: false,
+      app_application_status: false,
+      app_new_application: false,
+      app_new_job: false,
+      app_job_expiring: false,
+      app_profile_viewed: false,
+      app_company_review: false,
+      app_team_invitation: false,
+      app_job_moderation: false,
+      app_company_verification: false,
+    }
   },
 }

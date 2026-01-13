@@ -10,9 +10,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import type { ResumeSettings, ResumeTemplate } from '@/types/resume-builder'
-import { TEMPLATE_OPTIONS, COLOR_OPTIONS } from '@/types/resume-builder'
+import type { ResumeSettings, ResumeTemplate, ResumeFont } from '@/types/resume-builder'
+import { COLOR_OPTIONS, FONT_OPTIONS } from '@/types/resume-builder'
 import { cn } from '@/lib/utils'
+import { TemplateSelector } from './template-selector'
 
 interface ResumeSettingsPanelProps {
   settings: ResumeSettings
@@ -30,22 +31,32 @@ export function ResumeSettingsPanel({ settings, onSettingsChange }: ResumeSettin
         <CardTitle className="text-base sm:text-lg">Resume Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 sm:space-y-6">
-        {/* Template Selection */}
+        {/* Template Selection with Visual Preview */}
         <div className="space-y-2 sm:space-y-3">
           <Label className="text-sm">Template</Label>
-          <Select
+          <TemplateSelector
             value={settings.template}
-            onValueChange={(value: ResumeTemplate) => updateSettings({ template: value })}
+            onChange={(template: ResumeTemplate) => updateSettings({ template })}
+            primaryColor={settings.primaryColor}
+          />
+        </div>
+
+        {/* Font Selection */}
+        <div className="space-y-2 sm:space-y-3">
+          <Label className="text-sm">Font Family</Label>
+          <Select
+            value={settings.fontFamily}
+            onValueChange={(value: ResumeFont) => updateSettings({ fontFamily: value })}
           >
             <SelectTrigger className="w-full">
-              <SelectValue />
+              <SelectValue placeholder="Select font" />
             </SelectTrigger>
             <SelectContent>
-              {TEMPLATE_OPTIONS.map((template) => (
-                <SelectItem key={template.value} value={template.value}>
-                  <div>
-                    <div className="font-medium text-sm">{template.label}</div>
-                    <div className="text-xs text-muted-foreground">{template.description}</div>
+              {FONT_OPTIONS.map((font) => (
+                <SelectItem key={font.value} value={font.value}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{font.label}</span>
+                    <span className="text-xs text-muted-foreground">{font.description}</span>
                   </div>
                 </SelectItem>
               ))}

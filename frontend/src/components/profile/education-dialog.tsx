@@ -88,6 +88,8 @@ export function EducationDialog({ open, onOpenChange, education }: EducationDial
   const isCurrent = watch('is_current')
 
   useEffect(() => {
+    if (!open) return // Don't reset when closing
+
     if (education) {
       reset({
         institution_name: education.institution_name,
@@ -111,7 +113,7 @@ export function EducationDialog({ open, onOpenChange, education }: EducationDial
         description: '',
       })
     }
-  }, [education, reset])
+  }, [education, reset, open])
 
   useEffect(() => {
     if (isCurrent) {

@@ -208,6 +208,21 @@ func (m *MinioClient) GetSignedURL(bucket, path string, expiry time.Duration) (s
 	return url.String(), nil
 }
 
+// GetObject retrieves a file from MinIO
+func (m *MinioClient) GetObject(bucket, path string) (io.ReadCloser, error) {
+	object, err := m.client.GetObject(
+		context.Background(),
+		bucket,
+		path,
+		minio.GetObjectOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get object: %w", err)
+	}
+
+	return object, nil
+}
+
 // GetFileInfo retrieves file metadata
 func (m *MinioClient) GetFileInfo(bucket, path string) (*FileInfo, error) {
 	info, err := m.client.StatObject(

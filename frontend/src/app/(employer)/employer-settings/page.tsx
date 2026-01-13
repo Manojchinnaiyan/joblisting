@@ -306,6 +306,7 @@ export default function SettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Two-Factor Authentication - Commented out
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="flex items-center gap-3">
               <Smartphone className="h-5 w-5 text-muted-foreground" />
@@ -318,6 +319,7 @@ export default function SettingsPage() {
             </div>
             <Button variant="outline">Enable</Button>
           </div>
+          */}
           <div className="flex items-center justify-between rounded-lg border p-4">
             <div className="flex items-center gap-3">
               <Globe className="h-5 w-5 text-muted-foreground" />

@@ -592,6 +592,75 @@ func (s *AuthService) ChangePassword(userID uuid.UUID, oldPassword, newPassword 
 	return nil
 }
 
+// SetPassword sets a password for users who signed up via OAuth (Google)
+// This allows OAuth users to also login with email/password
+func (s *AuthService) SetPassword(userID uuid.UUID, newPassword string) error {
+	// Validate new password strength
+	if !password.ValidatePasswordStrength(newPassword) {
+		return domain.ErrWeakPassword
+	}
+
+	// Get user
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return domain.ErrUserNotFound
+	}
+
+	// Only allow setting password for OAuth users who don't have a password yet
+	if user.AuthProvider != domain.AuthProviderGoogle {
+		return domain.ErrInvalidCredentials // Use existing error - user should use change password instead
+	}
+
+	// Check if user already has a password set
+	if user.Password != "" {
+		return domain.ErrInvalidCredentials // User should use change password
+	}
+
+	// Hash new password
+	hashedPassword, err := password.HashPassword(newPassword, s.config.BcryptCost)
+	if err != nil {
+		return err
+	}
+
+	// Start transaction
+	tx := s.db.Begin()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Update password
+	userRepoTx := repository.NewUserRepository(tx)
+	if err := userRepoTx.UpdatePassword(userID, hashedPassword); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Add to password history
+	passwordHistory := &domain.PasswordHistory{
+		ID:           uuid.New(),
+		UserID:       userID,
+		PasswordHash: hashedPassword,
+	}
+
+	passwordHistRepoTx := repository.NewPasswordHistoryRepository(tx)
+	if err := passwordHistRepoTx.Create(passwordHistory); err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	// Commit transaction
+	if err := tx.Commit().Error; err != nil {
+		return err
+	}
+
+	// Send confirmation email
+	go s.sendPasswordChangedEmail(user)
+
+	return nil
+}
+
 // Logout logs out user by revoking refresh token
 func (s *AuthService) Logout(refreshToken string) error {
 	return s.tokenService.RevokeRefreshToken(refreshToken)

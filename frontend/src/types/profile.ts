@@ -42,7 +42,7 @@ export interface UserProfile {
   website_url?: string
 
   // Privacy
-  visibility: 'PUBLIC' | 'EMPLOYERS_ONLY' | 'PRIVATE'
+  visibility: 'PUBLIC' | 'PRIVATE'
   show_email: boolean
   show_phone: boolean
 
@@ -93,7 +93,7 @@ export interface UpdateProfileRequest {
   github_url?: string
   portfolio_url?: string
   website_url?: string
-  visibility?: 'PUBLIC' | 'EMPLOYERS_ONLY' | 'PRIVATE'
+  visibility?: 'PUBLIC' | 'PRIVATE'
   show_email?: boolean
   show_phone?: boolean
 }

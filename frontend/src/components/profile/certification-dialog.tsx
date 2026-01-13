@@ -67,6 +67,8 @@ export function CertificationDialog({ open, onOpenChange, certification }: Certi
   const doesNotExpire = watch('does_not_expire')
 
   useEffect(() => {
+    if (!open) return // Don't reset when closing
+
     if (certification) {
       reset({
         name: certification.name,
@@ -88,7 +90,7 @@ export function CertificationDialog({ open, onOpenChange, certification }: Certi
         does_not_expire: false,
       })
     }
-  }, [certification, reset])
+  }, [certification, reset, open])
 
   useEffect(() => {
     if (doesNotExpire) {

@@ -56,9 +56,14 @@ export function SkillDialog({ open, onOpenChange, skill }: SkillDialogProps) {
     setValue,
   } = useForm<SkillFormData>({
     resolver: zodResolver(skillSchema),
+    defaultValues: {
+      level: 'INTERMEDIATE',
+    },
   })
 
   useEffect(() => {
+    if (!open) return // Don't reset when closing
+
     if (skill) {
       reset({
         name: skill.name,
@@ -67,10 +72,10 @@ export function SkillDialog({ open, onOpenChange, skill }: SkillDialogProps) {
     } else {
       reset({
         name: '',
-        level: undefined,
+        level: 'INTERMEDIATE',
       })
     }
-  }, [skill, reset])
+  }, [skill, reset, open])
 
   const onSubmit = async (data: SkillFormData) => {
     try {

@@ -65,7 +65,7 @@ const profileSchema = z.object({
   github_url: z.string().url('Invalid URL').or(z.literal('')).optional(),
   portfolio_url: z.string().url('Invalid URL').or(z.literal('')).optional(),
   website_url: z.string().url('Invalid URL').or(z.literal('')).optional(),
-  visibility: z.enum(['PUBLIC', 'EMPLOYERS_ONLY', 'PRIVATE']),
+  visibility: z.enum(['PUBLIC', 'PRIVATE']),
   show_email: z.boolean(),
   show_phone: z.boolean(),
 })
@@ -120,7 +120,7 @@ export default function EditProfilePage() {
         headline: profile.headline || '',
         bio: profile.bio || '',
         phone: profile.phone || '',
-        date_of_birth: profile.date_of_birth || '',
+        date_of_birth: profile.date_of_birth ? profile.date_of_birth.split('T')[0] : '',
         city: profile.city || '',
         state: profile.state || '',
         country: profile.country || '',
@@ -131,7 +131,7 @@ export default function EditProfilePage() {
         expected_salary_max: profile.expected_salary_max ?? undefined,
         salary_currency: profile.salary_currency || 'USD',
         notice_period: profile.notice_period ?? undefined,
-        available_from: profile.available_from || '',
+        available_from: profile.available_from ? profile.available_from.split('T')[0] : '',
         open_to_opportunities: profile.open_to_opportunities ?? false,
         linkedin_url: profile.linkedin_url || '',
         github_url: profile.github_url || '',
@@ -181,6 +181,13 @@ export default function EditProfilePage() {
   })
 
   const onSubmit = async (data: ProfileFormValues) => {
+    // Upload avatar first if a new one is selected
+    if (avatarFile) {
+      await uploadAvatar.mutateAsync(avatarFile)
+      setAvatarFile(null)
+      setAvatarPreview(null)
+    }
+
     await updateProfile.mutateAsync(data)
     router.push('/profile')
   }
@@ -552,7 +559,6 @@ export default function EditProfilePage() {
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="PUBLIC">Public</SelectItem>
-                        <SelectItem value="EMPLOYERS_ONLY">Employers Only</SelectItem>
                         <SelectItem value="PRIVATE">Private</SelectItem>
                       </SelectContent>
                     </Select>
@@ -623,17 +629,17 @@ export default function EditProfilePage() {
       </Form>
 
       {/* Sticky Footer */}
-      <div className="fixed bottom-16 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bottom-0 lg:left-64">
+      <div className="fixed bottom-16 left-0 right-0 z-[60] border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 lg:bottom-0 lg:left-64">
         <div className="w-full max-w-7xl mx-auto px-6 py-4 flex justify-end gap-4">
           <Button type="button" variant="outline" onClick={handleCancel}>
             Cancel
           </Button>
           <Button
-            type="submit"
-            disabled={updateProfile.isPending}
+            type="button"
+            disabled={updateProfile.isPending || uploadAvatar.isPending}
             onClick={form.handleSubmit(onSubmit)}
           >
-            {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
+            {uploadAvatar.isPending ? 'Uploading Photo...' : updateProfile.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </div>
       </div>

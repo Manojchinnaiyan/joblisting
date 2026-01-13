@@ -127,6 +127,7 @@ export default function AdminProfilePage() {
               </div>
             </div>
 
+            {/* Two-Factor Auth Section - Commented out
             <Separator className="my-6" />
 
             <div className="space-y-3">
@@ -155,6 +156,18 @@ export default function AdminProfilePage() {
                   {currentUser?.two_factor_enabled ? 'Manage 2FA' : 'Enable 2FA'}
                 </Link>
               </Button>
+              <Button variant="outline" className="w-full" asChild>
+                <Link href="/admin/profile/password">
+                  <Key className="mr-2 h-4 w-4" />
+                  Change Password
+                </Link>
+              </Button>
+            </div>
+            */}
+
+            <Separator className="my-6" />
+
+            <div className="space-y-2">
               <Button variant="outline" className="w-full" asChild>
                 <Link href="/admin/profile/password">
                   <Key className="mr-2 h-4 w-4" />

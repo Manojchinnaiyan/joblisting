@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Menu, Briefcase, Building2, Info, Home, BookOpen, Users, Search, GraduationCap, UserCheck } from 'lucide-react'
+import { Menu, Briefcase, Building2, Info, Home, BookOpen, Users, Search, GraduationCap, UserCheck, FileText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { VisuallyHidden } from '@/components/ui/visually-hidden'
@@ -18,6 +18,7 @@ const navItems = [
   { href: ROUTES.FRESHER_JOBS, label: 'Fresher Jobs', icon: GraduationCap },
   { href: ROUTES.INTERNSHIPS, label: 'Internships', icon: UserCheck },
   { href: ROUTES.COMPANIES, label: 'Companies', icon: Building2 },
+  { href: ROUTES.RESUME_TEMPLATES, label: 'Resume Builder', icon: FileText },
   { href: '/blogs', label: 'Blog', icon: BookOpen },
   { href: ROUTES.ABOUT, label: 'About', icon: Info },
 ]

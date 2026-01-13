@@ -79,18 +79,23 @@ export function ExperienceDialog({ open, onOpenChange, experience }: ExperienceD
     resolver: zodResolver(experienceSchema),
     defaultValues: {
       is_current: false,
+      is_remote: false,
+      employment_type: 'FULL_TIME',
     },
   })
 
   const isCurrent = watch('is_current')
 
   useEffect(() => {
+    if (!open) return // Don't reset when closing
+
     if (experience) {
       reset({
         title: experience.title,
         company_name: experience.company_name,
         location: experience.location || '',
         employment_type: experience.employment_type,
+        is_remote: experience.is_remote ?? false,
         start_date: experience.start_date.split('T')[0],
         end_date: experience.end_date ? experience.end_date.split('T')[0] : '',
         is_current: experience.is_current,
@@ -101,14 +106,15 @@ export function ExperienceDialog({ open, onOpenChange, experience }: ExperienceD
         title: '',
         company_name: '',
         location: '',
-        employment_type: undefined,
+        employment_type: 'FULL_TIME',
+        is_remote: false,
         start_date: '',
         end_date: '',
         is_current: false,
         description: '',
       })
     }
-  }, [experience, reset])
+  }, [experience, reset, open])
 
   useEffect(() => {
     if (isCurrent) {

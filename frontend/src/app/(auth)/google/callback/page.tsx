@@ -80,6 +80,14 @@ function GoogleCallbackContent() {
         return
       }
 
+      // Check for post-login redirect (e.g., from resume template selection)
+      const postLoginRedirect = localStorage.getItem('post-login-redirect')
+      if (postLoginRedirect && role === 'JOB_SEEKER') {
+        localStorage.removeItem('post-login-redirect')
+        router.push(postLoginRedirect)
+        return
+      }
+
       // Redirect based on role
       if (role === 'EMPLOYER') {
         // Redirect to company setup - the employer layout will check if company exists

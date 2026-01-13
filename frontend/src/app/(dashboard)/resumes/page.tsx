@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileText, Download, Star, Trash2, CheckCircle } from 'lucide-react'
+import { Upload, FileText, Download, Star, Trash2, CheckCircle, Edit, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useResumes, useUploadResume, useSetPrimaryResume, useDeleteResume } from '@/hooks/use-resumes'
@@ -10,14 +10,18 @@ import { format } from 'date-fns'
 import type { Resume } from '@/types/resume'
 import { resumesApi } from '@/lib/api/resumes'
 import { toast } from 'sonner'
+import { useRouter } from 'next/navigation'
+import { parseResumeFile } from '@/lib/resume-parser'
 
 export default function ResumesPage() {
+  const router = useRouter()
   const { data: resumes = [], isLoading } = useResumes()
   const uploadResume = useUploadResume()
   const setPrimaryResume = useSetPrimaryResume()
   const deleteResume = useDeleteResume()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -88,6 +92,41 @@ export default function ResumesPage() {
       URL.revokeObjectURL(blobUrl)
     } catch (error) {
       toast.error('Failed to download resume')
+    }
+  }
+
+  const handleEditInBuilder = async (resume: Resume) => {
+    // Only PDF files can be parsed
+    if (!resume.file_name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF resumes can be edited in the builder. Please download and re-upload as PDF.')
+      return
+    }
+
+    setEditingId(resume.id)
+    try {
+      // Fetch the resume file
+      const downloadUrl = await resumesApi.getResumeDownloadUrl(resume.id)
+      const response = await fetch(downloadUrl)
+      if (!response.ok) throw new Error('Failed to fetch resume')
+
+      const blob = await response.blob()
+      const file = new File([blob], resume.file_name, { type: 'application/pdf' })
+
+      // Parse the resume
+      const parsedData = await parseResumeFile(file)
+
+      // Store in localStorage
+      localStorage.setItem('resume-builder-data', JSON.stringify(parsedData))
+
+      toast.success('Resume loaded! Redirecting to builder...')
+
+      // Redirect to resume builder
+      router.push('/resume-builder')
+    } catch (error) {
+      console.error('Failed to parse resume:', error)
+      toast.error('Failed to parse resume. Please try uploading manually in the Resume Builder.')
+    } finally {
+      setEditingId(null)
     }
   }
 
@@ -193,6 +232,21 @@ export default function ResumesPage() {
                       >
                         <Star className="mr-1.5 h-4 w-4" />
                         Set Primary
+                      </Button>
+                    )}
+                    {resume.file_name.toLowerCase().endsWith('.pdf') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditInBuilder(resume)}
+                        disabled={editingId === resume.id}
+                      >
+                        {editingId === resume.id ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Edit className="mr-1.5 h-4 w-4" />
+                        )}
+                        {editingId === resume.id ? 'Loading...' : 'Edit'}
                       </Button>
                     )}
                     <Button

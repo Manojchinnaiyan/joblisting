@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"fmt"
 
 	"job-platform/internal/cache"
 	"job-platform/internal/domain"
@@ -54,6 +55,12 @@ type LoginRequest struct {
 type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password" binding:"required"`
 	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
+// SetPasswordRequest represents set password request (for OAuth users)
+type SetPasswordRequest struct {
+	NewPassword     string `json:"new_password" binding:"required,min=8"`
+	ConfirmPassword string `json:"confirm_password" binding:"required,min=8"`
 }
 
 // ResetPasswordRequest represents reset password request
@@ -419,4 +426,39 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	}
 
 	response.OK(c, "Password changed successfully", nil)
+}
+
+// SetPassword handles setting password for OAuth users (who don't have a password yet)
+func (h *AuthHandler) SetPassword(c *gin.Context) {
+	var req SetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, err)
+		return
+	}
+
+	// Validate passwords match
+	if req.NewPassword != req.ConfirmPassword {
+		response.BadRequest(c, fmt.Errorf("passwords do not match"))
+		return
+	}
+
+	userID, err := middleware.GetUserIDFromContext(c)
+	if err != nil {
+		response.Unauthorized(c, err)
+		return
+	}
+
+	if err := h.authService.SetPassword(userID, req.NewPassword); err != nil {
+		switch err {
+		case domain.ErrInvalidCredentials:
+			response.BadRequest(c, fmt.Errorf("cannot set password - you may already have one or did not sign up with Google"))
+		case domain.ErrWeakPassword:
+			response.BadRequest(c, err)
+		default:
+			response.InternalError(c, err)
+		}
+		return
+	}
+
+	response.OK(c, "Password set successfully. You can now login with your email and password.", nil)
 }

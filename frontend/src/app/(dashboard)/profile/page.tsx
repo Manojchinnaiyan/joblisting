@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Edit, MapPin, Briefcase, Mail, Phone, Calendar } from 'lucide-react'
+import { Edit, MapPin, Briefcase, Mail, Phone, Calendar, Award, FolderOpen, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -10,6 +10,8 @@ import { useProfile } from '@/hooks/use-profile'
 import { useExperiences } from '@/hooks/use-experience'
 import { useEducation } from '@/hooks/use-education'
 import { useSkills } from '@/hooks/use-skills'
+import { useCertifications } from '@/hooks/use-certifications'
+import { usePortfolio } from '@/hooks/use-portfolio'
 import { format } from 'date-fns'
 
 export default function ProfilePage() {
@@ -17,6 +19,8 @@ export default function ProfilePage() {
   const { data: experiences = [] } = useExperiences()
   const { data: education = [] } = useEducation()
   const { data: skills = [] } = useSkills()
+  const { data: certifications = [] } = useCertifications()
+  const { data: portfolio = [] } = usePortfolio()
 
   if (profileLoading) {
     return (
@@ -247,6 +251,149 @@ export default function ProfilePage() {
                   {skill.name}
                 </Badge>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Certifications */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Certifications</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/profile/certifications">Manage</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {certifications.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No certifications added yet
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {certifications.slice(0, 3).map((cert) => (
+                <div key={cert.id} className="flex gap-4">
+                  <div className="mt-1">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Award className="h-5 w-5 text-primary" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-semibold">{cert.name}</h4>
+                    <p className="text-sm text-muted-foreground">
+                      {cert.issuing_organization}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Issued {format(new Date(cert.issue_date), 'MMM yyyy')}
+                      {cert.no_expiry
+                        ? ' · No Expiration'
+                        : cert.expiry_date
+                        ? ` · Expires ${format(new Date(cert.expiry_date), 'MMM yyyy')}`
+                        : ''}
+                    </p>
+                    {cert.credential_url && (
+                      <a
+                        href={cert.credential_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline mt-1 inline-flex items-center gap-1"
+                      >
+                        View Credential <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {certifications.length > 3 && (
+                <Button variant="ghost" size="sm" asChild className="w-full">
+                  <Link href="/profile/certifications">
+                    View all {certifications.length} certifications
+                  </Link>
+                </Button>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Portfolio */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Portfolio</CardTitle>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/profile/portfolio">Manage</Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {portfolio.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-8">
+              No projects added yet
+            </p>
+          ) : (
+            <div className="space-y-6">
+              {portfolio.slice(0, 3).map((project) => (
+                <div key={project.id} className="flex gap-4">
+                  <div className="mt-1">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <FolderOpen className="h-5 w-5 text-primary" />
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold">{project.title}</h4>
+                      {project.is_featured && (
+                        <Badge variant="secondary" className="text-xs">Featured</Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground line-clamp-2">
+                      {project.description}
+                    </p>
+                    {project.technologies.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {project.technologies.slice(0, 4).map((tech) => (
+                          <Badge key={tech} variant="outline" className="text-xs">
+                            {tech}
+                          </Badge>
+                        ))}
+                        {project.technologies.length > 4 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{project.technologies.length - 4}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex gap-3 mt-2">
+                      {project.project_url && (
+                        <a
+                          href={project.project_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          Live Demo <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                      {project.source_code_url && (
+                        <a
+                          href={project.source_code_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+                        >
+                          Source Code <ExternalLink className="h-3 w-3" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {portfolio.length > 3 && (
+                <Button variant="ghost" size="sm" asChild className="w-full">
+                  <Link href="/profile/portfolio">
+                    View all {portfolio.length} projects
+                  </Link>
+                </Button>
+              )}
             </div>
           )}
         </CardContent>

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import Link from 'next/link'
-import { FileText, Trash2, Columns, Rows, ChevronRight, Save, Loader2, ExternalLink } from 'lucide-react'
+import { useSearchParams } from 'next/navigation'
+import { FileText, Trash2, Columns, Rows, ChevronRight, Save, Loader2, ExternalLink, Target } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from 'sonner'
@@ -10,8 +11,9 @@ import { cn } from '@/lib/utils'
 import { ResumeEditor } from '@/components/resume-builder/resume-editor'
 import { ResumeSettingsPanel } from '@/components/resume-builder/resume-settings-panel'
 import { ResumePreview } from '@/components/resume-builder/resume-preview'
-import type { ResumeData, ResumeSettings } from '@/types/resume-builder'
-import { DEFAULT_RESUME_SETTINGS } from '@/types/resume-builder'
+import { ResizablePanel } from '@/components/ui/resizable-panel'
+import type { ResumeData, ResumeSettings, ResumeTemplate } from '@/types/resume-builder'
+import { DEFAULT_RESUME_SETTINGS, TEMPLATE_OPTIONS } from '@/types/resume-builder'
 import { useProfile } from '@/hooks/use-profile'
 import { useExperiences } from '@/hooks/use-experience'
 import { useEducation } from '@/hooks/use-education'
@@ -21,6 +23,7 @@ import { usePortfolio } from '@/hooks/use-portfolio'
 import { useUploadResume } from '@/hooks/use-resumes'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
+import { ATSScoreDialog } from '@/components/resume-builder/ats-score-dialog'
 
 const STORAGE_KEY = 'resume-builder-data'
 const SETTINGS_KEY = 'resume-builder-settings'
@@ -49,7 +52,8 @@ function getEmptyResumeData(): ResumeData {
   }
 }
 
-export default function ResumeBuilderPage() {
+function ResumeBuilderContent() {
+  const searchParams = useSearchParams()
   const [resumeData, setResumeData] = useState<ResumeData>(getEmptyResumeData())
   const [previewData, setPreviewData] = useState<ResumeData>(getEmptyResumeData())
   const [settings, setSettings] = useState<ResumeSettings>(DEFAULT_RESUME_SETTINGS)
@@ -61,7 +65,9 @@ export default function ResumeBuilderPage() {
   const [hasUnsyncedChanges, setHasUnsyncedChanges] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [showATSScore, setShowATSScore] = useState(false)
   const autoImportAttempted = useRef(false)
+  const templateFromUrlApplied = useRef(false)
 
   // Resume upload mutation
   const uploadResume = useUploadResume()
@@ -181,6 +187,26 @@ export default function ResumeBuilderPage() {
     setIsHydrated(true)
   }, [])
 
+  // Apply template from URL query parameter (e.g., ?template=modern)
+  useEffect(() => {
+    if (!isHydrated || templateFromUrlApplied.current) return
+
+    const templateParam = searchParams.get('template')
+    if (templateParam) {
+      // Validate that the template exists
+      const validTemplate = TEMPLATE_OPTIONS.find(t => t.value === templateParam)
+      if (validTemplate) {
+        templateFromUrlApplied.current = true
+        const newSettings = { ...settings, template: validTemplate.value as ResumeTemplate }
+        setSettings(newSettings)
+        setPreviewSettings(newSettings)
+        // Save to localStorage so it persists
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings))
+        toast.success(`${validTemplate.label} template applied!`)
+      }
+    }
+  }, [isHydrated, searchParams, settings])
+
   // Auto-import from profile when data loads (only if no saved data exists)
   useEffect(() => {
     if (
@@ -209,29 +235,25 @@ export default function ResumeBuilderPage() {
   }, [isHydrated, allDataLoaded, hasAutoImported, profile, experiences, educationList, skills, buildResumeDataFromProfile])
 
   // Track when editor data changes (mark as unsynced)
-  // Use refs to track last synced version
+  // Settings (template, font, color) auto-sync, so only track data changes
   const lastSyncedDataRef = useRef<string>(JSON.stringify(resumeData))
-  const lastSyncedSettingsRef = useRef<string>(JSON.stringify(settings))
 
   useEffect(() => {
     if (isHydrated) {
       const currentData = JSON.stringify(resumeData)
-      const currentSettings = JSON.stringify(settings)
 
-      // Only update if different from last synced version
-      if (currentData !== lastSyncedDataRef.current || currentSettings !== lastSyncedSettingsRef.current) {
+      // Only track data changes - settings auto-sync to preview
+      if (currentData !== lastSyncedDataRef.current) {
         setHasUnsyncedChanges(true)
       }
     }
-  }, [resumeData, settings, isHydrated])
+  }, [resumeData, isHydrated])
 
-  // Sync preview with editor data
+  // Sync preview with editor data (for content changes like experience, education, etc.)
   const syncPreview = () => {
     setPreviewData({ ...resumeData })
-    setPreviewSettings({ ...settings })
-    // Update refs to track what was synced
+    // Update ref to track what was synced
     lastSyncedDataRef.current = JSON.stringify(resumeData)
-    lastSyncedSettingsRef.current = JSON.stringify(settings)
     setHasUnsyncedChanges(false)
     toast.success('Preview updated!')
   }
@@ -242,11 +264,9 @@ export default function ResumeBuilderPage() {
     setUseSideBySide(newLayout)
     localStorage.setItem(LAYOUT_KEY, newLayout ? 'side-by-side' : 'tabs')
     if (newLayout) {
-      // When switching to side-by-side, sync immediately
+      // When switching to side-by-side, sync data immediately
       setPreviewData({ ...resumeData })
-      setPreviewSettings({ ...settings })
       lastSyncedDataRef.current = JSON.stringify(resumeData)
-      lastSyncedSettingsRef.current = JSON.stringify(settings)
       setHasUnsyncedChanges(false)
     }
   }
@@ -261,6 +281,9 @@ export default function ResumeBuilderPage() {
   useEffect(() => {
     if (isHydrated) {
       localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings))
+      // Auto-sync preview settings when template/font/color changes
+      // This makes template changes instant in the preview
+      setPreviewSettings({ ...settings })
     }
   }, [settings, isHydrated])
 
@@ -350,6 +373,16 @@ export default function ResumeBuilderPage() {
         {hasResumeData && (
           <div className="flex flex-wrap gap-2">
             <Button
+              onClick={() => setShowATSScore(true)}
+              variant="outline"
+              size="sm"
+              className="flex-1 sm:flex-none"
+            >
+              <Target className="mr-2 h-4 w-4" />
+              <span className="hidden xs:inline">Check ATS Score</span>
+              <span className="xs:hidden">ATS</span>
+            </Button>
+            <Button
               onClick={saveToMyResumes}
               disabled={isSaving}
               size="sm"
@@ -402,25 +435,6 @@ export default function ResumeBuilderPage() {
         </div>
       )}
 
-      {/* ATS Tips */}
-      <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 sm:p-4">
-        <div className="flex items-start gap-2 sm:gap-3">
-          <FileText className="h-5 w-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
-          <div className="min-w-0">
-            <p className="font-medium text-green-900 dark:text-green-100 text-sm sm:text-base">ATS-Optimized Templates</p>
-            <p className="text-xs sm:text-sm text-green-700 dark:text-green-300 mt-1">
-              Our templates are designed for Applicant Tracking Systems. For best results:
-            </p>
-            <ul className="text-xs sm:text-sm text-green-700 dark:text-green-300 mt-2 list-disc list-inside space-y-1">
-              <li>Use Professional or Minimal template for ATS compatibility</li>
-              <li>Add bullet points with metrics (e.g., &quot;Increased sales by 25%&quot;)</li>
-              <li>Include keywords from the job description</li>
-              <li>Keep formatting simple</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
       {/* Saved Resumes Link */}
       {hasResumeData && (
         <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-3 sm:p-4">
@@ -470,50 +484,39 @@ export default function ResumeBuilderPage() {
 
       {/* Side-by-Side Layout (Desktop only when enabled) */}
       {useSideBySide && (
-        <div className="hidden lg:grid lg:grid-cols-[1fr,auto,1fr] xl:grid-cols-[55%,auto,45%] gap-2 h-[calc(100vh-280px)] min-h-[600px]">
-          {/* Left Panel - Editor & Settings */}
-          <div className="flex flex-col min-w-0 overflow-hidden bg-background rounded-lg border">
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              <ResumeSettingsPanel settings={settings} onSettingsChange={setSettings} />
-              <ResumeEditor data={resumeData} onDataChange={setResumeData} />
-            </div>
-          </div>
-
-          {/* Center - Sync Button */}
-          <div className="flex flex-col items-center justify-center px-1">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={hasUnsyncedChanges ? 'default' : 'outline'}
-                    size="icon"
-                    onClick={syncPreview}
-                    className={cn(
-                      'h-10 w-10 rounded-full transition-all',
-                      hasUnsyncedChanges && 'animate-pulse shadow-lg'
-                    )}
-                  >
-                    <ChevronRight className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right">
-                  {hasUnsyncedChanges ? 'Apply changes to preview' : 'Preview is up to date'}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            {hasUnsyncedChanges && (
-              <p className="text-[10px] text-muted-foreground mt-1 text-center leading-tight">
-                Sync
-              </p>
-            )}
-          </div>
-
-          {/* Right Panel - Preview */}
-          <div className="flex flex-col min-w-0 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              <ResumePreview data={previewData} settings={previewSettings} />
-            </div>
-          </div>
+        <div className="hidden lg:block h-[calc(100vh-280px)] min-h-[600px] border rounded-lg overflow-hidden">
+          <ResizablePanel
+            storageKey="resume-builder-panel-width"
+            defaultLeftWidth={55}
+            minLeftWidth={35}
+            maxLeftWidth={70}
+            leftPanel={
+              <div className="h-full flex flex-col bg-background">
+                {/* Sync Button at top of left panel */}
+                {hasUnsyncedChanges && (
+                  <div className="shrink-0 border-b p-3 bg-muted/30">
+                    <Button
+                      onClick={syncPreview}
+                      className="w-full"
+                      size="sm"
+                    >
+                      <ChevronRight className="mr-2 h-4 w-4" />
+                      Apply Changes to Preview
+                    </Button>
+                  </div>
+                )}
+                <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                  <ResumeSettingsPanel settings={settings} onSettingsChange={setSettings} />
+                  <ResumeEditor data={resumeData} onDataChange={setResumeData} />
+                </div>
+              </div>
+            }
+            rightPanel={
+              <div className="h-full overflow-y-auto bg-muted/30 p-4">
+                <ResumePreview data={previewData} settings={previewSettings} />
+              </div>
+            }
+          />
         </div>
       )}
 
@@ -524,9 +527,7 @@ export default function ResumeBuilderPage() {
           // Sync preview data when switching to preview tab
           if (value === 'preview') {
             setPreviewData({ ...resumeData })
-            setPreviewSettings({ ...settings })
             lastSyncedDataRef.current = JSON.stringify(resumeData)
-            lastSyncedSettingsRef.current = JSON.stringify(settings)
             setHasUnsyncedChanges(false)
           }
         }} className="space-y-6">
@@ -570,6 +571,26 @@ export default function ResumeBuilderPage() {
         confirmText="Clear Data"
         onConfirm={clearResumeData}
       />
+
+      {/* ATS Score Dialog */}
+      <ATSScoreDialog
+        open={showATSScore}
+        onOpenChange={setShowATSScore}
+        data={resumeData}
+      />
     </div>
+  )
+}
+
+export default function ResumeBuilderPage() {
+  return (
+    <Suspense fallback={
+      <div className="space-y-6">
+        <div className="h-12 bg-muted animate-pulse rounded-lg" />
+        <div className="h-96 bg-muted animate-pulse rounded-lg" />
+      </div>
+    }>
+      <ResumeBuilderContent />
+    </Suspense>
   )
 }

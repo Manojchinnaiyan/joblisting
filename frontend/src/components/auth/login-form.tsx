@@ -82,6 +82,14 @@ export function LoginForm() {
       login(response.user, response.tokens)
       toast.success('Logged in successfully')
 
+      // Check for post-login redirect (e.g., from resume template selection)
+      const postLoginRedirect = localStorage.getItem('post-login-redirect')
+      if (postLoginRedirect && response.user.role === 'JOB_SEEKER') {
+        localStorage.removeItem('post-login-redirect')
+        router.push(postLoginRedirect)
+        return
+      }
+
       // Redirect based on user role
       if (response.user.role === 'EMPLOYER') {
         router.push(ROUTES.EMPLOYER)

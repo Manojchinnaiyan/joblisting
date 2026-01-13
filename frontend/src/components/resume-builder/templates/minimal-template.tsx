@@ -15,21 +15,21 @@ const styles = StyleSheet.create({
     lineHeight: 1.15,
   },
   header: {
-    marginBottom: 10,
+    marginBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#000000',
-    paddingBottom: 8,
+    paddingBottom: 10,
   },
   name: {
     fontSize: 16,
     fontFamily: 'Helvetica-Bold',
     color: '#000000',
-    marginBottom: 2,
+    marginBottom: 6,
   },
   headline: {
     fontSize: 10,
     color: '#333333',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   contactLine: {
     fontSize: 9,
@@ -48,28 +48,28 @@ const styles = StyleSheet.create({
     textDecoration: 'underline',
   },
   section: {
-    marginBottom: 8,
+    marginBottom: 10,
     width: '100%',
   },
   sectionTitle: {
     fontSize: 10,
     fontFamily: 'Helvetica-Bold',
     color: '#000000',
-    marginBottom: 4,
-    paddingBottom: 1,
+    marginBottom: 6,
+    paddingBottom: 2,
     borderBottomWidth: 0.5,
     borderBottomColor: '#666666',
     textTransform: 'uppercase',
   },
   // Experience
   experienceItem: {
-    marginBottom: 6,
+    marginBottom: 8,
     width: '100%',
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 1,
+    marginBottom: 2,
     width: '100%',
   },
   jobTitle: {
@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     flex: 1,
     flexWrap: 'wrap',
-    paddingRight: 8,
+    paddingRight: 10,
   },
   dates: {
     fontSize: 9,

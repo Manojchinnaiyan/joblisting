@@ -101,12 +101,14 @@ export default function SecurityPage() {
           icon={XCircle}
           description="Failed attempts"
         />
+        {/* 2FA Stats - Commented out
         <StatsCard
           title="2FA Enabled"
           value={`${stats.twoFactorEnabled}%`}
           icon={Shield}
           description="Users with 2FA"
         />
+        */}
       </div>
 
       {/* Alerts */}
@@ -197,6 +199,7 @@ export default function SecurityPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
+              {/* 2FA Adoption - Commented out
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-muted-foreground">2FA Adoption</span>
@@ -209,6 +212,7 @@ export default function SecurityPage() {
                   />
                 </div>
               </div>
+              */}
 
               <div>
                 <div className="flex items-center justify-between mb-2">

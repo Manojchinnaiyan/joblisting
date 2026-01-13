@@ -39,6 +39,23 @@ func (s *UserService) Update(user *domain.User) error {
 	return s.userRepo.Update(user)
 }
 
+// UpdateUserName updates user's first name and/or last name
+func (s *UserService) UpdateUserName(userID uuid.UUID, firstName, lastName *string) error {
+	user, err := s.userRepo.GetByID(userID)
+	if err != nil {
+		return err
+	}
+
+	if firstName != nil {
+		user.FirstName = *firstName
+	}
+	if lastName != nil {
+		user.LastName = *lastName
+	}
+
+	return s.userRepo.Update(user)
+}
+
 // Delete soft deletes a user
 func (s *UserService) Delete(id uuid.UUID) error {
 	return s.userRepo.Delete(id)

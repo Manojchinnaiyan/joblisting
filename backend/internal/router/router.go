@@ -278,10 +278,16 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	emailRateLimitMiddleware := middleware.EmailRateLimitMiddleware(redis)
 	generalRateLimitMiddleware := middleware.RateLimitMiddleware(redis, 100, 1*time.Minute)
 
+	// Storage handler for serving files from MinIO
+	storageHandler := handler.NewStorageHandler(minioClient)
+
 	// Health routes (no prefix)
 	r.GET("/health", healthHandler.Check)
 	r.GET("/health/ready", healthHandler.Readiness)
 	r.GET("/health/live", healthHandler.Liveness)
+
+	// Storage routes - serve files from MinIO (avatars, resumes, etc.)
+	r.GET("/storage/:bucket/*path", storageHandler.ServeFile)
 
 	// API v1 routes
 	v1 := r.Group("/api/v1")
@@ -331,6 +337,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			// User Info & Profile
 			authProtected.GET("/me", authHandler.GetMe)
 			authProtected.POST("/change-password", authHandler.ChangePassword)
+			authProtected.POST("/set-password", authHandler.SetPassword) // For OAuth users to set a password
 			authProtected.POST("/logout", authHandler.Logout)
 
 			// Session Management

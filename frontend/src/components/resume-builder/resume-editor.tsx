@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { cn } from '@/lib/utils'
 import { Checkbox } from '@/components/ui/checkbox'
 import {
   Select,
@@ -247,8 +248,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Personal Information
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('personal') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -355,8 +360,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Work Experience ({data.experience.length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('experience') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -472,8 +481,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Education ({data.education.length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('education') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -574,8 +587,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Skills ({data.skills.length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('skills') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -626,8 +643,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Languages ({(data.languages || []).length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('languages') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -679,8 +700,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Certifications ({data.certifications.length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('certifications') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>
@@ -751,8 +776,12 @@ export function ResumeEditor({ data, onDataChange }: ResumeEditorProps) {
         <Card>
           <CollapsibleTrigger asChild>
             <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <CardTitle className="text-lg">
+              <CardTitle className="text-lg flex items-center justify-between">
                 Projects ({data.projects.length})
+                <ChevronDown className={cn(
+                  "h-5 w-5 text-muted-foreground transition-transform duration-200",
+                  openSections.includes('projects') && "rotate-180"
+                )} />
               </CardTitle>
             </CardHeader>
           </CollapsibleTrigger>

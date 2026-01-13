@@ -157,6 +157,14 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 		return
 	}
 
+	// Update user fields (first_name, last_name) if provided
+	if req.FirstName != nil || req.LastName != nil {
+		if err := h.userService.UpdateUserName(userID, req.FirstName, req.LastName); err != nil {
+			response.Error(c, http.StatusBadRequest, err, nil)
+			return
+		}
+	}
+
 	input := service.UpdateProfileInput{
 		Headline:                req.Headline,
 		Bio:                     req.Bio,
@@ -165,9 +173,13 @@ func (h *ProfileHandler) UpdateProfile(c *gin.Context) {
 		Country:                 req.Country,
 		Phone:                   req.Phone,
 		DateOfBirth:             req.DateOfBirth,
+		CurrentTitle:            req.CurrentTitle,
+		CurrentCompany:          req.CurrentCompany,
 		LinkedInURL:             req.LinkedInURL,
 		GithubURL:               req.GitHubURL,
 		PortfolioURL:            req.PortfolioURL,
+		WebsiteURL:              req.WebsiteURL,
+		TotalExperienceYears:    req.TotalExperienceYears,
 		PreferredJobTypes:       req.PreferredJobTypes,
 		ExpectedSalaryMin:       req.DesiredSalaryMin,
 		ExpectedSalaryMax:       req.DesiredSalaryMax,
@@ -346,7 +358,8 @@ func (h *ProfileHandler) UploadAvatar(c *gin.Context) {
 
 	// Generate unique filename
 	filename := fmt.Sprintf("%s%s", uuid.New().String(), ext)
-	avatarPath := fmt.Sprintf("avatars/%s/%s", userID.String(), filename)
+	// Path should not include bucket name since bucket is passed separately
+	avatarPath := fmt.Sprintf("%s/%s", userID.String(), filename)
 
 	// Upload to MinIO
 	result, err := h.storage.UploadFile(h.storage.GetConfig().BucketAvatars, file, avatarPath)

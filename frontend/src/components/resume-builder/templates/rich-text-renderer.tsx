@@ -116,13 +116,14 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   bold: {
-    fontFamily: 'Helvetica-Bold',
+    fontWeight: 700,
   },
   italic: {
-    fontFamily: 'Helvetica-Oblique',
+    fontStyle: 'italic',
   },
   boldItalic: {
-    fontFamily: 'Helvetica-BoldOblique',
+    fontWeight: 700,
+    fontStyle: 'italic',
   },
 })
 

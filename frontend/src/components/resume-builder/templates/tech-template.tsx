@@ -399,7 +399,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {personalInfo.summary && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>About</Text>
             </View>
             <RichTextRenderer text={personalInfo.summary} style={styles.summaryText} />
@@ -410,7 +410,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {experience.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>Experience</Text>
             </View>
             {experience.map((exp) => (
@@ -446,7 +446,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {projects.length > 0 && (
           <View style={styles.projectsSection}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>Projects</Text>
             </View>
             {projects.map((project, index) => (
@@ -454,7 +454,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
                 key={project.id}
                 style={[
                   styles.projectItem,
-                  index === projects.length - 1 && styles.projectItemLast,
+                  ...(index === projects.length - 1 ? [styles.projectItemLast] : []),
                 ]}
               >
                 <View style={styles.projectHeader}>
@@ -487,7 +487,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {education.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>Education</Text>
             </View>
             {education.map((edu) => (
@@ -507,7 +507,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {languages && languages.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>Languages</Text>
             </View>
             <View style={styles.languagesGrid}>
@@ -529,7 +529,7 @@ export function TechTemplate({ data, settings }: TechTemplateProps) {
         {certifications.length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Text style={styles.sectionIcon}>//</Text>
+              <Text style={styles.sectionIcon}>{'// '}</Text>
               <Text style={styles.sectionTitle}>Certifications</Text>
             </View>
             <View style={styles.certGrid}>

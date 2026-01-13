@@ -57,6 +57,8 @@ export function PortfolioDialog({ open, onOpenChange, project }: PortfolioDialog
   })
 
   useEffect(() => {
+    if (!open) return // Don't reset when closing
+
     if (project) {
       reset({
         title: project.title,
@@ -75,8 +77,9 @@ export function PortfolioDialog({ open, onOpenChange, project }: PortfolioDialog
         is_featured: false,
       })
       setTechnologies([])
+      setTechInput('')
     }
-  }, [project, reset])
+  }, [project, reset, open])
 
   const addTechnology = () => {
     const tech = techInput.trim()
