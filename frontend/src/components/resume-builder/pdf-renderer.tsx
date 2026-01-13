@@ -137,7 +137,6 @@ function PDFRendererComponent({ data, settings, showPreview }: PDFRendererProps)
 
   // Calculate scaled dimensions for fullscreen manual zoom
   const fullscreenScaledWidth = PDF_BASE_WIDTH * (fullscreenZoom / 100)
-  const fullscreenScaledHeight = PDF_BASE_HEIGHT * (fullscreenZoom / 100)
 
   const PreviewContent = () => (
     <div
@@ -214,20 +213,24 @@ function PDFRendererComponent({ data, settings, showPreview }: PDFRendererProps)
         </div>
       ) : pdfBlobUrl ? (
         <div
-          className="h-full overflow-auto flex justify-center p-2 sm:p-4"
+          className="h-full overflow-auto flex justify-center items-start p-2 sm:p-4"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
-          <iframe
-            src={`${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
-            className="bg-white shadow-lg rounded"
+          <div
+            className="bg-white shadow-lg rounded flex-shrink-0 mx-auto"
             style={{
-              width: `${fullscreenScaledWidth}px`,
-              height: `${fullscreenScaledHeight}px`,
-              border: 'none',
-              transition: 'width 0.2s ease-out, height 0.2s ease-out',
+              width: `min(${fullscreenScaledWidth}px, calc(100vw - 32px))`,
+              aspectRatio: `${PDF_BASE_WIDTH} / ${PDF_BASE_HEIGHT}`,
+              maxWidth: `${fullscreenScaledWidth}px`,
             }}
-            title="Resume Preview"
-          />
+          >
+            <iframe
+              src={`${pdfBlobUrl}#toolbar=0&navpanes=0&scrollbar=0`}
+              className="w-full h-full rounded"
+              style={{ border: 'none' }}
+              title="Resume Preview"
+            />
+          </div>
         </div>
       ) : (
         <div className="h-full flex items-center justify-center text-muted-foreground">
@@ -372,17 +375,16 @@ function PDFRendererComponent({ data, settings, showPreview }: PDFRendererProps)
       {/* Fullscreen Modal */}
       {isFullscreen && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-auto"
+          className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-2 sm:p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setIsFullscreen(false)
           }}
         >
           <div
-            className="bg-gray-100 rounded-2xl shadow-2xl flex flex-col my-auto overflow-hidden"
+            className="bg-gray-100 rounded-xl sm:rounded-2xl shadow-2xl flex flex-col w-full max-w-4xl overflow-hidden"
             style={{
-              width: `min(${Math.max(fullscreenScaledWidth + 48, 400)}px, 95vw)`,
               maxHeight: '95vh',
-              transition: 'width 0.2s ease-out',
+              height: '95vh',
             }}
           >
             {/* Header */}

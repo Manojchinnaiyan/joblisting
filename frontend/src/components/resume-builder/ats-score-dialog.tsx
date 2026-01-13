@@ -88,8 +88,8 @@ export function ATSScoreDialog({ open, onOpenChange, data }: ATSScoreDialogProps
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] h-[90vh] sm:h-auto overflow-hidden flex flex-col p-0">
+        <DialogHeader className="p-4 sm:p-6 pb-0 sm:pb-0">
           <DialogTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
             ATS Compatibility Score
@@ -99,28 +99,28 @@ export function ATSScoreDialog({ open, onOpenChange, data }: ATSScoreDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 pr-4">
+        <ScrollArea className="flex-1 px-4 sm:px-6 pb-4 sm:pb-6">
           {/* Score Overview */}
-          <div className="flex items-center justify-between p-6 bg-muted/50 rounded-lg mb-6">
-            <div className="flex items-center gap-6">
+          <div className="flex flex-col sm:flex-row items-center sm:justify-between p-4 sm:p-6 bg-muted/50 rounded-lg mb-6 gap-4 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6">
               <div
                 className={cn(
-                  'w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold',
+                  'w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center text-2xl sm:text-3xl font-bold',
                   getGradeColor(result.grade)
                 )}
               >
                 {result.grade}
               </div>
               <div>
-                <div className="flex items-baseline gap-2">
-                  <span className={cn('text-4xl font-bold', getScoreColor(result.percentage))}>
+                <div className="flex items-baseline gap-2 justify-center sm:justify-start">
+                  <span className={cn('text-3xl sm:text-4xl font-bold', getScoreColor(result.percentage))}>
                     {result.percentage}%
                   </span>
-                  <span className="text-muted-foreground text-sm">
-                    ({result.overallScore}/{result.maxScore} points)
+                  <span className="text-muted-foreground text-xs sm:text-sm">
+                    ({result.overallScore}/{result.maxScore})
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">ATS Compatibility Score</p>
+                <p className="text-xs sm:text-sm text-muted-foreground mt-1">ATS Compatibility Score</p>
               </div>
             </div>
           </div>
