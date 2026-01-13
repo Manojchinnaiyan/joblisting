@@ -345,7 +345,7 @@ export default function ResumeTemplatesPage() {
           {/* Grid */}
           {filteredTemplates.length > 0 ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 max-w-sm sm:max-w-none mx-auto sm:mx-0">
                 {/* Create New Card - only on first page */}
                 {currentPage === 1 && (
                   <Card
@@ -477,22 +477,22 @@ export default function ResumeTemplatesPage() {
       {/* Preview Modal */}
       {previewTemplate && (
         <div
-          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-2 sm:p-4"
           onClick={closePreview}
         >
           <div
-            className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-white rounded-lg w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="font-semibold">
-                {TEMPLATE_OPTIONS.find((t) => t.value === previewTemplate)?.label} Template Preview
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 border-b gap-3">
+              <h3 className="font-semibold text-sm sm:text-base">
+                {TEMPLATE_OPTIONS.find((t) => t.value === previewTemplate)?.label} Template
               </h3>
-              <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => handleSelectTemplate(previewTemplate)}>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleSelectTemplate(previewTemplate)}>
                   <Plus className="h-4 w-4 mr-2" />
-                  Use This Template
+                  Use Template
                 </Button>
                 <Button variant="outline" size="sm" onClick={closePreview}>
                   Close
@@ -501,8 +501,8 @@ export default function ResumeTemplatesPage() {
             </div>
 
             {/* Preview */}
-            <div className="flex-1 overflow-auto bg-gray-100 p-4">
-              <div className="mx-auto" style={{ width: '595px', height: '842px' }}>
+            <div className="flex-1 overflow-auto bg-gray-100 p-2 sm:p-4">
+              <div className="mx-auto w-full max-w-[595px] aspect-[8.5/11]">
                 <TemplatePreview template={previewTemplate} color="#2563eb" />
               </div>
             </div>
