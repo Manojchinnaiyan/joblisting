@@ -5,6 +5,7 @@ import { pdf } from '@react-pdf/renderer'
 import { Download, Loader2, Maximize2, X, ZoomIn, ZoomOut, RotateCcw, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { toast } from 'sonner'
 import type { ResumeData, ResumeSettings } from '@/types/resume-builder'
 import { ResumeDocument } from './templates'
 
@@ -108,24 +109,48 @@ function PDFRendererComponent({ data, settings, showPreview }: PDFRendererProps)
     }
   }, [])
 
+  // Detect mobile browsers (iOS Safari, Android Chrome, etc.)
+  const isMobileBrowser = useCallback(() => {
+    if (typeof window === 'undefined') return false
+    const ua = window.navigator.userAgent
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua)
+  }, [])
+
   const handleDownload = useCallback(async () => {
     setIsDownloading(true)
     try {
       const blob = await pdf(<ResumeDocument data={data} settings={settings} />).toBlob()
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+
+      // For mobile browsers, open in new tab since download attribute often doesn't work
+      // User can then use native share/save functionality
+      if (isMobileBrowser()) {
+        const url = URL.createObjectURL(blob)
+        // Open PDF in new tab - mobile browsers will show native PDF viewer with save options
+        window.open(url, '_blank')
+        // Don't revoke immediately, let the new tab load
+        setTimeout(() => URL.revokeObjectURL(url), 10000)
+        // Show toast with instructions
+        toast.info('PDF opened in new tab. Use the Share button or menu to save the file.', {
+          duration: 5000,
+        })
+      } else {
+        // Standard download for desktop browsers
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        URL.revokeObjectURL(url)
+      }
     } catch (err) {
       console.error('Download failed:', err)
+      toast.error('Failed to generate PDF. Please try again.')
     } finally {
       setIsDownloading(false)
     }
-  }, [data, settings, fileName])
+  }, [data, settings, fileName, isMobileBrowser])
 
   const handleRefresh = useCallback(() => {
     generatePdfPreview()
