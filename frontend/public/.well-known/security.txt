@@ -1,0 +1,8 @@
+# Security Policy for JobsWorld
+# https://securitytxt.org/
+
+Contact: mailto:security@jobsworld.in
+Expires: 2027-01-15T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://jobsworld.in/.well-known/security.txt
+Policy: https://jobsworld.in/security-policy
