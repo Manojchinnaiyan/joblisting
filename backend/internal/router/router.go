@@ -270,6 +270,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Cache handler
 	adminCacheHandler := handler.NewAdminCacheHandler(cacheService)
 
+	// Admin resume handler
+	adminResumeHandler := handler.NewAdminResumeHandler(resumeRepo, resumeService, userRepo, userSkillRepo)
+
 	// Initialize middleware
 	authMiddleware := middleware.AuthMiddleware(tokenService, userService)
 	companyMiddleware := handlerMiddleware.NewCompanyMiddleware(companyService, teamService)
@@ -417,6 +420,27 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminAnalytics.GET("/featured-jobs", adminAnalyticsHandler.GetFeaturedJobsAnalytics)
 			adminAnalytics.GET("/monthly-activity", adminAnalyticsHandler.GetMonthlyActivity)
 			adminAnalytics.GET("/conversions", adminAnalyticsHandler.GetConversionAnalytics)
+		}
+
+		// ==================== Admin Resume & Skills Routes ====================
+		adminResumes := v1.Group("/admin/resumes")
+		adminResumes.Use(authMiddleware, adminMiddleware)
+		{
+			adminResumes.GET("", adminResumeHandler.ListResumes)
+			adminResumes.GET("/stats", adminResumeHandler.GetResumeStats)
+			adminResumes.GET("/user/:user_id", adminResumeHandler.GetUserResumes)
+			adminResumes.GET("/:id", adminResumeHandler.GetResume)
+			adminResumes.GET("/:id/download", adminResumeHandler.GetResumeDownloadURL)
+			adminResumes.DELETE("/:id", adminResumeHandler.DeleteResume)
+		}
+
+		// Admin skills and user search by skills
+		adminSkills := v1.Group("/admin/skills")
+		adminSkills.Use(authMiddleware, adminMiddleware)
+		{
+			adminSkills.GET("", adminResumeHandler.GetTopSkills)
+			adminSkills.GET("/search", adminResumeHandler.SearchSkills)
+			adminSkills.GET("/users", adminResumeHandler.SearchUsersBySkills)
 		}
 
 		// ==================== Public Job Routes ====================

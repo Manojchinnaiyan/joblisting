@@ -202,3 +202,97 @@ func (r *UserRepository) EmailExists(email string) (bool, error) {
 		Count(&count).Error
 	return count > 0, err
 }
+
+// ListWithSkillsFilter retrieves paginated list of users with skills filter (admin only)
+func (r *UserRepository) ListWithSkillsFilter(filters map[string]interface{}, page, perPage int) ([]domain.User, int64, error) {
+	var users []domain.User
+	var total int64
+
+	query := r.db.Model(&domain.User{}).Where("users.deleted_at IS NULL")
+
+	// Apply standard filters
+	if role, ok := filters["role"]; ok && role != "" {
+		query = query.Where("users.role = ?", role)
+	}
+	if status, ok := filters["status"]; ok && status != "" {
+		query = query.Where("users.status = ?", status)
+	}
+	if search, ok := filters["search"]; ok && search != "" {
+		searchTerm := "%" + search.(string) + "%"
+		query = query.Where("users.email ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ?",
+			searchTerm, searchTerm, searchTerm)
+	}
+
+	// Apply skills filter - find users who have ANY of the specified skills
+	if skills, ok := filters["skills"].([]string); ok && len(skills) > 0 {
+		query = query.Joins("INNER JOIN user_skills ON user_skills.user_id = users.id").
+			Where("LOWER(user_skills.name) IN ?", skills).
+			Distinct()
+	}
+
+	// Count total (need a subquery for DISTINCT count)
+	countQuery := r.db.Model(&domain.User{}).Where("users.deleted_at IS NULL")
+	if role, ok := filters["role"]; ok && role != "" {
+		countQuery = countQuery.Where("users.role = ?", role)
+	}
+	if status, ok := filters["status"]; ok && status != "" {
+		countQuery = countQuery.Where("users.status = ?", status)
+	}
+	if search, ok := filters["search"]; ok && search != "" {
+		searchTerm := "%" + search.(string) + "%"
+		countQuery = countQuery.Where("users.email ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ?",
+			searchTerm, searchTerm, searchTerm)
+	}
+	if skills, ok := filters["skills"].([]string); ok && len(skills) > 0 {
+		countQuery = countQuery.Joins("INNER JOIN user_skills ON user_skills.user_id = users.id").
+			Where("LOWER(user_skills.name) IN ?", skills).
+			Distinct()
+	}
+	if err := countQuery.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	offset := (page - 1) * perPage
+	if err := query.
+		Preload("Profile").
+		Offset(offset).
+		Limit(perPage).
+		Order("users.created_at DESC").
+		Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// GetUsersBySkills retrieves users who have specific skills
+func (r *UserRepository) GetUsersBySkills(skillNames []string, limit, offset int) ([]domain.User, int64, error) {
+	var users []domain.User
+	var total int64
+
+	// Copy skill names (they're already processed by caller)
+	lowerSkills := make([]string, len(skillNames))
+	copy(lowerSkills, skillNames)
+
+	query := r.db.Model(&domain.User{}).
+		Joins("INNER JOIN user_skills ON user_skills.user_id = users.id").
+		Where("users.deleted_at IS NULL").
+		Where("LOWER(user_skills.name) IN ?", lowerSkills).
+		Distinct()
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	err := query.
+		Preload("Profile").
+		Offset(offset).
+		Limit(limit).
+		Order("users.created_at DESC").
+		Find(&users).Error
+
+	return users, total, err
+}

@@ -123,30 +123,33 @@ export function JobFiltersSidebar({ filters, onFiltersChange, className }: JobFi
     (filters.location ? 1 : 0)
 
   return (
-    <div className={cn("bg-card border rounded-lg p-4", className)}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4" />
-          <h2 className="font-semibold">Filters</h2>
+    <div className={cn("bg-card border rounded-lg", className)}>
+      {/* Sticky Filter Header */}
+      <div className="sticky top-0 z-10 bg-card border-b rounded-t-lg px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4" />
+            <h2 className="font-semibold">Filters</h2>
+            {activeFilterCount > 0 && (
+              <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                {activeFilterCount}
+              </Badge>
+            )}
+          </div>
           {activeFilterCount > 0 && (
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-              {activeFilterCount}
-            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={clearFilters}
+              className="h-8 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Clear all
+            </Button>
           )}
         </div>
-        {activeFilterCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearFilters}
-            className="h-8 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Clear all
-          </Button>
-        )}
       </div>
 
-      <div className="space-y-1">
+      <div className="space-y-1 p-4">
           {/* Location Filter */}
           <FilterSection title="Location">
             <Input

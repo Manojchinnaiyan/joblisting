@@ -187,3 +187,41 @@ func (r *ResumeRepository) GetMostDownloaded(limit int) ([]domain.Resume, error)
 func (r *ResumeRepository) DeleteByFilePath(filePath string) error {
 	return r.db.Where("file_path = ?", filePath).Delete(&domain.Resume{}).Error
 }
+
+// GetAllResumes retrieves all resumes with pagination and filters (admin only)
+func (r *ResumeRepository) GetAllResumes(filters map[string]interface{}, limit, offset int) ([]domain.Resume, int64, error) {
+	var resumes []domain.Resume
+	var total int64
+
+	query := r.db.Model(&domain.Resume{}).Where("deleted_at IS NULL")
+
+	// Apply filters
+	if userID, ok := filters["user_id"].(string); ok && userID != "" {
+		query = query.Where("user_id = ?", userID)
+	}
+	if search, ok := filters["search"].(string); ok && search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where("original_name ILIKE ? OR title ILIKE ?", searchPattern, searchPattern)
+	}
+	if mimeType, ok := filters["mime_type"].(string); ok && mimeType != "" {
+		query = query.Where("mime_type = ?", mimeType)
+	}
+	if isPrimary, ok := filters["is_primary"].(bool); ok {
+		query = query.Where("is_primary = ?", isPrimary)
+	}
+
+	// Get total count
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results with user info
+	err := query.
+		Preload("User").
+		Order("created_at DESC").
+		Limit(limit).
+		Offset(offset).
+		Find(&resumes).Error
+
+	return resumes, total, err
+}

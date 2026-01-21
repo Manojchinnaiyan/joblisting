@@ -186,154 +186,161 @@ export function JobsPageClient({ initialData }: JobsPageClientProps) {
   }
 
   return (
-    <Container className="py-4 sm:py-8">
-      {/* Header Section */}
-      <div className="mb-4 sm:mb-6">
-        {/* Category filter header */}
-        {filters.category && (
-          <div className="flex items-center gap-3 mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearCategoryFilter}
-              className="gap-2"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              All Jobs
-            </Button>
-            <span className="text-muted-foreground">/</span>
-            <Badge variant="secondary" className="gap-1.5 py-1 px-3">
-              {categoryName || filters.category}
-              <button
+    <div className="flex flex-col h-[calc(100vh-4rem)]">
+      {/* Sticky Header Section */}
+      <div className="sticky top-16 z-40 bg-background">
+        <Container className="py-3 sm:py-4">
+          {/* Category filter header */}
+          {filters.category && (
+            <div className="flex items-center gap-3 mb-3">
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={clearCategoryFilter}
-                className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                className="gap-2"
               >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          </div>
-        )}
-
-        <h1 className="text-xl sm:text-2xl md:text-3xl font-bold mb-3 sm:mb-4">
-          {categoryName
-            ? `${categoryName} Jobs`
-            : filters.experience_level?.includes('ENTRY' as any)
-              ? 'Fresher Jobs'
-              : filters.job_type?.includes('INTERNSHIP' as any)
-                ? 'Internship Jobs'
-                : 'Find Your Next Job'}
-        </h1>
-        <JobSearch defaultValue={searchQuery} onSearch={handleSearch} />
-      </div>
-
-      {/* Main Content with Sidebar */}
-      <div className="flex flex-col lg:flex-row gap-6">
-        {/* Left Sidebar - Filters (hidden on mobile) */}
-        <aside className="hidden lg:block w-72 shrink-0 h-fit">
-          <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto scrollbar-thin">
-            <JobFiltersSidebar
-              filters={{ ...filters, q: searchQuery || undefined }}
-              onFiltersChange={handleFiltersChange}
-            />
-          </div>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 min-w-0">
-          {/* View Toggle, Filter Button (mobile), and Results Count */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              {/* Mobile Filter Button */}
-              <Sheet
-                open={mobileFilterOpen}
-                onOpenChange={(open) => {
-                  setMobileFilterOpen(open)
-                  if (open) {
-                    // Reset mobile filters to current filters when opening
-                    setMobileFilters({ ...filters, q: searchQuery || undefined })
-                  }
-                }}
-              >
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm" className="lg:hidden gap-2">
-                    <SlidersHorizontal className="h-4 w-4" />
-                    Filters
-                    {activeFilterCount > 0 && (
-                      <Badge variant="secondary" className="h-5 px-1.5 text-xs">
-                        {activeFilterCount}
-                      </Badge>
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="w-80 p-0 flex flex-col">
-                  <SheetHeader className="p-4 border-b">
-                    <SheetTitle>Filters</SheetTitle>
-                  </SheetHeader>
-                  <div className="flex-1 p-4 overflow-y-auto">
-                    <JobFiltersSidebar
-                      filters={mobileFilters}
-                      onFiltersChange={setMobileFilters}
-                      className="border-0 p-0"
-                    />
-                  </div>
-                  <div className="p-4 border-t bg-background">
-                    <Button
-                      className="w-full"
-                      onClick={() => {
-                        handleFiltersChange(mobileFilters)
-                        setMobileFilterOpen(false)
-                      }}
-                    >
-                      Apply Filters
-                    </Button>
-                  </div>
-                </SheetContent>
-              </Sheet>
-
-              <div className="text-sm text-muted-foreground">
-                {pagination && (
-                  <span>
-                    {pagination.total} job{pagination.total !== 1 ? 's' : ''} found
-                  </span>
-                )}
-              </div>
+                <ArrowLeft className="h-4 w-4" />
+                All Jobs
+              </Button>
+              <span className="text-muted-foreground">/</span>
+              <Badge variant="secondary" className="gap-1.5 py-1 px-3">
+                {categoryName || filters.category}
+                <button
+                  onClick={clearCategoryFilter}
+                  className="ml-1 hover:bg-muted-foreground/20 rounded-full p-0.5"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </Badge>
             </div>
-
-            <ToggleGroup
-              type="single"
-              value={viewMode}
-              onValueChange={(value) => value && setViewMode(value as ViewMode)}
-              className="hidden sm:flex border rounded-lg p-1"
-            >
-              <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 p-0">
-                <List className="h-4 w-4" />
-              </ToggleGroupItem>
-              <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 p-0">
-                <LayoutGrid className="h-4 w-4" />
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
-          {error ? (
-            <ErrorState message={error} retry={() => fetchJobs()} />
-          ) : isLoading ? (
-            <JobSkeletonList count={12} />
-          ) : (
-            <>
-              <JobList jobs={jobs} viewMode={viewMode} />
-              {pagination && pagination.total_pages > 1 && (
-                <div className="mt-4 sm:mt-8">
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={pagination.total_pages}
-                    onPageChange={setCurrentPage}
-                  />
-                </div>
-              )}
-            </>
           )}
-        </main>
+
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-2 sm:mb-3">
+            {categoryName
+              ? `${categoryName} Jobs`
+              : filters.experience_level?.includes('ENTRY' as any)
+                ? 'Fresher Jobs'
+                : filters.job_type?.includes('INTERNSHIP' as any)
+                  ? 'Internship Jobs'
+                  : 'Find Your Next Job'}
+          </h1>
+          <JobSearch defaultValue={searchQuery} onSearch={handleSearch} />
+        </Container>
       </div>
-    </Container>
+
+      {/* Scrollable Content Area */}
+      <div className="flex-1 overflow-y-auto">
+        <Container className="py-4">
+          {/* Main Content with Sidebar */}
+          <div className="flex flex-col lg:flex-row gap-6">
+            {/* Left Sidebar - Filters (hidden on mobile) */}
+            <aside className="hidden lg:block w-72 shrink-0">
+              <div className="sticky top-4 max-h-[calc(100vh-12rem)] overflow-y-auto scrollbar-thin">
+                <JobFiltersSidebar
+                  filters={{ ...filters, q: searchQuery || undefined }}
+                  onFiltersChange={handleFiltersChange}
+                />
+              </div>
+            </aside>
+
+            {/* Main Content */}
+            <main className="flex-1 min-w-0">
+              {/* View Toggle, Filter Button (mobile), and Results Count */}
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  {/* Mobile Filter Button */}
+                  <Sheet
+                    open={mobileFilterOpen}
+                    onOpenChange={(open) => {
+                      setMobileFilterOpen(open)
+                      if (open) {
+                        // Reset mobile filters to current filters when opening
+                        setMobileFilters({ ...filters, q: searchQuery || undefined })
+                      }
+                    }}
+                  >
+                    <SheetTrigger asChild>
+                      <Button variant="outline" size="sm" className="lg:hidden gap-2">
+                        <SlidersHorizontal className="h-4 w-4" />
+                        Filters
+                        {activeFilterCount > 0 && (
+                          <Badge variant="secondary" className="h-5 px-1.5 text-xs">
+                            {activeFilterCount}
+                          </Badge>
+                        )}
+                      </Button>
+                    </SheetTrigger>
+                    <SheetContent side="left" className="w-80 p-0 flex flex-col">
+                      <SheetHeader className="p-4 border-b">
+                        <SheetTitle>Filters</SheetTitle>
+                      </SheetHeader>
+                      <div className="flex-1 p-4 overflow-y-auto">
+                        <JobFiltersSidebar
+                          filters={mobileFilters}
+                          onFiltersChange={setMobileFilters}
+                          className="border-0 p-0"
+                        />
+                      </div>
+                      <div className="p-4 border-t bg-background">
+                        <Button
+                          className="w-full"
+                          onClick={() => {
+                            handleFiltersChange(mobileFilters)
+                            setMobileFilterOpen(false)
+                          }}
+                        >
+                          Apply Filters
+                        </Button>
+                      </div>
+                    </SheetContent>
+                  </Sheet>
+
+                  <div className="text-sm text-muted-foreground">
+                    {pagination && (
+                      <span>
+                        {pagination.total} job{pagination.total !== 1 ? 's' : ''} found
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <ToggleGroup
+                  type="single"
+                  value={viewMode}
+                  onValueChange={(value) => value && setViewMode(value as ViewMode)}
+                  className="hidden sm:flex border rounded-lg p-1"
+                >
+                  <ToggleGroupItem value="list" aria-label="List view" className="h-8 w-8 p-0">
+                    <List className="h-4 w-4" />
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="grid" aria-label="Grid view" className="h-8 w-8 p-0">
+                    <LayoutGrid className="h-4 w-4" />
+                  </ToggleGroupItem>
+                </ToggleGroup>
+              </div>
+
+              {error ? (
+                <ErrorState message={error} retry={() => fetchJobs()} />
+              ) : isLoading ? (
+                <JobSkeletonList count={12} />
+              ) : (
+                <>
+                  <JobList jobs={jobs} viewMode={viewMode} />
+                  {pagination && pagination.total_pages > 1 && (
+                    <div className="mt-4 sm:mt-8">
+                      <Pagination
+                        currentPage={currentPage}
+                        totalPages={pagination.total_pages}
+                        onPageChange={setCurrentPage}
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </main>
+          </div>
+        </Container>
+      </div>
+    </div>
   )
 }

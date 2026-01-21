@@ -117,12 +117,11 @@ func (r *JobRepository) GetEmployerJobs(employerID uuid.UUID, limit, offset int)
 	return jobs, total, err
 }
 
-// GetFeaturedJobs retrieves featured jobs
+// GetFeaturedJobs retrieves featured jobs (no expiry - featured indefinitely)
 func (r *JobRepository) GetFeaturedJobs(limit int) ([]domain.Job, error) {
 	var jobs []domain.Job
 	err := r.db.
 		Where("is_featured = ? AND status = ? AND deleted_at IS NULL", true, domain.JobStatusActive).
-		Where("featured_until > ?", time.Now()).
 		Preload("Employer").
 		Preload("Categories").
 		Order("published_at DESC").

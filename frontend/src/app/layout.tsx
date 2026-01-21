@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/toaster'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
 import { GTMScript } from '@/components/analytics/gtm-script'
+import { ScrollIndicator } from '@/components/ui/scroll-indicator'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -137,6 +138,7 @@ export default function RootLayout({
           shadow="0 0 10px #2563eb,0 0 5px #2563eb"
           zIndex={9999}
         />
+        <ScrollIndicator />
         {/* Google Tag Manager (noscript) - for users without JavaScript */}
         <noscript>
           <iframe
