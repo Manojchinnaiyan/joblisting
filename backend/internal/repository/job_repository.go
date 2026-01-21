@@ -74,8 +74,7 @@ func (r *JobRepository) GetActiveJobs(limit, offset int) ([]domain.Job, int64, e
 	var total int64
 
 	query := r.db.Model(&domain.Job{}).
-		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive).
-		Where("expires_at > ?", time.Now())
+		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive)
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
@@ -124,7 +123,6 @@ func (r *JobRepository) GetFeaturedJobs(limit int) ([]domain.Job, error) {
 	err := r.db.
 		Where("is_featured = ? AND status = ? AND deleted_at IS NULL", true, domain.JobStatusActive).
 		Where("featured_until > ?", time.Now()).
-		Where("expires_at > ?", time.Now()).
 		Preload("Employer").
 		Preload("Categories").
 		Order("published_at DESC").
@@ -139,7 +137,6 @@ func (r *JobRepository) GetJobsForSitemap() ([]domain.Job, error) {
 	err := r.db.
 		Select("id, slug, updated_at").
 		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive).
-		Where("expires_at > ?", time.Now()).
 		Order("updated_at DESC").
 		Find(&jobs).Error
 	return jobs, err
@@ -364,7 +361,6 @@ func (r *JobRepository) SearchByLocation(location string, limit, offset int) ([]
 
 	query := r.db.Model(&domain.Job{}).
 		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive).
-		Where("expires_at > ?", time.Now()).
 		Where("location ILIKE ? OR city ILIKE ? OR state ILIKE ? OR country ILIKE ?",
 			"%"+location+"%", "%"+location+"%", "%"+location+"%", "%"+location+"%")
 
@@ -393,8 +389,7 @@ func (r *JobRepository) GetJobsByCategory(categoryID uuid.UUID, limit, offset in
 	query := r.db.Model(&domain.Job{}).
 		Joins("JOIN job_category_mappings ON jobs.id = job_category_mappings.job_id").
 		Where("job_category_mappings.category_id = ?", categoryID).
-		Where("jobs.status = ? AND jobs.deleted_at IS NULL", domain.JobStatusActive).
-		Where("jobs.expires_at > ?", time.Now())
+		Where("jobs.status = ? AND jobs.deleted_at IS NULL", domain.JobStatusActive)
 
 	// Get total count
 	if err := query.Count(&total).Error; err != nil {
@@ -453,7 +448,6 @@ func (r *JobRepository) GetUniqueLocations(limit int) ([]string, error) {
 	var locations []string
 	err := r.db.Model(&domain.Job{}).
 		Where("status = ?", domain.JobStatusActive).
-		Where("expires_at > ?", time.Now()).
 		Where("location IS NOT NULL AND location != ''").
 		Distinct("location").
 		Order("location ASC").
@@ -480,8 +474,7 @@ func (r *JobRepository) GetFilteredJobs(filters JobFilters, limit, offset int) (
 	var total int64
 
 	query := r.db.Model(&domain.Job{}).
-		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive).
-		Where("expires_at > ?", time.Now())
+		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive)
 
 	// Apply search query
 	if filters.Query != "" {

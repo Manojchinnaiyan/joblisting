@@ -24,13 +24,13 @@ func NewJobCronScheduler(jobService *service.JobService) *JobCronScheduler {
 func (s *JobCronScheduler) Start() {
 	log.Println("🕐 Starting job cron scheduler...")
 
-	// Run job expiry checker every hour
-	go s.runJobExpiryChecker()
+	// Job expiry is disabled - jobs never expire automatically
+	// go s.runJobExpiryChecker()
 
-	// Run expiry warning notifier every 6 hours
-	go s.runExpiryWarningNotifier()
+	// Expiry warning notifier is disabled since jobs don't expire
+	// go s.runExpiryWarningNotifier()
 
-	log.Println("✅ Job cron scheduler started")
+	log.Println("✅ Job cron scheduler started (expiry disabled)")
 }
 
 // Stop gracefully stops all cron jobs

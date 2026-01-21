@@ -138,17 +138,17 @@ func (Job) TableName() string {
 
 // IsActive returns true if the job is currently active
 func (j *Job) IsActive() bool {
-	return j.Status == JobStatusActive && j.ExpiresAt != nil && j.ExpiresAt.After(time.Now())
+	return j.Status == JobStatusActive
 }
 
-// IsExpired returns true if the job has expired
+// IsExpired returns true if the job has expired status
 func (j *Job) IsExpired() bool {
-	return j.ExpiresAt != nil && j.ExpiresAt.Before(time.Now())
+	return j.Status == JobStatusExpired
 }
 
 // CanAcceptApplications returns true if job can accept new applications
 func (j *Job) CanAcceptApplications() bool {
-	return j.Status == JobStatusActive && !j.IsExpired()
+	return j.Status == JobStatusActive
 }
 
 // BeforeCreate sets default values before creating
