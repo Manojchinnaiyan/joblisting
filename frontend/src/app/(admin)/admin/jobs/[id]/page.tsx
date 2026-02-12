@@ -325,16 +325,19 @@ export default function JobDetailPage({ params }: PageProps) {
                 </Card>
               )}
 
-              {job.benefits && (
+              {job.benefits && job.benefits.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle>Benefits</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div
-                      className="prose prose-sm max-w-none dark:prose-invert"
-                      dangerouslySetInnerHTML={{ __html: job.benefits }}
-                    />
+                    <ul className="list-disc list-inside space-y-1">
+                      {job.benefits.map((benefit: string, index: number) => (
+                        <li key={index} className="text-sm">
+                          {benefit}
+                        </li>
+                      ))}
+                    </ul>
                   </CardContent>
                 </Card>
               )}

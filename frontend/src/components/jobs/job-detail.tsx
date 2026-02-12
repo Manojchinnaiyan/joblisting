@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { MapPin, Clock, Briefcase, Users } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { SalaryDisplay } from './salary-display'
 import { formatRelativeTime } from '@/lib/utils'
+import { trackJobView } from '@/lib/posthog'
 import type { Job } from '@/types/job'
 
 function DefaultLogo() {
@@ -43,6 +44,11 @@ interface JobDetailProps {
 }
 
 export function JobDetail({ job, mobileActions }: JobDetailProps) {
+  // Track job view when component mounts
+  useEffect(() => {
+    trackJobView(job.id, job.title)
+  }, [job.id, job.title])
+
   return (
     <div className="space-y-4 sm:space-y-6 overflow-hidden">
       {/* Header */}

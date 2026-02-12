@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { SalaryDisplay } from './salary-display'
+import { trackEvent } from '@/lib/posthog'
 import type { Job } from '@/types/job'
 import type { ViewMode } from './job-list'
 
@@ -81,6 +82,28 @@ export function JobCard({ job, onSave, viewMode = 'grid', compact = false }: Job
 }
 
 function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
+  const handleJobClick = () => {
+    trackEvent('job_card_clicked', {
+      job_id: job.id,
+      job_title: job.title,
+      company_name: job.company_name,
+      job_type: job.job_type,
+      workplace_type: job.workplace_type,
+      location: job.location,
+      view_mode: 'list',
+    })
+  }
+
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    trackEvent(job.is_saved ? 'job_unsaved' : 'job_saved', {
+      job_id: job.id,
+      job_title: job.title,
+      company_name: job.company_name,
+    })
+    onSave?.(job.id)
+  }
+
   return (
     <Card className="hover:shadow-md transition-shadow group">
       <CardContent className="p-5 sm:p-6">
@@ -92,7 +115,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
-                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer" onClick={handleJobClick}>
                   <h3 className="font-semibold text-lg group-hover:text-primary transition-colors line-clamp-1">
                     {job.title}
                   </h3>
@@ -107,10 +130,7 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={(e) => {
-                      e.preventDefault()
-                      onSave(job.id)
-                    }}
+                    onClick={handleSaveClick}
                     className="h-9 w-9"
                   >
                     <Bookmark
@@ -168,6 +188,28 @@ function JobCardListView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
 }
 
 function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
+  const handleJobClick = () => {
+    trackEvent('job_card_clicked', {
+      job_id: job.id,
+      job_title: job.title,
+      company_name: job.company_name,
+      job_type: job.job_type,
+      workplace_type: job.workplace_type,
+      location: job.location,
+      view_mode: 'grid',
+    })
+  }
+
+  const handleSaveClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    trackEvent(job.is_saved ? 'job_unsaved' : 'job_saved', {
+      job_id: job.id,
+      job_title: job.title,
+      company_name: job.company_name,
+    })
+    onSave?.(job.id)
+  }
+
   return (
     <Card className="hover:shadow-md transition-shadow group min-h-[220px]">
       <CardContent className="p-4 sm:p-5">
@@ -179,7 +221,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
           <div className="flex-1 min-w-0 overflow-hidden">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
-                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer">
+                <Link href={`/jobs/${job.slug}`} target="_blank" rel="noopener noreferrer" onClick={handleJobClick}>
                   <h3 className="font-semibold text-sm sm:text-base group-hover:text-primary transition-colors line-clamp-2 sm:line-clamp-1">
                     {job.title}
                   </h3>
@@ -190,10 +232,7 @@ function JobCardGridView({ job, onSave }: Omit<JobCardProps, 'viewMode'>) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    onSave(job.id)
-                  }}
+                  onClick={handleSaveClick}
                   className="shrink-0 h-8 w-8"
                 >
                   <Bookmark

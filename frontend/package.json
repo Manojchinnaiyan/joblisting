@@ -66,6 +66,7 @@
     "next": "^15.5.9",
     "nextjs-toploader": "^3.9.17",
     "pdfjs-dist": "^5.4.530",
+    "posthog-js": "^1.346.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-hook-form": "^7.68.0",

@@ -22,6 +22,7 @@ import { authApi } from '@/lib/api/auth'
 import { registerSchema, type RegisterFormData } from '@/lib/validations'
 import { ROUTES } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/utils'
+import { trackSignUp } from '@/lib/posthog'
 
 export function RegisterForm() {
   const searchParams = useSearchParams()
@@ -57,6 +58,10 @@ export function RegisterForm() {
     setIsLoading(true)
     try {
       await authApi.register(data)
+
+      // Track successful sign up
+      trackSignUp('email')
+
       toast.success('Account created successfully. Please check your email to verify your account.')
       router.push(ROUTES.LOGIN)
     } catch (error) {

@@ -17,6 +17,7 @@ import { useAdminAuthStore } from '@/store/admin-auth-store'
 import { loginSchema, type LoginFormData } from '@/lib/validations'
 import { ROUTES } from '@/lib/constants'
 import { getErrorMessage } from '@/lib/utils'
+import { trackSignIn } from '@/lib/posthog'
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
@@ -36,6 +37,9 @@ export function LoginForm() {
     setIsLoading(true)
     try {
       const response = await authApi.login(data)
+
+      // Track successful login
+      trackSignIn('email')
 
       // For admin users, store auth data directly and use hard navigation
       // to avoid RSC fetch race conditions in Safari

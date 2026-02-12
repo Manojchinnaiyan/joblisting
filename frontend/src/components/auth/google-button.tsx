@@ -2,6 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { authApi } from '@/lib/api/auth'
+import { trackEvent } from '@/lib/posthog'
 
 interface GoogleButtonProps {
   role?: 'JOB_SEEKER' | 'EMPLOYER'
@@ -15,6 +16,10 @@ export function GoogleButton({
   className
 }: GoogleButtonProps) {
   const handleGoogleLogin = () => {
+    trackEvent('google_auth_initiated', {
+      role,
+      auth_type: text.includes('Sign up') ? 'signup' : 'login',
+    })
     window.location.href = authApi.getGoogleAuthUrl(role)
   }
 

@@ -4,7 +4,9 @@ import NextTopLoader from 'nextjs-toploader'
 import './globals.css'
 import { QueryProvider } from '@/providers/query-provider'
 import { AuthProvider } from '@/providers/auth-provider'
+import { PHProvider } from '@/providers/posthog-provider'
 import { Toaster } from '@/components/ui/toaster'
+import { PostHogPageView } from './posthog-pageview'
 // import { CookieConsent } from '@/components/shared/cookie-consent'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
@@ -148,13 +150,16 @@ export default function RootLayout({
             style={{ display: 'none', visibility: 'hidden' }}
           />
         </noscript>
-        <QueryProvider>
-          <AuthProvider>
-            {children}
-            <Toaster />
-            {/* <CookieConsent /> */}
-          </AuthProvider>
-        </QueryProvider>
+        <PHProvider>
+          <QueryProvider>
+            <AuthProvider>
+              <PostHogPageView />
+              {children}
+              <Toaster />
+              {/* <CookieConsent /> */}
+            </AuthProvider>
+          </QueryProvider>
+        </PHProvider>
         <GTMScript />
         <AdSenseScript />
       </body>

@@ -5,6 +5,7 @@ import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { trackEvent } from '@/lib/posthog'
 
 interface SearchInputProps {
   placeholder?: string
@@ -68,6 +69,15 @@ export function SearchInput({
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
     }
+
+    // Track search event
+    if (query.trim()) {
+      trackEvent('search_performed', {
+        query: query.trim(),
+        query_length: query.trim().length,
+      })
+    }
+
     onSearch(query)
   }
 
@@ -76,6 +86,12 @@ export function SearchInput({
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current)
     }
+
+    // Track search clear
+    trackEvent('search_cleared', {
+      previous_query: query,
+    })
+
     setQuery('')
     onSearch('')
   }

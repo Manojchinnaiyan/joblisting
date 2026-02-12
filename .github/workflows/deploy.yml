@@ -283,6 +283,8 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+            NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+            NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
 
   # Deploy to production server
   deploy:
@@ -385,6 +387,9 @@ jobs:
           NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
           EMAIL_VERIFICATION_URL=${{ secrets.FRONTEND_URL }}/verify-email
           PASSWORD_RESET_URL=${{ secrets.FRONTEND_URL }}/reset-password
+          # PostHog Analytics
+          NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
+          NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
           # Docker Images
           BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest
           FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:latest

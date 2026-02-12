@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { User, AuthTokens } from '@/types/auth'
+import { resetUser } from '@/lib/posthog'
 
 interface AuthState {
   user: User | null
@@ -51,6 +52,9 @@ export const useAuthStore = create<AuthState>()(
           localStorage.removeItem('admin-auth-storage') // Also clear admin auth
           localStorage.removeItem('admin-sidebar-collapsed')
           sessionStorage.clear()
+
+          // Reset PostHog user tracking
+          resetUser()
         }
         // Then reset the state
         set({
