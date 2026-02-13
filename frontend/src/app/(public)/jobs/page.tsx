@@ -26,6 +26,7 @@ export const metadata: Metadata = {
     title: 'Browse Jobs - Find Your Next Career Opportunity',
     description: 'Search and browse thousands of job opportunities across various industries.',
     type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'JobsWorld - Browse Jobs' }],
   },
 }
 

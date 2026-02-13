@@ -23,6 +23,7 @@ export const metadata: Metadata = {
     title: 'Blog - Career Advice, Job Search Tips & Industry Insights',
     description: 'Latest articles and insights on careers, job searching, and professional development.',
     type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'JobsWorld Blog' }],
   },
   alternates: {
     canonical: 'https://jobsworld.in/blogs',

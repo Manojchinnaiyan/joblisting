@@ -20,6 +20,22 @@ export const metadata: Metadata = {
     title: 'JobsWorld - Global Job Search Platform',
     description: 'Find your dream job from thousands of opportunities worldwide. Remote jobs, international positions, and career growth await.',
     type: 'website',
+    url: 'https://jobsworld.in',
+    siteName: 'JobsWorld',
+    images: [
+      {
+        url: '/og-image.png',
+        width: 1200,
+        height: 630,
+        alt: 'JobsWorld - Global Job Search Platform',
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'JobsWorld - Global Job Search Platform',
+    description: 'Find your dream job from thousands of opportunities worldwide. Remote jobs, international positions, and career growth await.',
+    images: ['/og-image.png'],
   },
 }
 

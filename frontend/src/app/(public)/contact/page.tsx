@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     title: 'Contact Us - Get Help & Support',
     description: 'Have questions? Contact our support team for help with job searching, employer services, or general inquiries.',
     type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'JobsWorld - Contact Us' }],
   },
   alternates: {
     canonical: `${BASE_URL}/contact`,

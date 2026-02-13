@@ -22,6 +22,7 @@ export const metadata: Metadata = {
     title: 'Explore Companies - Find Top Employers Hiring Now',
     description: 'Discover top companies hiring for your dream role. Browse company profiles and find your ideal workplace.',
     type: 'website',
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'JobsWorld - Explore Companies' }],
   },
   alternates: {
     canonical: 'https://jobsworld.in/companies',
