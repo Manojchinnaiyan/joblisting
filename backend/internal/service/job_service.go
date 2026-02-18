@@ -233,9 +233,15 @@ func (s *JobService) CreateJob(employerID uuid.UUID, input CreateJobInput) (*dom
 		return nil, err
 	}
 
-	// Add categories if provided
-	if len(input.CategoryIDs) > 0 {
-		if err := jobRepoTx.AddCategories(job.ID, input.CategoryIDs); err != nil {
+	// Add categories if provided, otherwise auto-categorize
+	categoryIDs := input.CategoryIDs
+	if len(categoryIDs) == 0 {
+		if autoIDs, err := s.AutoCategorizeJob(job); err == nil && len(autoIDs) > 0 {
+			categoryIDs = autoIDs
+		}
+	}
+	if len(categoryIDs) > 0 {
+		if err := jobRepoTx.AddCategories(job.ID, categoryIDs); err != nil {
 			tx.Rollback()
 			return nil, err
 		}
@@ -349,9 +355,15 @@ func (s *JobService) AdminCreateJob(adminID uuid.UUID, input AdminCreateJobInput
 		return nil, err
 	}
 
-	// Add categories if provided
-	if len(input.CategoryIDs) > 0 {
-		if err := jobRepoTx.AddCategories(job.ID, input.CategoryIDs); err != nil {
+	// Add categories if provided, otherwise auto-categorize
+	categoryIDs := input.CategoryIDs
+	if len(categoryIDs) == 0 {
+		if autoIDs, err := s.AutoCategorizeJob(job); err == nil && len(autoIDs) > 0 {
+			categoryIDs = autoIDs
+		}
+	}
+	if len(categoryIDs) > 0 {
+		if err := jobRepoTx.AddCategories(job.ID, categoryIDs); err != nil {
 			tx.Rollback()
 			return nil, err
 		}

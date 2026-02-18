@@ -666,6 +666,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			// Search indexing endpoints
 			adminJobs.POST("/reindex", adminJobHandler.ReindexJobs)
 			adminJobs.GET("/search-stats", adminJobHandler.GetSearchStats)
+
+			// Auto-categorization
+			adminJobs.POST("/auto-categorize", adminJobHandler.AutoCategorizeJobs)
 		}
 
 		// Admin - Application stats

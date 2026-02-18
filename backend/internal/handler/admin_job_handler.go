@@ -855,3 +855,17 @@ func (h *AdminJobHandler) GetSearchStats(c *gin.Context) {
 		"stats":     stats,
 	})
 }
+
+// AutoCategorizeJobs auto-categorizes all uncategorized jobs using keyword matching
+// POST /api/v1/admin/jobs/auto-categorize
+func (h *AdminJobHandler) AutoCategorizeJobs(c *gin.Context) {
+	count, err := h.jobService.AutoCategorizeAllJobs()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	response.OK(c, "Jobs auto-categorized successfully", gin.H{
+		"categorized_count": count,
+	})
+}

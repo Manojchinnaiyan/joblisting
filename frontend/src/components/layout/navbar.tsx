@@ -9,7 +9,7 @@ const navItems = [
   { href: ROUTES.JOBS, label: 'Jobs' },
   { href: ROUTES.FRESHER_JOBS, label: 'Fresher Jobs' },
   { href: ROUTES.INTERNSHIPS, label: 'Internships' },
-  { href: ROUTES.COMPANIES, label: 'Companies' },
+  // { href: ROUTES.COMPANIES, label: 'Companies' },
   { href: ROUTES.RESUME_TEMPLATES, label: 'Resume Builder' },
   { href: '/blogs', label: 'Blog' },
   { href: ROUTES.ABOUT, label: 'About' },
