@@ -203,6 +203,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Notification service
 	notificationService := service.NewNotificationService(notificationRepo, notificationPrefsRepo)
 
+	// Newsletter service
+	newsletterRepo := repository.NewNewsletterRepository(db)
+	newsletterService := service.NewNewsletterService(newsletterRepo)
+
 	// Blog service
 	blogRepo := repository.NewBlogRepository(db)
 	blogService := service.NewBlogService(blogRepo)
@@ -223,7 +227,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	adminAuthHandler := handler.NewAdminAuthHandler(adminService, tokenService)
 	adminUserHandler := handler.NewAdminUserHandler(adminService, userService)
 	adminCMSHandler := handler.NewAdminCMSHandler(cmsService)
-	adminAnalyticsHandler := handler.NewAdminAnalyticsHandler(userService, adminService, jobRepo, companyRepo, applicationRepo, reviewRepo, jobViewRepo)
+	adminAnalyticsHandler := handler.NewAdminAnalyticsHandler(userService, adminService, jobRepo, companyRepo, applicationRepo, reviewRepo, jobViewRepo, jobCategoryRepo)
 	oauthHandler := handler.NewOAuthHandler(googleOAuthService, cfg)
 
 	// Job management handlers
@@ -266,6 +270,9 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Import queue service and handler
 	importQueueService := service.NewImportQueueService(scraperService, jobService)
 	importQueueHandler := handler.NewImportQueueHandler(importQueueService)
+
+	// Newsletter handler
+	newsletterHandler := handler.NewNewsletterHandler(newsletterService)
 
 	// Cache handler
 	adminCacheHandler := handler.NewAdminCacheHandler(cacheService)
@@ -411,6 +418,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminAnalytics.GET("/companies", adminAnalyticsHandler.GetCompanyAnalytics)
 			adminAnalytics.GET("/logins", adminAnalyticsHandler.GetLoginStats)
 			adminAnalytics.GET("/security-events", adminAnalyticsHandler.GetSecurityEvents)
+			adminAnalytics.GET("/login-history", adminAnalyticsHandler.GetLoginHistory)
 
 			// Comprehensive analytics endpoints
 			adminAnalytics.GET("/overview", adminAnalyticsHandler.GetComprehensiveAnalytics)
@@ -441,6 +449,20 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			adminSkills.GET("", adminResumeHandler.GetTopSkills)
 			adminSkills.GET("/search", adminResumeHandler.SearchSkills)
 			adminSkills.GET("/users", adminResumeHandler.SearchUsersBySkills)
+		}
+
+		// ==================== Newsletter Routes (Public) ====================
+		newsletter := v1.Group("/newsletter")
+		{
+			newsletter.POST("/subscribe", newsletterHandler.Subscribe)
+			newsletter.GET("/unsubscribe", newsletterHandler.Unsubscribe)
+		}
+
+		// ==================== Admin Newsletter Routes ====================
+		adminNewsletter := v1.Group("/admin/newsletter")
+		adminNewsletter.Use(authMiddleware, adminMiddleware)
+		{
+			adminNewsletter.GET("/subscribers", newsletterHandler.GetSubscribers)
 		}
 
 		// ==================== Public Job Routes ====================

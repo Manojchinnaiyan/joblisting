@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   adminBlogApi,
@@ -576,10 +577,12 @@ export function BlogGenerator() {
                   <div className="space-y-2">
                     <Label>Current Featured Image</Label>
                     <div className="relative aspect-video w-full max-w-md rounded-lg overflow-hidden border">
-                      <img
+                      <Image
                         src={editedData.featured_image}
                         alt="Featured"
                         className="object-cover w-full h-full"
+                        fill
+                        unoptimized
                       />
                     </div>
                   </div>
@@ -620,10 +623,12 @@ export function BlogGenerator() {
                               : 'border-transparent'
                           }`}
                         >
-                          <img
+                          <Image
                             src={image.thumb_url}
                             alt={image.alt_text}
                             className="object-cover w-full h-full"
+                            fill
+                            unoptimized
                           />
                           {editedData.featured_image === image.url && (
                             <div className="absolute top-1 right-1 bg-primary text-primary-foreground rounded-full p-1">

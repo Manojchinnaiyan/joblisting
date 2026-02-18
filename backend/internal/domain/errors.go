@@ -246,6 +246,14 @@ var (
 	ErrFollowerNotFound       = errors.New("FOLLOWER_004: Follower record not found")
 )
 
+// Newsletter errors
+var (
+	ErrNewsletterAlreadySubscribed = errors.New("NEWSLETTER_001: Email already subscribed to newsletter")
+	ErrNewsletterNotFound          = errors.New("NEWSLETTER_002: Newsletter subscription not found")
+	ErrNewsletterInvalidToken      = errors.New("NEWSLETTER_003: Invalid unsubscribe token")
+	ErrNewsletterEmailRequired     = errors.New("NEWSLETTER_004: Email is required")
+)
+
 // ErrorCode represents an error with a code
 type ErrorCode struct {
 	Code    string

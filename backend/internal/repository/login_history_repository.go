@@ -136,6 +136,29 @@ func (r *LoginHistoryRepository) GetLoginStats(since time.Time) (map[string]int6
 	return stats, nil
 }
 
+// GetPaginated retrieves paginated login history with optional status filter
+func (r *LoginHistoryRepository) GetPaginated(page, limit int, status string, since time.Time) ([]domain.LoginHistory, int64, error) {
+	var history []domain.LoginHistory
+	var total int64
+
+	query := r.db.Model(&domain.LoginHistory{}).Where("created_at >= ?", since)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	err := query.Order("created_at DESC").
+		Offset(offset).
+		Limit(limit).
+		Preload("User").
+		Find(&history).Error
+	return history, total, err
+}
+
 // DeleteOldHistory deletes login history older than specified duration
 func (r *LoginHistoryRepository) DeleteOldHistory(before time.Time) error {
 	return r.db.Where("created_at < ?", before).

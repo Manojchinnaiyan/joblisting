@@ -29,6 +29,7 @@ import {
   useAnalyticsUsers,
   useAnalyticsJobs,
   useAnalyticsCompanies,
+  useApplicationAnalytics,
 } from '@/hooks/admin'
 
 type Period = '7d' | '30d' | '90d' | '1y'
@@ -40,8 +41,9 @@ export default function AnalyticsPage() {
   const { data: usersAnalytics, isLoading: usersLoading } = useAnalyticsUsers(period)
   const { data: jobsAnalytics, isLoading: jobsLoading } = useAnalyticsJobs(period)
   const { data: companiesAnalytics, isLoading: companiesLoading } = useAnalyticsCompanies(period)
+  const { data: applicationsAnalytics, isLoading: applicationsLoading } = useApplicationAnalytics(period)
 
-  const isLoading = overviewLoading || usersLoading || jobsLoading || companiesLoading
+  const isLoading = overviewLoading || usersLoading || jobsLoading || companiesLoading || applicationsLoading
 
   if (isLoading) {
     return <AnalyticsSkeleton />
@@ -59,9 +61,9 @@ export default function AnalyticsPage() {
 
   const trends = {
     users: { value: overview?.users?.growth || 0, isPositive: (overview?.users?.growth || 0) >= 0 },
-    companies: { value: 0, isPositive: true },
-    jobs: { value: 0, isPositive: true },
-    applications: { value: 0, isPositive: true },
+    companies: { value: companiesAnalytics?.growth_percentage || 0, isPositive: (companiesAnalytics?.growth_percentage || 0) >= 0 },
+    jobs: { value: jobsAnalytics?.growth_percentage || 0, isPositive: (jobsAnalytics?.growth_percentage || 0) >= 0 },
+    applications: { value: applicationsAnalytics?.growth_percentage || 0, isPositive: (applicationsAnalytics?.growth_percentage || 0) >= 0 },
   }
 
   return (

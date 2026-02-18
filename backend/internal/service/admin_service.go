@@ -315,6 +315,11 @@ func (s *AdminService) GetLoginStats(since time.Time) (map[string]int64, error) 
 	return s.loginHistoryRepo.GetLoginStats(since)
 }
 
+// GetPaginatedLoginHistory retrieves paginated login history across all users
+func (s *AdminService) GetPaginatedLoginHistory(page, limit int, status string, since time.Time) ([]domain.LoginHistory, int64, error) {
+	return s.loginHistoryRepo.GetPaginated(page, limit, status, since)
+}
+
 // Helper methods
 
 func (s *AdminService) logAdminLogin(userID uuid.UUID, email, ipAddress, userAgent string) {

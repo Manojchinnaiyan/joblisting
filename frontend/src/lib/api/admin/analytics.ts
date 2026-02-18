@@ -132,6 +132,26 @@ export interface SecurityAnalytics {
   active_sessions: number
 }
 
+export interface LoginHistoryEntry {
+  id: string
+  user_id?: string
+  email: string
+  user_name: string
+  status: 'SUCCESS' | 'FAILED' | 'LOCKED'
+  ip_address: string
+  user_agent: string
+  failure_reason: string
+  created_at: string
+}
+
+export interface GlobalLoginHistoryResponse {
+  history: LoginHistoryEntry[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+}
+
 export interface DashboardStats {
   users: {
     total: number
@@ -291,6 +311,11 @@ export const adminAnalyticsApi = {
 
   async getConversionAnalytics(limit: number = 20): Promise<{ jobs: ConversionData[], limit: number }> {
     const response = await apiClient.get('/admin/analytics/conversions', { params: { limit } })
+    return response.data.data || response.data
+  },
+
+  async getLoginHistory(params: { page?: number, limit?: number, status?: string, days?: number } = {}): Promise<GlobalLoginHistoryResponse> {
+    const response = await apiClient.get('/admin/analytics/login-history', { params })
     return response.data.data || response.data
   },
 }

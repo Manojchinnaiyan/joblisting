@@ -775,6 +775,22 @@ SELECT * FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM job_categories LIMIT 1);
 
 -- =====================================================
+-- NEWSLETTER SUBSCRIPTIONS
+-- =====================================================
+CREATE TABLE IF NOT EXISTS newsletter_subscriptions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE NOT NULL,
+    token VARCHAR(255) UNIQUE NOT NULL,
+    subscribed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    unsubscribed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_email ON newsletter_subscriptions(email);
+CREATE INDEX IF NOT EXISTS idx_newsletter_subscriptions_token ON newsletter_subscriptions(token);
+
+-- =====================================================
 -- GRANT PERMISSIONS
 -- =====================================================
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO postgres;

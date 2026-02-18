@@ -19,6 +19,7 @@ import {
   LogOut,
   BookOpen,
   Database,
+  Mail,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -93,6 +94,11 @@ const navItems: NavItem[] = [
       { title: 'All Reviews', href: '/admin/reviews' },
       { title: 'Pending Moderation', href: '/admin/reviews/pending' },
     ],
+  },
+  {
+    title: 'Newsletter',
+    href: '/admin/newsletter',
+    icon: Mail,
   },
   {
     title: 'Analytics',

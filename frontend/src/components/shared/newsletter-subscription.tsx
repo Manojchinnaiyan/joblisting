@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { newsletterApi } from '@/lib/api/newsletter'
 
 interface NewsletterSubscriptionProps {
   variant?: 'default' | 'compact' | 'inline'
@@ -43,15 +44,18 @@ export function NewsletterSubscription({
     setIsLoading(true)
 
     try {
-      // TODO: Implement actual newsletter subscription API
-      // For now, simulate a successful subscription
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await newsletterApi.subscribe(email)
 
       setIsSubscribed(true)
       setEmail('')
       toast.success('Successfully subscribed to newsletter!')
-    } catch {
-      toast.error('Failed to subscribe. Please try again.')
+    } catch (error: any) {
+      if (error.response?.status === 409) {
+        toast.info('You are already subscribed to our newsletter!')
+        setIsSubscribed(true)
+      } else {
+        toast.error('Failed to subscribe. Please try again.')
+      }
     } finally {
       setIsLoading(false)
     }

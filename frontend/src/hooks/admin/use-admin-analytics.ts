@@ -133,6 +133,13 @@ export function useConversionAnalytics(limit: number = 20) {
   })
 }
 
+export function useLoginHistory(params: { page?: number, limit?: number, status?: string, days?: number } = {}) {
+  return useQuery({
+    queryKey: [...adminAnalyticsKeys.all, 'loginHistory', params] as const,
+    queryFn: () => adminAnalyticsApi.getLoginHistory(params),
+  })
+}
+
 // Aliases for page imports (with wrapper to accept optional period)
 export function useAnalyticsOverview(_period?: AnalyticsPeriod) {
   return useDashboardStats()

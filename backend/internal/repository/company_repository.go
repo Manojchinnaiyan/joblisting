@@ -336,6 +336,78 @@ func (r *CompanyRepository) CountByStatus(status domain.CompanyStatus) (int64, e
 	return count, err
 }
 
+// CountCreatedSince counts companies created since a given time
+func (r *CompanyRepository) CountCreatedSince(since time.Time) (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Company{}).
+		Where("created_at >= ? AND deleted_at IS NULL", since).
+		Count(&count).Error
+	return count, err
+}
+
+// CountFeatured counts featured companies
+func (r *CompanyRepository) CountFeatured() (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Company{}).
+		Where("is_featured = ? AND deleted_at IS NULL", true).
+		Count(&count).Error
+	return count, err
+}
+
+// NameCount represents a name with count for analytics
+type NameCount struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// SizeCount represents a company size with count for analytics
+type SizeCount struct {
+	Size  string `json:"size"`
+	Count int64  `json:"count"`
+}
+
+// CountByIndustry counts companies grouped by industry
+func (r *CompanyRepository) CountByIndustry() ([]NameCount, error) {
+	var results []NameCount
+	err := r.db.Model(&domain.Company{}).
+		Select("industry as name, COUNT(*) as count").
+		Where("deleted_at IS NULL AND industry IS NOT NULL AND industry != ''").
+		Group("industry").
+		Order("count DESC").
+		Scan(&results).Error
+	return results, err
+}
+
+// CountBySize counts companies grouped by company size
+func (r *CompanyRepository) CountBySize() ([]SizeCount, error) {
+	var results []SizeCount
+	err := r.db.Model(&domain.Company{}).
+		Select("company_size as size, COUNT(*) as count").
+		Where("deleted_at IS NULL AND company_size IS NOT NULL AND company_size != ''").
+		Group("company_size").
+		Order("count DESC").
+		Scan(&results).Error
+	return results, err
+}
+
+// CompaniesOverTimeEntry represents a time series data point
+type CompaniesOverTimeEntry struct {
+	Date  string `json:"date"`
+	Value int64  `json:"value"`
+}
+
+// GetCompaniesOverTime returns monthly company registrations since a given time
+func (r *CompanyRepository) GetCompaniesOverTime(since time.Time) ([]CompaniesOverTimeEntry, error) {
+	var results []CompaniesOverTimeEntry
+	err := r.db.Model(&domain.Company{}).
+		Select("TO_CHAR(created_at, 'YYYY-MM') as date, COUNT(*) as value").
+		Where("created_at >= ? AND deleted_at IS NULL", since).
+		Group("TO_CHAR(created_at, 'YYYY-MM')").
+		Order("date ASC").
+		Scan(&results).Error
+	return results, err
+}
+
 // GetCompanyJobs retrieves jobs for a company
 func (r *CompanyRepository) GetCompanyJobs(companyID uuid.UUID, limit, offset int) ([]*domain.Job, int64, error) {
 	var jobs []*domain.Job

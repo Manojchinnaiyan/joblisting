@@ -83,8 +83,6 @@ export default function EmployerDashboardPage() {
           <StatsCard
             title="New Applications"
             value={analytics?.new_applications ?? 0}
-            change={12}
-            changeLabel="this week"
             icon={Clock}
             iconColor="text-orange-500"
           />

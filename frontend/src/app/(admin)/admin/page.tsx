@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect } from 'react'
 import Link from 'next/link'
 import {
   Users,
@@ -8,10 +7,6 @@ import {
   Briefcase,
   FileText,
   TrendingUp,
-  TrendingDown,
-  Clock,
-  CheckCircle,
-  AlertCircle,
   ArrowRight,
   UserPlus,
   Building,
@@ -22,11 +17,9 @@ import {
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StatsCard } from '@/components/admin/stats-card'
 import { useAnalyticsOverview } from '@/hooks/admin'
-import { formatDistanceToNow } from 'date-fns'
 
 export default function AdminDashboardPage() {
   const { data: analytics, isLoading } = useAnalyticsOverview('30d')
@@ -47,13 +40,7 @@ export default function AdminDashboardPage() {
     pendingReviews: analytics?.reviews?.pending_moderation || 0,
   }
 
-  const recentActivity: Array<{type: string, title: string, description: string, time: string, timestamp: string}> = []
-  const trends = {
-    users: { value: analytics?.users?.growth || 0, isPositive: (analytics?.users?.growth || 0) >= 0 },
-    companies: { value: 0, isPositive: true },
-    jobs: { value: 0, isPositive: true },
-    applications: { value: 0, isPositive: true },
-  }
+  const userGrowth = analytics?.users?.growth || 0
 
   return (
     <div className="space-y-4 md:space-y-6">
@@ -71,33 +58,27 @@ export default function AdminDashboardPage() {
           title="Total Users"
           value={stats.totalUsers.toLocaleString()}
           icon={Users}
-          trend={trends.users.isPositive ? 'up' : 'down'}
-          trendValue={`${trends.users.value}%`}
+          trend={userGrowth >= 0 ? 'up' : 'down'}
+          trendValue={`${userGrowth.toFixed(1)}%`}
           description="vs last month"
         />
         <StatsCard
           title="Companies"
           value={stats.totalCompanies.toLocaleString()}
           icon={Building2}
-          trend={trends.companies.isPositive ? 'up' : 'down'}
-          trendValue={`${trends.companies.value}%`}
-          description="vs last month"
+          description="registered companies"
         />
         <StatsCard
           title="Active Jobs"
           value={stats.activeJobs.toLocaleString()}
           icon={Briefcase}
-          trend={trends.jobs.isPositive ? 'up' : 'down'}
-          trendValue={`${trends.jobs.value}%`}
-          description="vs last month"
+          description="currently active"
         />
         <StatsCard
           title="Applications"
           value={stats.totalApplications.toLocaleString()}
           icon={FileText}
-          trend={trends.applications.isPositive ? 'up' : 'down'}
-          trendValue={`${trends.applications.value}%`}
-          description="vs last month"
+          description="total applications"
         />
       </div>
 
@@ -207,49 +188,8 @@ export default function AdminDashboardPage() {
         </Card>
       </div>
 
-      {/* Recent Activity and Quick Actions */}
-      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2">
-        {/* Recent Activity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Activity</CardTitle>
-            <CardDescription>Latest actions on the platform</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {recentActivity.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No recent activity
-                </p>
-              ) : (
-                recentActivity.slice(0, 8).map((activity, index) => (
-                  <div key={index} className="flex items-start gap-3">
-                    <div className={`rounded-full p-2 ${getActivityIconColor(activity.type)}`}>
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{activity.title}</p>
-                      <p className="text-xs text-muted-foreground">{activity.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(activity.timestamp), { addSuffix: true })}
-                      </p>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-            {recentActivity.length > 8 && (
-              <Button variant="ghost" className="w-full mt-4" asChild>
-                <Link href="/admin/analytics/overview">
-                  View All Activity
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Quick Actions */}
+      {/* Quick Actions */}
+      <div className="grid gap-3 md:gap-4 grid-cols-1">
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -354,44 +294,6 @@ export default function AdminDashboardPage() {
   )
 }
 
-function getActivityIcon(type: string) {
-  switch (type) {
-    case 'user_registered':
-      return <UserPlus className="h-4 w-4" />
-    case 'company_created':
-    case 'company_verified':
-      return <Building2 className="h-4 w-4" />
-    case 'job_posted':
-    case 'job_approved':
-      return <Briefcase className="h-4 w-4" />
-    case 'application_submitted':
-      return <FileText className="h-4 w-4" />
-    case 'review_submitted':
-      return <MessageSquare className="h-4 w-4" />
-    default:
-      return <Activity className="h-4 w-4" />
-  }
-}
-
-function getActivityIconColor(type: string) {
-  switch (type) {
-    case 'user_registered':
-      return 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'
-    case 'company_created':
-    case 'company_verified':
-      return 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400'
-    case 'job_posted':
-    case 'job_approved':
-      return 'bg-indigo-100 text-indigo-600 dark:bg-indigo-900 dark:text-indigo-400'
-    case 'application_submitted':
-      return 'bg-orange-100 text-orange-600 dark:bg-orange-900 dark:text-orange-400'
-    case 'review_submitted':
-      return 'bg-purple-100 text-purple-600 dark:bg-purple-900 dark:text-purple-400'
-    default:
-      return 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
-  }
-}
-
 function DashboardSkeleton() {
   return (
     <div className="space-y-4 md:space-y-6">
@@ -446,27 +348,7 @@ function DashboardSkeleton() {
         ))}
       </div>
 
-      <div className="grid gap-3 md:gap-4 grid-cols-1 md:grid-cols-2">
-        <Card>
-          <CardHeader className="p-3 md:p-6">
-            <Skeleton className="h-5 md:h-6 w-28 md:w-32" />
-            <Skeleton className="h-4 w-40 md:w-48" />
-          </CardHeader>
-          <CardContent className="p-3 pt-0 md:p-6 md:pt-0">
-            <div className="space-y-3 md:space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <Skeleton className="h-8 w-8 rounded-full" />
-                  <div className="flex-1">
-                    <Skeleton className="h-4 w-full" />
-                    <Skeleton className="h-3 w-24 mt-1" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
+      <div className="grid gap-3 md:gap-4 grid-cols-1">
         <Card>
           <CardHeader className="p-3 md:p-6">
             <Skeleton className="h-5 md:h-6 w-24 md:w-28" />

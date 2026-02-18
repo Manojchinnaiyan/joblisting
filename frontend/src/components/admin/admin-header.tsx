@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Bell, Menu, Search, User } from 'lucide-react'
+import { Menu, Search, User } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -66,53 +66,6 @@ export function AdminHeader({ title }: AdminHeaderProps) {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        {/* Notifications */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800">
-              <Bell className="h-5 w-5" />
-              <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-[10px] text-white">
-                3
-              </span>
-              <span className="sr-only">Notifications</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-80 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-            <DropdownMenuLabel className="text-slate-900 dark:text-white">Notifications</DropdownMenuLabel>
-            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
-            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-white">New company verification</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  TechCorp Inc. submitted verification documents
-                </p>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-white">Job pending approval</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Senior Developer position needs review
-                </p>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium text-slate-900 dark:text-white">Review flagged</p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  A review has been reported for moderation
-                </p>
-              </div>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-slate-200 dark:bg-slate-700" />
-            <DropdownMenuItem asChild className="hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700">
-              <Link href="/admin/notifications" className="w-full text-center text-sm text-slate-900 dark:text-white">
-                View all notifications
-              </Link>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
         {/* User menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

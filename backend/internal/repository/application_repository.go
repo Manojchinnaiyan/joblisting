@@ -226,6 +226,22 @@ func (r *ApplicationRepository) CountApplicationsByStatus(jobID uuid.UUID, statu
 	return count, err
 }
 
+// CountAll counts all applications
+func (r *ApplicationRepository) CountAll() (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Application{}).Count(&count).Error
+	return count, err
+}
+
+// CountCreatedSince counts applications created since a given time
+func (r *ApplicationRepository) CountCreatedSince(since time.Time) (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Application{}).
+		Where("created_at >= ?", since).
+		Count(&count).Error
+	return count, err
+}
+
 // CountAllByStatus counts all applications by status (admin)
 func (r *ApplicationRepository) CountAllByStatus(status domain.ApplicationStatus) (int64, error) {
 	var count int64

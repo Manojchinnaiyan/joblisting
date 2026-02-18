@@ -136,3 +136,24 @@ func (r *JobCategoryRepository) ToggleActive(categoryID uuid.UUID, isActive bool
 		Where("id = ?", categoryID).
 		Update("is_active", isActive).Error
 }
+
+// CategoryJobCount represents a category with its job count
+type CategoryJobCount struct {
+	Name  string `json:"name"`
+	Count int64  `json:"count"`
+}
+
+// GetTopCategoriesWithJobCount returns categories ordered by active job count
+func (r *JobCategoryRepository) GetTopCategoriesWithJobCount(limit int) ([]CategoryJobCount, error) {
+	var results []CategoryJobCount
+	err := r.db.Table("job_categories").
+		Select("job_categories.name, COUNT(job_category_mappings.job_id) as count").
+		Joins("JOIN job_category_mappings ON job_category_mappings.category_id = job_categories.id").
+		Joins("JOIN jobs ON jobs.id = job_category_mappings.job_id").
+		Where("jobs.deleted_at IS NULL AND jobs.status = ? AND job_categories.is_active = ?", "ACTIVE", true).
+		Group("job_categories.id, job_categories.name").
+		Order("count DESC").
+		Limit(limit).
+		Scan(&results).Error
+	return results, err
+}

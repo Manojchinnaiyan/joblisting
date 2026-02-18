@@ -20,6 +20,7 @@ type AdminAnalyticsHandler struct {
 	applicationRepo *repository.ApplicationRepository
 	reviewRepo      *repository.ReviewRepository
 	jobViewRepo     *repository.JobViewRepository
+	jobCategoryRepo *repository.JobCategoryRepository
 }
 
 // NewAdminAnalyticsHandler creates a new admin analytics handler
@@ -31,6 +32,7 @@ func NewAdminAnalyticsHandler(
 	applicationRepo *repository.ApplicationRepository,
 	reviewRepo *repository.ReviewRepository,
 	jobViewRepo *repository.JobViewRepository,
+	jobCategoryRepo *repository.JobCategoryRepository,
 ) *AdminAnalyticsHandler {
 	return &AdminAnalyticsHandler{
 		userService:     userService,
@@ -40,6 +42,7 @@ func NewAdminAnalyticsHandler(
 		applicationRepo: applicationRepo,
 		reviewRepo:      reviewRepo,
 		jobViewRepo:     jobViewRepo,
+		jobCategoryRepo: jobCategoryRepo,
 	}
 }
 
@@ -108,8 +111,86 @@ func (h *AdminAnalyticsHandler) GetSecurityEvents(c *gin.Context) {
 	})
 }
 
+// GetLoginHistory retrieves paginated login history across all users
+func (h *AdminAnalyticsHandler) GetLoginHistory(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	status := c.DefaultQuery("status", "")
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	if days < 1 {
+		days = 30
+	}
+
+	since := time.Now().AddDate(0, 0, -days)
+
+	history, total, err := h.adminService.GetPaginatedLoginHistory(page, limit, status, since)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	type loginEntry struct {
+		ID            string  `json:"id"`
+		UserID        *string `json:"user_id"`
+		Email         string  `json:"email"`
+		UserName      string  `json:"user_name"`
+		Status        string  `json:"status"`
+		IPAddress     string  `json:"ip_address"`
+		UserAgent     string  `json:"user_agent"`
+		FailureReason string  `json:"failure_reason"`
+		CreatedAt     string  `json:"created_at"`
+	}
+
+	entries := make([]loginEntry, 0, len(history))
+	for _, h := range history {
+		entry := loginEntry{
+			ID:        h.ID.String(),
+			Email:     h.Email,
+			Status:    string(h.Status),
+			CreatedAt: h.CreatedAt.Format(time.RFC3339),
+		}
+		if h.UserID != nil {
+			uid := h.UserID.String()
+			entry.UserID = &uid
+		}
+		if h.User != nil {
+			entry.UserName = h.User.FirstName + " " + h.User.LastName
+		}
+		if h.IPAddress != nil {
+			entry.IPAddress = *h.IPAddress
+		}
+		if h.UserAgent != nil {
+			entry.UserAgent = *h.UserAgent
+		}
+		if h.FailureReason != nil {
+			entry.FailureReason = *h.FailureReason
+		}
+		entries = append(entries, entry)
+	}
+
+	totalPages := (total + int64(limit) - 1) / int64(limit)
+
+	response.OK(c, "Login history retrieved successfully", gin.H{
+		"history":     entries,
+		"total":       total,
+		"page":        page,
+		"limit":       limit,
+		"total_pages": totalPages,
+	})
+}
+
 // GetJobAnalytics retrieves job analytics for admin
 func (h *AdminAnalyticsHandler) GetJobAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
 	// Get all jobs count
 	_, allJobsCount, _ := h.jobRepo.GetAllJobs(nil, 1, 0)
 
@@ -133,6 +214,35 @@ func (h *AdminAnalyticsHandler) GetJobAnalytics(c *gin.Context) {
 	rejectedStatus := domain.JobStatusRejected
 	_, rejectedJobsCount, _ := h.jobRepo.GetAllJobs(&rejectedStatus, 1, 0)
 
+	// New jobs in current period
+	newJobsPeriod, _ := h.jobRepo.CountCreatedSince(since)
+
+	// Growth: compare current period with previous period of same length
+	periodDuration := time.Since(since)
+	prevPeriodStart := since.Add(-periodDuration)
+	newJobsPrevPeriod, _ := h.jobRepo.CountCreatedSince(prevPeriodStart)
+	// Subtract current period count from the "since prevPeriodStart" count to get only prev period
+	newJobsPrevPeriod = newJobsPrevPeriod - newJobsPeriod
+
+	growthPercentage := float64(0)
+	if newJobsPrevPeriod > 0 {
+		growthPercentage = float64(newJobsPeriod-newJobsPrevPeriod) / float64(newJobsPrevPeriod) * 100
+	}
+
+	// Featured jobs count
+	featuredJobs, _ := h.jobRepo.CountFeatured()
+
+	// Jobs over time
+	jobsOverTime, _ := h.jobViewRepo.GetMonthlyJobActivity(12)
+
+	// Top categories
+	topCategories, _ := h.jobCategoryRepo.GetTopCategoriesWithJobCount(10)
+
+	// Count by type, experience level, workplace type
+	byType, _ := h.jobRepo.CountByJobType()
+	byExperienceLevel, _ := h.jobRepo.CountByExperienceLevel()
+	byWorkplaceType, _ := h.jobRepo.CountByWorkplaceType()
+
 	response.OK(c, "Job analytics retrieved successfully", gin.H{
 		"total_jobs":  allJobsCount,
 		"active_jobs": activeJobsCount,
@@ -143,19 +253,22 @@ func (h *AdminAnalyticsHandler) GetJobAnalytics(c *gin.Context) {
 			"closed":   closedJobsCount,
 			"rejected": rejectedJobsCount,
 		},
-		"new_jobs_period":    0,
-		"growth_percentage":  0,
-		"featured_jobs":      0,
-		"jobs_over_time":     []interface{}{},
-		"top_categories":     []interface{}{},
-		"by_type":            gin.H{},
-		"by_experience_level": gin.H{},
-		"by_workplace_type":   gin.H{},
+		"new_jobs_period":     newJobsPeriod,
+		"growth_percentage":   growthPercentage,
+		"featured_jobs":       featuredJobs,
+		"jobs_over_time":      jobsOverTime,
+		"top_categories":      topCategories,
+		"by_type":             byType,
+		"by_experience_level": byExperienceLevel,
+		"by_workplace_type":   byWorkplaceType,
 	})
 }
 
 // GetApplicationAnalytics retrieves application analytics for admin
 func (h *AdminAnalyticsHandler) GetApplicationAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
 	// Get application counts by status
 	submittedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusSubmitted)
 	reviewedCount, _ := h.applicationRepo.CountAllByStatus(domain.ApplicationStatusReviewed)
@@ -168,10 +281,42 @@ func (h *AdminAnalyticsHandler) GetApplicationAnalytics(c *gin.Context) {
 
 	totalApplications := submittedCount + reviewedCount + shortlistedCount + interviewCount + offeredCount + hiredCount + rejectedCount + withdrawnCount
 
+	// New applications in current period
+	newAppsPeriod, _ := h.applicationRepo.CountCreatedSince(since)
+
+	// Growth: compare current period with previous period
+	periodDuration := time.Since(since)
+	prevPeriodStart := since.Add(-periodDuration)
+	newAppsPrevPeriod, _ := h.applicationRepo.CountCreatedSince(prevPeriodStart)
+	newAppsPrevPeriod = newAppsPrevPeriod - newAppsPeriod
+
+	growthPercentage := float64(0)
+	if newAppsPrevPeriod > 0 {
+		growthPercentage = float64(newAppsPeriod-newAppsPrevPeriod) / float64(newAppsPrevPeriod) * 100
+	}
+
+	// Average applications per job
+	activeStatus := domain.JobStatusActive
+	_, activeJobsCount, _ := h.jobRepo.GetAllJobs(&activeStatus, 1, 0)
+	avgAppsPerJob := float64(0)
+	if activeJobsCount > 0 {
+		avgAppsPerJob = float64(totalApplications) / float64(activeJobsCount)
+	}
+
+	// Conversion rate: applications / views
+	totalViews, _ := h.jobViewRepo.GetTotalViews()
+	conversionRate := float64(0)
+	if totalViews > 0 {
+		conversionRate = float64(totalApplications) / float64(totalViews) * 100
+	}
+
+	// Applications over time
+	applicationsOverTime, _ := h.jobViewRepo.GetApplicationsOverTime(since)
+
 	response.OK(c, "Application analytics retrieved successfully", gin.H{
-		"total_applications":     totalApplications,
-		"new_applications_period": 0,
-		"growth_percentage":       0,
+		"total_applications":           totalApplications,
+		"new_applications_period":      newAppsPeriod,
+		"growth_percentage":            growthPercentage,
 		"by_status": gin.H{
 			"pending":     submittedCount,
 			"reviewed":    reviewedCount,
@@ -182,14 +327,17 @@ func (h *AdminAnalyticsHandler) GetApplicationAnalytics(c *gin.Context) {
 			"rejected":    rejectedCount,
 			"withdrawn":   withdrawnCount,
 		},
-		"average_applications_per_job": 0,
-		"conversion_rate":              0,
-		"applications_over_time":       []interface{}{},
+		"average_applications_per_job": avgAppsPerJob,
+		"conversion_rate":              conversionRate,
+		"applications_over_time":       applicationsOverTime,
 	})
 }
 
 // GetCompanyAnalytics retrieves company analytics for admin
 func (h *AdminAnalyticsHandler) GetCompanyAnalytics(c *gin.Context) {
+	period := c.DefaultQuery("period", "30d")
+	since := parsePeriod(period)
+
 	// Get company counts by status
 	activeCount, _ := h.companyRepo.CountByStatus(domain.CompanyStatusActive)
 	pendingCount, _ := h.companyRepo.CountByStatus(domain.CompanyStatusPending)
@@ -198,22 +346,52 @@ func (h *AdminAnalyticsHandler) GetCompanyAnalytics(c *gin.Context) {
 
 	totalCompanies := activeCount + pendingCount + suspendedCount + verifiedCount
 
+	// New companies in current period
+	newCompaniesPeriod, _ := h.companyRepo.CountCreatedSince(since)
+
+	// Growth: compare current period with previous period
+	periodDuration := time.Since(since)
+	prevPeriodStart := since.Add(-periodDuration)
+	newCompaniesPrevPeriod, _ := h.companyRepo.CountCreatedSince(prevPeriodStart)
+	newCompaniesPrevPeriod = newCompaniesPrevPeriod - newCompaniesPeriod
+
+	growthPercentage := float64(0)
+	if newCompaniesPrevPeriod > 0 {
+		growthPercentage = float64(newCompaniesPeriod-newCompaniesPrevPeriod) / float64(newCompaniesPrevPeriod) * 100
+	}
+
+	// Verification rate
+	verificationRate := float64(0)
+	if totalCompanies > 0 {
+		verificationRate = float64(verifiedCount) / float64(totalCompanies) * 100
+	}
+
+	// Featured companies
+	featuredCompanies, _ := h.companyRepo.CountFeatured()
+
+	// By industry and size
+	byIndustry, _ := h.companyRepo.CountByIndustry()
+	bySize, _ := h.companyRepo.CountBySize()
+
+	// Companies over time
+	companiesOverTime, _ := h.companyRepo.GetCompaniesOverTime(since)
+
 	response.OK(c, "Company analytics retrieved successfully", gin.H{
-		"total_companies":     totalCompanies,
-		"active_companies":    activeCount + verifiedCount,
-		"new_companies_period": 0,
-		"growth_percentage":    0,
+		"total_companies":      totalCompanies,
+		"active_companies":     activeCount + verifiedCount,
+		"new_companies_period": newCompaniesPeriod,
+		"growth_percentage":    growthPercentage,
 		"by_status": gin.H{
 			"active":    activeCount,
 			"pending":   pendingCount,
 			"suspended": suspendedCount,
 		},
-		"verified_companies":   verifiedCount,
-		"verification_rate":    0,
-		"featured_companies":   0,
-		"by_industry":          []interface{}{},
-		"by_size":              []interface{}{},
-		"companies_over_time":  []interface{}{},
+		"verified_companies":  verifiedCount,
+		"verification_rate":   verificationRate,
+		"featured_companies":  featuredCompanies,
+		"by_industry":         byIndustry,
+		"by_size":             bySize,
+		"companies_over_time": companiesOverTime,
 	})
 }
 
@@ -253,10 +431,10 @@ func (h *AdminAnalyticsHandler) GetDashboard(c *gin.Context) {
 	pendingStatus := domain.JobStatusPendingApproval
 	_, pendingJobsCount, _ := h.jobRepo.GetAllJobs(&pendingStatus, 1, 0)
 
-	// Get application stats - we'll estimate from recent activity
-	// For now, use a simple count approach
-	applicationsTotal := int64(0)
-	applicationsNewToday := int64(0)
+	// Get application stats
+	applicationsTotal, _ := h.applicationRepo.CountAll()
+	todayStart := time.Date(time.Now().Year(), time.Now().Month(), time.Now().Day(), 0, 0, 0, 0, time.Now().Location())
+	applicationsNewToday, _ := h.applicationRepo.CountCreatedSince(todayStart)
 
 	// Get pending reviews count using GetPendingReviews
 	_, pendingReviews, _ := h.reviewRepo.GetPendingReviews(1, 0)

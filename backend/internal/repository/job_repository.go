@@ -467,6 +467,90 @@ type JobFilters struct {
 	CategorySlug     string
 }
 
+// CountCreatedSince counts jobs created since a given time
+func (r *JobRepository) CountCreatedSince(since time.Time) (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Job{}).
+		Where("created_at >= ? AND deleted_at IS NULL", since).
+		Count(&count).Error
+	return count, err
+}
+
+// CountFeatured counts featured jobs
+func (r *JobRepository) CountFeatured() (int64, error) {
+	var count int64
+	err := r.db.Model(&domain.Job{}).
+		Where("is_featured = ? AND deleted_at IS NULL", true).
+		Count(&count).Error
+	return count, err
+}
+
+// CountByJobType counts jobs grouped by job type
+func (r *JobRepository) CountByJobType() (map[string]int64, error) {
+	type TypeCount struct {
+		JobType string
+		Count   int64
+	}
+	var results []TypeCount
+	err := r.db.Model(&domain.Job{}).
+		Select("job_type, COUNT(*) as count").
+		Where("deleted_at IS NULL").
+		Group("job_type").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int64)
+	for _, r := range results {
+		counts[r.JobType] = r.Count
+	}
+	return counts, nil
+}
+
+// CountByExperienceLevel counts jobs grouped by experience level
+func (r *JobRepository) CountByExperienceLevel() (map[string]int64, error) {
+	type LevelCount struct {
+		ExperienceLevel string
+		Count           int64
+	}
+	var results []LevelCount
+	err := r.db.Model(&domain.Job{}).
+		Select("experience_level, COUNT(*) as count").
+		Where("deleted_at IS NULL").
+		Group("experience_level").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int64)
+	for _, r := range results {
+		counts[r.ExperienceLevel] = r.Count
+	}
+	return counts, nil
+}
+
+// CountByWorkplaceType counts jobs grouped by workplace type
+func (r *JobRepository) CountByWorkplaceType() (map[string]int64, error) {
+	type WpCount struct {
+		WorkplaceType string
+		Count         int64
+	}
+	var results []WpCount
+	err := r.db.Model(&domain.Job{}).
+		Select("workplace_type, COUNT(*) as count").
+		Where("deleted_at IS NULL").
+		Group("workplace_type").
+		Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+	counts := make(map[string]int64)
+	for _, r := range results {
+		counts[r.WorkplaceType] = r.Count
+	}
+	return counts, nil
+}
+
 // GetFilteredJobs retrieves active jobs with filters and pagination
 func (r *JobRepository) GetFilteredJobs(filters JobFilters, limit, offset int) ([]domain.Job, int64, error) {
 	var jobs []domain.Job

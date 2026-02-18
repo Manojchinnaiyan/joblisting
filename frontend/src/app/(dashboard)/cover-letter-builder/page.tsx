@@ -80,6 +80,7 @@ export default function CoverLetterBuilderPage() {
       setData(newData)
       setPreviewData(newData)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHydrated, user, data.senderName])
 
   // Auto-save to localStorage
