@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -15,17 +16,19 @@ import (
 
 // BlogHandler handles blog-related HTTP requests
 type BlogHandler struct {
-	blogService   *service.BlogService
-	searchService *service.SearchService
-	cacheService  *cache.CacheService
+	blogService     *service.BlogService
+	searchService   *service.SearchService
+	cacheService    *cache.CacheService
+	linkedinService *service.LinkedInService
 }
 
 // NewBlogHandler creates a new blog handler
-func NewBlogHandler(blogService *service.BlogService, searchService *service.SearchService, cacheService *cache.CacheService) *BlogHandler {
+func NewBlogHandler(blogService *service.BlogService, searchService *service.SearchService, cacheService *cache.CacheService, linkedinService *service.LinkedInService) *BlogHandler {
 	return &BlogHandler{
-		blogService:   blogService,
-		searchService: searchService,
-		cacheService:  cacheService,
+		blogService:     blogService,
+		searchService:   searchService,
+		cacheService:    cacheService,
+		linkedinService: linkedinService,
 	}
 }
 
@@ -140,6 +143,25 @@ func (h *BlogHandler) PublishBlog(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Auto-post to LinkedIn (non-blocking)
+	if h.linkedinService != nil {
+		adminUserID, _ := c.Get("user_id")
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("LinkedIn auto-post panic for blog %s: %v", id, r)
+				}
+			}()
+			uid, ok := adminUserID.(uuid.UUID)
+			if !ok {
+				return
+			}
+			if err := h.linkedinService.AutoPostBlog(context.Background(), blog, uid); err != nil {
+				log.Printf("LinkedIn auto-post failed for blog %s: %v", id, err)
+			}
+		}()
 	}
 
 	c.JSON(http.StatusOK, blog)

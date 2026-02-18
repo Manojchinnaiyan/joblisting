@@ -199,8 +199,13 @@ services:
       RESEND_FROM_NAME: Job Platform
 
       # Admin
-      ADMIN_EMAIL_DOMAIN: "@admin.jobsworld.com"
-      SUPER_ADMIN_EMAIL: superadmin@admin.jobsworld.com
+      ADMIN_EMAIL_DOMAIN: "@jobsworld.in"
+      SUPER_ADMIN_EMAIL: admin@jobsworld.in
+
+      # LinkedIn OAuth
+      LINKEDIN_CLIENT_ID: ${LINKEDIN_CLIENT_ID:-your-linkedin-client-id}
+      LINKEDIN_CLIENT_SECRET: ${LINKEDIN_CLIENT_SECRET:-your-linkedin-client-secret}
+      LINKEDIN_REDIRECT_URL: http://localhost:3000/admin/linkedin/callback
 
       # Frontend URLs
       FRONTEND_URL: http://localhost:3000

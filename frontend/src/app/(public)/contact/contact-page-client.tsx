@@ -64,10 +64,10 @@ export function ContactPageClient() {
                   <div>
                     <h3 className="font-semibold">Email Us</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      support@jobsworld.com
+                      info@jobsworld.in
                     </p>
                     <p className="text-sm text-muted-foreground">
-                      careers@jobsworld.com
+                      careers@jobsworld.in
                     </p>
                   </div>
                 </div>

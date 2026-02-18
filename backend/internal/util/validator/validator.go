@@ -18,7 +18,7 @@ var (
 	urlRegex = regexp.MustCompile(`^https?://[a-zA-Z0-9\-._~:/?#[\]@!$&'()*+,;=%]+$`)
 
 	// Admin email domains
-	adminEmailDomains = []string{"admin.jobsworld.com"}
+	adminEmailDomains = []string{"jobsworld.in"}
 )
 
 // ValidationError represents a validation error

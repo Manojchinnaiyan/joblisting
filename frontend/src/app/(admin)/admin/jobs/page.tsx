@@ -22,6 +22,7 @@ import {
   Link2,
   Loader2,
   RefreshCw,
+  Linkedin,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -53,6 +54,7 @@ import {
   useUnfeatureJob,
   useDeleteJob,
   useReindexJobs,
+  usePostJobToLinkedIn,
 } from '@/hooks/admin'
 import { AdminJobListItem } from '@/lib/api/admin/jobs'
 
@@ -76,6 +78,7 @@ export default function JobsPage() {
   const unfeatureJob = useUnfeatureJob()
   const deleteJob = useDeleteJob()
   const reindexJobs = useReindexJobs()
+  const postToLinkedIn = usePostJobToLinkedIn()
 
   const handleAction = async () => {
     try {
@@ -354,6 +357,16 @@ export default function JobsPage() {
                 </DropdownMenuItem>
               )}
               <DropdownMenuSeparator />
+              {job.status === 'ACTIVE' && (
+                <DropdownMenuItem
+                  onClick={() => postToLinkedIn.mutate(job.id)}
+                  disabled={postToLinkedIn.isPending}
+                  className="text-[#0A66C2]"
+                >
+                  <Linkedin className="mr-2 h-4 w-4" />
+                  Post to LinkedIn
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 onClick={() => {
                   setSelectedJob(job)

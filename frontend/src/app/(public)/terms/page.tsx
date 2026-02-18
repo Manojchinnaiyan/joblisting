@@ -177,7 +177,7 @@ export default function TermsPage() {
             </p>
             <div className="mt-4 p-4 bg-muted rounded-lg">
               <p className="text-muted-foreground">
-                <strong>Email:</strong> legal@jobsworld.com<br />
+                <strong>Email:</strong> info@jobsworld.in<br />
                 <strong>Address:</strong> 123 Tech Hub Street, San Francisco, CA 94105
               </p>
             </div>

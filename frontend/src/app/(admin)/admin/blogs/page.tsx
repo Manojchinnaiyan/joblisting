@@ -16,6 +16,7 @@ import {
   X,
   RefreshCw,
   Sparkles,
+  Linkedin,
 } from 'lucide-react'
 import { Blog, BlogStatus, adminBlogApi, blogApi, BlogCategory } from '@/lib/api/blog'
 import { BlogStatusBadge } from '@/components/blog/BlogStatusBadge'
@@ -47,6 +48,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { useToast } from '@/hooks/use-toast'
+import { usePostBlogToLinkedIn } from '@/hooks/admin/use-admin-linkedin'
 
 export default function AdminBlogsPage() {
   const { toast } = useToast()
@@ -61,6 +63,7 @@ export default function AdminBlogsPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const postToLinkedIn = usePostBlogToLinkedIn()
   const [previewBlog, setPreviewBlog] = useState<Blog | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [isReindexing, setIsReindexing] = useState(false)
@@ -410,6 +413,17 @@ export default function AdminBlogsPage() {
                             )}
                           </Button>
                         ) : null}
+                        {blog.status === 'published' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => postToLinkedIn.mutate(blog.id)}
+                            disabled={postToLinkedIn.isPending}
+                            title="Post to LinkedIn"
+                          >
+                            <Linkedin className="h-4 w-4 text-[#0A66C2]" />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"

@@ -19,6 +19,7 @@ import {
   LogOut,
   BookOpen,
   Database,
+  Linkedin,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -103,6 +104,11 @@ const navItems: NavItem[] = [
     title: 'Security',
     href: '/admin/security',
     icon: Shield,
+  },
+  {
+    title: 'LinkedIn',
+    href: '/admin/linkedin',
+    icon: Linkedin,
   },
   {
     title: 'Cache',

@@ -8,6 +8,7 @@ import (
 	"job-platform/internal/repository"
 	"job-platform/internal/service"
 	"job-platform/internal/util/response"
+	"log"
 	"strconv"
 	"time"
 
@@ -21,6 +22,7 @@ type AdminJobHandler struct {
 	applicationService *service.ApplicationService
 	categoryService    *service.JobCategoryService
 	searchService      *service.SearchService
+	linkedinService    *service.LinkedInService
 }
 
 // NewAdminJobHandler creates a new admin job handler
@@ -29,12 +31,14 @@ func NewAdminJobHandler(
 	applicationService *service.ApplicationService,
 	categoryService *service.JobCategoryService,
 	searchService *service.SearchService,
+	linkedinService *service.LinkedInService,
 ) *AdminJobHandler {
 	return &AdminJobHandler{
 		jobService:         jobService,
 		applicationService: applicationService,
 		categoryService:    categoryService,
 		searchService:      searchService,
+		linkedinService:    linkedinService,
 	}
 }
 
@@ -154,6 +158,20 @@ func (h *AdminJobHandler) ApproveJob(c *gin.Context) {
 
 	// Convert to response
 	jobResponse := dto.ToJobResponse(job, nil)
+
+	// Auto-post to LinkedIn (non-blocking)
+	if h.linkedinService != nil {
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Printf("LinkedIn auto-post panic for job %s: %v", jobID, r)
+				}
+			}()
+			if err := h.linkedinService.AutoPostJob(context.Background(), job, user.ID); err != nil {
+				log.Printf("LinkedIn auto-post failed for job %s: %v", jobID, err)
+			}
+		}()
+	}
 
 	response.OK(c, "Job approved successfully", jobResponse)
 }

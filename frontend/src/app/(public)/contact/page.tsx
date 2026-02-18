@@ -77,7 +77,7 @@ function ContactStructuredData() {
     mainEntity: {
       '@type': 'Organization',
       name: APP_NAME,
-      email: 'support@jobsworld.com',
+      email: 'info@jobsworld.in',
       telephone: '+1 (555) 123-4567',
       address: {
         '@type': 'PostalAddress',

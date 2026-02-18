@@ -1,5 +1,5 @@
 -- Create Super Admin User
--- Email: superadmin@admin.jobsworld.com
+-- Email: admin@jobsworld.in
 -- Password: AdminPass123!
 -- Password hash generated with bcrypt cost 12
 
@@ -12,7 +12,7 @@ DECLARE
     v_password_hash VARCHAR(255) := '$2a$12$tvuuhVdhst1RK3uOxFsDAOqID54FL59aqrsZH84z1d8UFK0X49XLK';
 BEGIN
     -- Check if admin already exists
-    IF EXISTS (SELECT 1 FROM users WHERE email = 'superadmin@admin.jobsworld.com') THEN
+    IF EXISTS (SELECT 1 FROM users WHERE email = 'admin@jobsworld.in') THEN
         RAISE NOTICE 'Admin user already exists!';
     ELSE
         -- Insert admin user
@@ -22,7 +22,7 @@ BEGIN
             failed_login_attempts
         ) VALUES (
             v_user_id,
-            'superadmin@admin.jobsworld.com',
+            'admin@jobsworld.in',
             v_password_hash,
             'Super',
             'Admin',
@@ -42,7 +42,7 @@ BEGIN
         VALUES (v_password_history_id, v_user_id, v_password_hash);
 
         RAISE NOTICE 'Super Admin user created successfully!';
-        RAISE NOTICE 'Email: superadmin@admin.jobsworld.com';
+        RAISE NOTICE 'Email: admin@jobsworld.in';
         RAISE NOTICE 'Password: AdminPass123!';
         RAISE NOTICE 'User ID: %', v_user_id;
     END IF;

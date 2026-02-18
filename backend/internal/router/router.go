@@ -214,6 +214,21 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	// Search service
 	searchService := service.NewSearchService(meiliClient)
 
+	// LinkedIn service
+	linkedInTokenRepo := repository.NewLinkedInTokenRepository(db)
+	linkedInPostRepo := repository.NewLinkedInPostRepository(db)
+	linkedInService := service.NewLinkedInService(
+		linkedInTokenRepo,
+		linkedInPostRepo,
+		cmsService,
+		service.LinkedInConfig{
+			ClientID:     cfg.LinkedInClientID,
+			ClientSecret: cfg.LinkedInClientSecret,
+			RedirectURL:  cfg.LinkedInRedirectURL,
+			FrontendURL:  cfg.FrontendURL,
+		},
+	)
+
 	// Set notification service on application service (to avoid circular dependency)
 	applicationService.SetNotificationService(notificationService)
 
@@ -230,7 +245,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	jobHandler := handler.NewJobHandler(jobService, jobCategoryService, savedJobService, meiliClient, cacheService)
 	jobSeekerHandler := handler.NewJobSeekerHandler(applicationService, savedJobService, jobService)
 	employerJobHandler := handler.NewEmployerJobHandler(jobService, applicationService, cacheService)
-	adminJobHandler := handler.NewAdminJobHandler(jobService, applicationService, jobCategoryService, searchService)
+	adminJobHandler := handler.NewAdminJobHandler(jobService, applicationService, jobCategoryService, searchService, linkedInService)
 
 	// Profile management handlers
 	profileHandler := handler.NewProfileHandler(profileService, userService, minioClient)
@@ -255,7 +270,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	notificationHandler := handler.NewNotificationHandler(notificationService)
 
 	// Blog handler
-	blogHandler := handler.NewBlogHandler(blogService, searchService, cacheService)
+	blogHandler := handler.NewBlogHandler(blogService, searchService, cacheService, linkedInService)
+
+	// LinkedIn handler
+	adminLinkedInHandler := handler.NewAdminLinkedInHandler(linkedInService, jobService, blogService)
 
 	// Blog scraper handler
 	blogScraperHandler := handler.NewBlogScraperHandler(aiService, scraperService, blogService)
@@ -925,6 +943,31 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 		{
 			adminBlogTags.POST("", blogHandler.CreateTag)
 			adminBlogTags.DELETE("/:id", blogHandler.DeleteTag)
+		}
+
+		// ==================== Admin LinkedIn Routes ====================
+		adminLinkedIn := v1.Group("/admin/linkedin")
+		adminLinkedIn.Use(authMiddleware, adminMiddleware)
+		{
+			// OAuth
+			adminLinkedIn.GET("/auth/url", adminLinkedInHandler.GetAuthURL)
+			adminLinkedIn.POST("/auth/callback", adminLinkedInHandler.HandleCallback)
+
+			// Connection management
+			adminLinkedIn.GET("/status", adminLinkedInHandler.GetStatus)
+			adminLinkedIn.POST("/disconnect", adminLinkedInHandler.Disconnect)
+
+			// Posting
+			adminLinkedIn.POST("/post/job/:id", adminLinkedInHandler.PostJob)
+			adminLinkedIn.POST("/post/blog/:id", adminLinkedInHandler.PostBlog)
+			adminLinkedIn.POST("/post/custom", adminLinkedInHandler.PostCustom)
+
+			// Post history
+			adminLinkedIn.GET("/posts", adminLinkedInHandler.GetPostHistory)
+
+			// Auto-post settings
+			adminLinkedIn.GET("/settings", adminLinkedInHandler.GetAutoPostSettings)
+			adminLinkedIn.PUT("/settings", adminLinkedInHandler.UpdateAutoPostSettings)
 		}
 
 		// ==================== Admin Cache Management Routes ====================

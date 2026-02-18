@@ -71,6 +71,11 @@ type Config struct {
 	GoogleClientSecret string
 	GoogleRedirectURL  string
 
+	// LinkedIn OAuth
+	LinkedInClientID     string
+	LinkedInClientSecret string
+	LinkedInRedirectURL  string
+
 	// Email Provider
 	EmailProvider string
 
@@ -98,8 +103,9 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	// Load .env file (ignore error if file doesn't exist)
+	// Load .env file (check current dir, then parent dir)
 	_ = godotenv.Load()
+	_ = godotenv.Load("../.env")
 
 	// Setup Viper
 	viper.AutomaticEnv()
@@ -172,6 +178,11 @@ func Load() (*Config, error) {
 		GoogleClientID:     viper.GetString("GOOGLE_CLIENT_ID"),
 		GoogleClientSecret: viper.GetString("GOOGLE_CLIENT_SECRET"),
 		GoogleRedirectURL:  viper.GetString("GOOGLE_REDIRECT_URL"),
+
+		// LinkedIn OAuth
+		LinkedInClientID:     viper.GetString("LINKEDIN_CLIENT_ID"),
+		LinkedInClientSecret: viper.GetString("LINKEDIN_CLIENT_SECRET"),
+		LinkedInRedirectURL:  viper.GetString("LINKEDIN_REDIRECT_URL"),
 
 		// Email Provider
 		EmailProvider: viper.GetString("EMAIL_PROVIDER"),
