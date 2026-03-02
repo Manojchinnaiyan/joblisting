@@ -110,7 +110,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
         {/* Preconnect to external origins for faster resource loading */}
         <link rel="preconnect" href="https://s3.smartdreamers.com" />
@@ -127,7 +127,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#2563eb" />
         <meta name="google-adsense-account" content="ca-pub-2850705628908256" />
       </head>
-      <body className={inter.variable}>
+      <body className={inter.variable} suppressHydrationWarning>
         <NextTopLoader
           color="#2563eb"
           initialPosition={0.08}

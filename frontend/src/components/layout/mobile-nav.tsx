@@ -27,7 +27,7 @@ export function MobileNav() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const prevPathRef = useRef(pathname)
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, _hasHydrated } = useAuthStore()
 
   // Close sheet when pathname changes (after navigation completes)
   useEffect(() => {
@@ -79,7 +79,7 @@ export function MobileNav() {
                 )
               })}
 
-              {!isAuthenticated && (
+              {_hasHydrated && !isAuthenticated && (
                 <>
                   <Separator className="my-4" />
                   <Link
