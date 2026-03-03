@@ -12,6 +12,7 @@ import { OrganizationStructuredData } from '@/components/seo/organization-struct
 import { AdSenseScript } from '@/components/ads/adsense-script'
 import { GTMScript } from '@/components/analytics/gtm-script'
 import { ScrollIndicator } from '@/components/ui/scroll-indicator'
+import { HydrationLogger } from '@/components/debug/hydration-logger'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -153,6 +154,7 @@ export default function RootLayout({
         <PHProvider>
           <QueryProvider>
             <AuthProvider>
+              <HydrationLogger />
               <PostHogPageView />
               {children}
               <Toaster />

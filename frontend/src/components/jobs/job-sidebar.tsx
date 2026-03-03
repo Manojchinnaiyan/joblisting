@@ -19,12 +19,12 @@ interface JobSidebarProps {
 export function JobSidebar({ job, className, isMobile = false }: JobSidebarProps) {
   const [jobUrl, setJobUrl] = useState('')
   const [isSaved, setIsSaved] = useState(job.is_saved || false)
-  const { isAuthenticated, user } = useAuthStore()
+  const { isAuthenticated, user, _hasHydrated } = useAuthStore()
   const saveJob = useSaveJob()
   const unsaveJob = useUnsaveJob()
 
   const isJobSeeker = user?.role === 'JOB_SEEKER'
-  const canSave = isAuthenticated && isJobSeeker
+  const canSave = _hasHydrated && isAuthenticated && isJobSeeker
 
   useEffect(() => {
     // Get the current URL on the client side

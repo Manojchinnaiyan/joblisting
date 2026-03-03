@@ -6,6 +6,12 @@ const nextConfig: NextConfig = {
   experimental: {
     esmExternals: 'loose',
   },
+
+  // Production performance optimizations
+  poweredByHeader: false,
+  reactStrictMode: true,
+  compress: true,
+
   webpack: (config, { isServer }) => {
     // Handle pdfjs-dist canvas dependency
     if (!isServer) {
@@ -25,6 +31,11 @@ const nextConfig: NextConfig = {
         hostname: '**',
       },
     ],
+    // Optimize image loading
+    formats: ['image/avif', 'image/webp'],
+    minimumCacheTTL: 60 * 60 * 24, // 24 hours
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256],
   },
   async headers() {
     return [
@@ -45,6 +56,40 @@ const nextConfig: NextConfig = {
               "object-src 'none'",
               "base-uri 'self'",
             ].join('; '),
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
+          },
+        ],
+      },
+      // Cache static assets aggressively
+      {
+        source: '/_next/static/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+      // Cache images
+      {
+        source: '/_next/image/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      // Cache static files (favicons, manifest, etc.)
+      {
+        source: '/(.*)\\.(ico|png|svg|jpg|jpeg|webp|avif|json|xml|txt)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
           },
         ],
       },
