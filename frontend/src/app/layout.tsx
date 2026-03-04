@@ -113,9 +113,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        {/* Preconnect to external origins for faster resource loading */}
-        <link rel="preconnect" href="https://s3.smartdreamers.com" />
-        <link rel="preconnect" href="https://www.accenture.com" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <OrganizationStructuredData />
@@ -142,15 +139,6 @@ export default function RootLayout({
           zIndex={9999}
         />
         <ScrollIndicator />
-        {/* Google Tag Manager (noscript) - for users without JavaScript */}
-        <noscript>
-          <iframe
-            src="https://www.googletagmanager.com/ns.html?id=GTM-5F6RMCTV"
-            height="0"
-            width="0"
-            style={{ display: 'none', visibility: 'hidden' }}
-          />
-        </noscript>
         <PHProvider>
           <QueryProvider>
             <AuthProvider>
