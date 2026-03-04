@@ -11,6 +11,7 @@ import { PostHogPageView } from './posthog-pageview'
 import { OrganizationStructuredData } from '@/components/seo/organization-structured-data'
 import { AdSenseScript } from '@/components/ads/adsense-script'
 import { GTMScript } from '@/components/analytics/gtm-script'
+import { CloudflareScript } from '@/components/analytics/cloudflare-script'
 import { ScrollIndicator } from '@/components/ui/scroll-indicator'
 import { HydrationLogger } from '@/components/debug/hydration-logger'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
@@ -152,6 +153,7 @@ export default function RootLayout({
         </PHProvider>
         <GTMScript />
         <AdSenseScript />
+        <CloudflareScript />
       </body>
     </html>
   )
