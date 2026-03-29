@@ -293,7 +293,7 @@ export function ChatWidget() {
               onClick={() => {
                 if (_hasHydrated && !isAuthenticated) {
                   setOpen(false)
-                  router.push('/auth/login')
+                  router.push('/login')
                 } else {
                   resumeInputRef.current?.click()
                 }
