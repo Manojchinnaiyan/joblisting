@@ -38,8 +38,10 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
       infra: ${{ steps.filter.outputs.infra }}
+      scraper: ${{ steps.filter.outputs.scraper }}
       backend_image: ${{ steps.set-images.outputs.backend_image }}
       frontend_image: ${{ steps.set-images.outputs.frontend_image }}
+      scraper_image: ${{ steps.set-images.outputs.scraper_image }}
       short_sha: ${{ steps.set-images.outputs.short_sha }}
     steps:
       - name: Checkout code
@@ -58,6 +60,8 @@ jobs:
               - 'go.sum'
             frontend:
               - 'frontend/**'
+            scraper:
+              - 'scraper/**'
             infra:
               - 'docker-compose.prod.yml'
               - 'nginx/**'
@@ -70,6 +74,7 @@ jobs:
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "backend_image=ghcr.io/${REPO_LOWER}/backend" >> $GITHUB_OUTPUT
           echo "frontend_image=ghcr.io/${REPO_LOWER}/frontend" >> $GITHUB_OUTPUT
+          echo "scraper_image=ghcr.io/${REPO_LOWER}/scraper" >> $GITHUB_OUTPUT
           echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
       - name: Print detected changes
@@ -286,23 +291,72 @@ jobs:
             NEXT_PUBLIC_POSTHOG_KEY=${{ secrets.NEXT_PUBLIC_POSTHOG_KEY }}
             NEXT_PUBLIC_POSTHOG_HOST=${{ secrets.NEXT_PUBLIC_POSTHOG_HOST }}
 
+  # Build Scraper (only if scraper changed)
+  build-scraper:
+    name: Build Scraper
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: |
+      always() &&
+      (needs.changes.outputs.scraper == 'true')
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for Scraper
+        id: meta-scraper
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ needs.changes.outputs.scraper_image }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+            type=raw,value=${{ github.run_number }}
+
+      - name: Build and push Scraper
+        uses: docker/build-push-action@v5
+        with:
+          context: ./scraper
+          push: true
+          tags: ${{ steps.meta-scraper.outputs.tags }}
+          labels: ${{ steps.meta-scraper.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   # Deploy to production server
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
-    needs: [changes, build-backend, build-frontend]
+    needs: [changes, build-backend, build-frontend, build-scraper]
     if: |
       always() &&
       (needs.build-backend.result == 'success' || needs.build-backend.result == 'skipped') &&
       (needs.build-frontend.result == 'success' || needs.build-frontend.result == 'skipped') &&
-      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_backend == 'true' || github.event.inputs.force_frontend == 'true' || github.event.inputs.force_infra == 'true')
+      (needs.build-scraper.result == 'success' || needs.build-scraper.result == 'skipped') &&
+      (needs.changes.outputs.backend == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.scraper == 'true' || needs.changes.outputs.infra == 'true' || github.event.inputs.force_backend == 'true' || github.event.inputs.force_frontend == 'true' || github.event.inputs.force_infra == 'true')
     environment: production
     env:
       BACKEND_IMAGE: ${{ needs.changes.outputs.backend_image }}
       FRONTEND_IMAGE: ${{ needs.changes.outputs.frontend_image }}
+      SCRAPER_IMAGE: ${{ needs.changes.outputs.scraper_image }}
       SHORT_SHA: ${{ needs.changes.outputs.short_sha }}
       BACKEND_CHANGED: ${{ needs.changes.outputs.backend == 'true' || github.event.inputs.force_backend == 'true' }}
       FRONTEND_CHANGED: ${{ needs.changes.outputs.frontend == 'true' || github.event.inputs.force_frontend == 'true' }}
+      SCRAPER_CHANGED: ${{ needs.changes.outputs.scraper == 'true' }}
       INFRA_CHANGED: ${{ needs.changes.outputs.infra == 'true' || github.event.inputs.force_infra == 'true' }}
 
     steps:
@@ -319,7 +373,13 @@ jobs:
       - name: Create deployment directory on server
         run: |
           ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }} \
-            "mkdir -p /opt/job-platform/scripts/postgres /opt/job-platform/nginx /opt/job-platform/backups"
+            "mkdir -p /opt/job-platform/scripts/postgres /opt/job-platform/nginx /opt/job-platform/backups /opt/job-platform/backend/migrations"
+
+      - name: Copy migrations (always — idempotent)
+        run: |
+          scp -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no \
+            backend/migrations/*.sql \
+            ${{ secrets.SERVER_USER }}@${{ secrets.SERVER_HOST }}:/opt/job-platform/backend/migrations/
 
       - name: Copy configuration files (infra changes)
         if: env.INFRA_CHANGED == 'true'
@@ -393,6 +453,7 @@ jobs:
           # Docker Images
           BACKEND_IMAGE=${{ env.BACKEND_IMAGE }}:latest
           FRONTEND_IMAGE=${{ env.FRONTEND_IMAGE }}:latest
+          SCRAPER_IMAGE=${{ env.SCRAPER_IMAGE }}:latest
           # Deployment info
           DEPLOY_SHA=${{ env.SHORT_SHA }}
           DEPLOY_TIME=${{ github.event.head_commit.timestamp }}
@@ -417,6 +478,7 @@ jobs:
 
             BACKEND_CHANGED="${{ env.BACKEND_CHANGED }}"
             FRONTEND_CHANGED="${{ env.FRONTEND_CHANGED }}"
+            SCRAPER_CHANGED="${{ env.SCRAPER_CHANGED }}"
             INFRA_CHANGED="${{ env.INFRA_CHANGED }}"
 
             echo "======================================"
@@ -442,6 +504,10 @@ jobs:
             if [ "$FRONTEND_CHANGED" = "true" ]; then
               echo "Pulling frontend image..."
               docker compose -f docker-compose.prod.yml pull frontend
+            fi
+            if [ "$SCRAPER_CHANGED" = "true" ]; then
+              echo "Pulling scraper image..."
+              docker compose -f docker-compose.prod.yml pull scraper
             fi
 
             # Step 2: Ensure infrastructure services are running
@@ -480,6 +546,15 @@ jobs:
             fi
             docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
             docker exec $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
+
+            # Run pending migrations (idempotent — IF NOT EXISTS guards make re-runs safe)
+            echo "Running database migrations..."
+            for MIGRATION in /opt/job-platform/backend/migrations/*.sql; do
+              echo "Applying migration: $(basename $MIGRATION)"
+              docker exec -i $POSTGRES_CONTAINER psql -U ${DB_USER:-postgres} -d ${DB_NAME:-jobdb} \
+                < "$MIGRATION" 2>&1 | grep -v "already exists" || true
+            done
+            echo "Migrations complete."
 
             # Step 4: Deploy only changed containers
             echo "[4/5] Deploying changed containers..."
@@ -531,8 +606,16 @@ jobs:
               zero_downtime_deploy "frontend" "job_frontend" "3000"
             fi
 
+            if [ "$SCRAPER_CHANGED" = "true" ]; then
+              echo "Restarting scraper..."
+              docker compose -f docker-compose.prod.yml up -d --force-recreate --no-deps scraper
+              echo "Scraper restarted."
+            fi
+
             if [ "$INFRA_CHANGED" = "true" ]; then
-              echo "Deploying infrastructure (nginx, netdata)..."
+              echo "Deploying infrastructure (nginx, netdata, frontend env refresh)..."
+              # Restart frontend to pick up any env var changes in docker-compose.prod.yml
+              zero_downtime_deploy "frontend" "job_frontend" "3000"
 
               # Check if SSL certificate exists for jobsworld.in
               if [ ! -f /etc/letsencrypt/live/jobsworld.in/fullchain.pem ]; then
@@ -636,6 +719,7 @@ jobs:
           echo "|-----------|---------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Backend | ${{ env.BACKEND_CHANGED }} | ${{ env.BACKEND_CHANGED == 'true' && 'Rebuilt & Deployed' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend | ${{ env.FRONTEND_CHANGED }} | ${{ env.FRONTEND_CHANGED == 'true' && 'Rebuilt & Deployed' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Scraper | ${{ env.SCRAPER_CHANGED }} | ${{ env.SCRAPER_CHANGED == 'true' && 'Rebuilt & Deployed' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Infra | ${{ env.INFRA_CHANGED }} | ${{ env.INFRA_CHANGED == 'true' && 'Config Updated' || 'Skipped' }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
