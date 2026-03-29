@@ -184,7 +184,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	educationService := service.NewEducationService(educationRepo, profileService)
 	certificationService := service.NewCertificationService(certificationRepo, profileService)
 	portfolioService := service.NewPortfolioService(portfolioRepo, profileService, minioClient)
-	resumeService := service.NewResumeService(resumeRepo, profileService, minioClient, db, cfg.MaxResumesPerUser, 10, 24, "resumes")
+	// AI service — initialized here so it can be shared by resume + chat services
+	aiService := service.NewAIService()
+
+	resumeService := service.NewResumeService(resumeRepo, profileService, minioClient, aiService, jobRepo, db, cfg.MaxResumesPerUser, 10, 24, "resumes")
 
 	// Candidate search service
 	candidateSearchService := service.NewCandidateSearchService(profileRepo, savedCandidateRepo, userRepo)
@@ -211,8 +214,7 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 	blogRepo := repository.NewBlogRepository(db)
 	blogService := service.NewBlogService(blogRepo)
 
-	// Scraper services
-	aiService := service.NewAIService()
+	// Scraper services (aiService already initialized above)
 	scraperService := service.NewScraperService(aiService)
 
 	// Search service
@@ -260,6 +262,10 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 
 	// Blog handler
 	blogHandler := handler.NewBlogHandler(blogService, searchService, cacheService)
+
+	// Chat handler
+	chatService := service.NewChatService(aiService, jobRepo)
+	chatHandler := handler.NewChatHandler(chatService)
 
 	// Blog scraper handler
 	blogScraperHandler := handler.NewBlogScraperHandler(aiService, scraperService, blogService)
@@ -469,14 +475,19 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 		jobs := v1.Group("/jobs")
 		{
 			// Public job listings and details
-			jobs.GET("", jobHandler.ListJobs)                 // List all active jobs with pagination
-			jobs.GET("/featured", jobHandler.GetFeaturedJobs) // Get featured jobs
-			jobs.GET("/search", jobHandler.SearchJobs)        // Search jobs (Meilisearch)
-			jobs.GET("/categories", jobHandler.GetCategories) // Get all categories (tree or flat)
-			jobs.GET("/locations", jobHandler.GetLocations)   // Get all locations
-			jobs.GET("/sitemap", jobHandler.GetJobsForSitemap) // Get all jobs for sitemap
-			jobs.GET("/view/:slug", jobHandler.GetJobBySlug)  // Get job by slug (records view)
+			jobs.GET("", jobHandler.ListJobs)                        // List all active jobs with pagination
+			jobs.GET("/featured", jobHandler.GetFeaturedJobs)        // Get featured jobs
+			jobs.GET("/search", jobHandler.SearchJobs)               // Search jobs (Meilisearch)
+			jobs.GET("/categories", jobHandler.GetCategories)        // Get all categories (tree or flat)
+			jobs.GET("/locations", jobHandler.GetLocations)          // Get all locations
+			jobs.GET("/sitemap", jobHandler.GetJobsForSitemap)       // Get all jobs for sitemap
+			jobs.GET("/view/:slug", jobHandler.GetJobBySlug)         // Get job by slug (records view)
+			jobs.GET("/by-skill/:skill", jobHandler.GetJobsBySkill)  // Jobs filtered by skill
+			jobs.GET("/by-location/:city", jobHandler.GetJobsByCity) // Jobs filtered by city
 		}
+
+		// Platform stats
+		v1.GET("/stats", jobHandler.GetStats)
 
 		// ==================== Job Seeker Routes ====================
 		jobSeekerJobs := v1.Group("/jobs")
@@ -560,7 +571,11 @@ func SetupRouter(cfg *config.Config, db *gorm.DB, redis *redis.Client, minioClie
 			jobSeekerMe.DELETE("/resumes/:id", resumeHandler.DeleteResume)
 			jobSeekerMe.PUT("/resumes/:id/primary", resumeHandler.SetPrimaryResume)
 			jobSeekerMe.GET("/resumes/:id/download", resumeHandler.DownloadResume)
+			jobSeekerMe.GET("/resumes/:id/job-matches", resumeHandler.GetJobMatches)
 		}
+
+		// ==================== Chat Routes (Public — no auth required) ====================
+		v1.POST("/chat/message", chatHandler.SendMessage)
 
 		// ==================== Notification Routes (All Authenticated Users) ====================
 		notificationRoutes := v1.Group("/me/notifications")

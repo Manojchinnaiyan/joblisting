@@ -1,6 +1,9 @@
 package service
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"job-platform/internal/domain"
 	"job-platform/internal/repository"
 	"job-platform/internal/storage"
@@ -16,6 +19,8 @@ type ResumeService struct {
 	resumeRepo     *repository.ResumeRepository
 	profileService *ProfileService
 	storageClient  *storage.MinioClient
+	aiService      *AIService
+	jobRepo        *repository.JobRepository
 	db             *gorm.DB
 	maxResumes     int
 	maxSizeMB      int64
@@ -28,6 +33,8 @@ func NewResumeService(
 	resumeRepo *repository.ResumeRepository,
 	profileService *ProfileService,
 	storageClient *storage.MinioClient,
+	aiService *AIService,
+	jobRepo *repository.JobRepository,
 	db *gorm.DB,
 	maxResumes int,
 	maxSizeMB int64,
@@ -38,12 +45,59 @@ func NewResumeService(
 		resumeRepo:     resumeRepo,
 		profileService: profileService,
 		storageClient:  storageClient,
+		aiService:      aiService,
+		jobRepo:        jobRepo,
 		db:             db,
 		maxResumes:     maxResumes,
 		maxSizeMB:      maxSizeMB,
 		urlExpiry:      time.Duration(urlExpiryHours) * time.Hour,
 		bucket:         bucket,
 	}
+}
+
+// JobMatchResult holds the resume analysis and matched jobs
+type JobMatchResult struct {
+	Analysis   *ResumeAnalysis `json:"analysis"`
+	Jobs       []domain.Job    `json:"jobs"`
+	TotalFound int             `json:"total_found"`
+}
+
+// MatchJobsForResume analyzes a PDF resume with Claude AI and returns matching jobs
+func (s *ResumeService) MatchJobsForResume(ctx context.Context, resumeID, userID uuid.UUID) (*JobMatchResult, error) {
+	resume, err := s.resumeRepo.GetByIDAndUserID(resumeID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if !resume.IsPDF() {
+		return nil, fmt.Errorf("only PDF resumes support AI job matching")
+	}
+
+	reader, err := s.storageClient.GetObject(s.bucket, resume.FilePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to download resume")
+	}
+	defer reader.Close()
+
+	fileBytes, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read resume file")
+	}
+
+	analysis, err := s.aiService.AnalyzeResume(ctx, fileBytes, "application/pdf")
+	if err != nil {
+		return nil, fmt.Errorf("AI analysis failed: %w", err)
+	}
+
+	jobs, err := s.jobRepo.FindBySkills(analysis.Skills, analysis.ExperienceLevel, "", false, "", 20)
+	if err != nil {
+		return nil, fmt.Errorf("failed to find matching jobs: %w", err)
+	}
+
+	return &JobMatchResult{
+		Analysis:   analysis,
+		Jobs:       jobs,
+		TotalFound: len(jobs),
+	}, nil
 }
 
 // UpdateResumeInput contains fields for updating resume metadata

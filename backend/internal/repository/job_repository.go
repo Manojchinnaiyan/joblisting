@@ -2,6 +2,7 @@ package repository
 
 import (
 	"job-platform/internal/domain"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -552,6 +553,43 @@ func (r *JobRepository) CountByWorkplaceType() (map[string]int64, error) {
 }
 
 // GetFilteredJobs retrieves active jobs with filters and pagination
+// FindBySkills finds active jobs that match any of the given skills using PostgreSQL array overlap.
+// Falls back to a keyword search on title/description when skills array is empty.
+func (r *JobRepository) FindBySkills(skills []string, experienceLevel string, keywords string, remote bool, location string, limit int) ([]domain.Job, error) {
+	query := r.db.Model(&domain.Job{}).
+		Where("status = ? AND deleted_at IS NULL", domain.JobStatusActive)
+
+	if len(skills) > 0 {
+		// Build PostgreSQL array literal: {"Go","PostgreSQL",...}
+		quoted := make([]string, len(skills))
+		for i, s := range skills {
+			quoted[i] = `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+		}
+		query = query.Where("skills && ?::text[]", "{"+strings.Join(quoted, ",")+"}")
+	} else if keywords != "" {
+		pattern := "%" + keywords + "%"
+		query = query.Where("title ILIKE ? OR description ILIKE ?", pattern, pattern)
+	}
+
+	if experienceLevel != "" {
+		query = query.Where("experience_level = ? OR experience_level IS NULL OR experience_level = ''", experienceLevel)
+	}
+	if remote {
+		query = query.Where("workplace_type = 'REMOTE'")
+	}
+	if location != "" {
+		pattern := "%" + location + "%"
+		query = query.Where("location ILIKE ? OR city ILIKE ?", pattern, pattern)
+	}
+
+	var jobs []domain.Job
+	err := query.
+		Order("is_featured DESC, published_at DESC").
+		Limit(limit).
+		Find(&jobs).Error
+	return jobs, err
+}
+
 func (r *JobRepository) GetFilteredJobs(filters JobFilters, limit, offset int) ([]domain.Job, int64, error) {
 	var jobs []domain.Job
 	var total int64

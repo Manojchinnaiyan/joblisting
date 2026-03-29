@@ -229,6 +229,33 @@ func (h *ResumeHandler) SetPrimaryResume(c *gin.Context) {
 	response.Success(c, http.StatusOK, "Primary resume set successfully", nil)
 }
 
+// GetJobMatches analyzes a resume with AI and returns matching jobs
+func (h *ResumeHandler) GetJobMatches(c *gin.Context) {
+	userID, err := middleware.GetUserIDFromContext(c)
+	if err != nil {
+		response.Error(c, http.StatusUnauthorized, domain.ErrUnauthorized, nil)
+		return
+	}
+
+	resumeID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, domain.ErrInvalidInput, nil)
+		return
+	}
+
+	result, err := h.resumeService.MatchJobsForResume(c.Request.Context(), resumeID, userID)
+	if err != nil {
+		if err == domain.ErrResumeNotFound {
+			response.Error(c, http.StatusNotFound, err, nil)
+			return
+		}
+		response.Error(c, http.StatusInternalServerError, err, nil)
+		return
+	}
+
+	response.Success(c, http.StatusOK, "Job matches found", result)
+}
+
 // DownloadResume generates a download URL for a resume
 func (h *ResumeHandler) DownloadResume(c *gin.Context) {
 	userID, err := middleware.GetUserIDFromContext(c)

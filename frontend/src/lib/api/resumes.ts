@@ -1,11 +1,27 @@
 import apiClient from './client'
 import { Resume, UpdateResumeRequest } from '@/types/resume'
+import type { Job } from '@/types/job'
 
 // Backend wraps all responses in { success, message, data }
 interface ApiResponse<T> {
   success: boolean
   message: string
   data: T
+}
+
+export interface ResumeAnalysis {
+  skills: string[]
+  experience_level: string
+  job_types: string[]
+  years_experience: number
+  preferred_roles: string[]
+  summary: string
+}
+
+export interface JobMatchResult {
+  analysis: ResumeAnalysis
+  jobs: Job[]
+  total_found: number
 }
 
 export const resumesApi = {
@@ -57,5 +73,12 @@ export const resumesApi = {
       `/jobseeker/me/resumes/${id}/download`
     )
     return response.data.data.download_url
+  },
+
+  getJobMatches: async (id: string): Promise<JobMatchResult> => {
+    const response = await apiClient.get<ApiResponse<JobMatchResult>>(
+      `/jobseeker/me/resumes/${id}/job-matches`
+    )
+    return response.data.data
   },
 }

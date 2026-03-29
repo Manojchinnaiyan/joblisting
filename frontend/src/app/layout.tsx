@@ -14,6 +14,7 @@ import { GTMScript } from '@/components/analytics/gtm-script'
 import { CloudflareScript } from '@/components/analytics/cloudflare-script'
 import { ScrollIndicator } from '@/components/ui/scroll-indicator'
 import { HydrationLogger } from '@/components/debug/hydration-logger'
+import { ChatWidget } from '@/components/chat/chat-widget'
 import { APP_NAME, APP_DESCRIPTION } from '@/lib/constants'
 
 // Inter font for entire application
@@ -147,6 +148,7 @@ export default function RootLayout({
               <PostHogPageView />
               {children}
               <Toaster />
+              <ChatWidget />
               {/* <CookieConsent /> */}
             </AuthProvider>
           </QueryProvider>

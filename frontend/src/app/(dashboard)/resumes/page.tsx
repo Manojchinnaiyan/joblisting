@@ -1,17 +1,18 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Upload, FileText, Download, Star, Trash2, CheckCircle, Edit, Loader2 } from 'lucide-react'
+import { Upload, FileText, Download, Star, Trash2, CheckCircle, Edit, Loader2, Sparkles, MapPin, Building2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { useResumes, useUploadResume, useSetPrimaryResume, useDeleteResume } from '@/hooks/use-resumes'
 import { ConfirmDialog } from '@/components/shared/confirm-dialog'
 import { format } from 'date-fns'
 import type { Resume } from '@/types/resume'
-import { resumesApi } from '@/lib/api/resumes'
+import { resumesApi, type JobMatchResult } from '@/lib/api/resumes'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { parseResumeFile } from '@/lib/resume-parser'
+import Link from 'next/link'
 
 export default function ResumesPage() {
   const router = useRouter()
@@ -22,6 +23,8 @@ export default function ResumesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [matchingId, setMatchingId] = useState<string | null>(null)
+  const [matchResult, setMatchResult] = useState<(JobMatchResult & { resumeId: string }) | null>(null)
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -130,6 +133,26 @@ export default function ResumesPage() {
     }
   }
 
+  const handleFindJobs = async (resume: Resume) => {
+    if (!resume.file_name.toLowerCase().endsWith('.pdf')) {
+      toast.error('Only PDF resumes support AI job matching')
+      return
+    }
+    setMatchingId(resume.id)
+    setMatchResult(null)
+    try {
+      const result = await resumesApi.getJobMatches(resume.id)
+      setMatchResult({ ...result, resumeId: resume.id })
+      if (result.total_found === 0) {
+        toast.info('No matching jobs found. Try uploading a more detailed resume.')
+      }
+    } catch {
+      toast.error('Failed to analyze resume. Please try again.')
+    } finally {
+      setMatchingId(null)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -195,7 +218,8 @@ export default function ResumesPage() {
       ) : (
         <div className="space-y-3">
           {resumes.map((resume) => (
-            <Card key={resume.id} className={resume.is_primary ? 'border-primary' : ''}>
+            <div key={resume.id} className="space-y-3">
+            <Card className={resume.is_primary ? 'border-primary' : ''}>
               <CardContent className="p-4 sm:p-6">
                 <div className="flex flex-col gap-4">
                   {/* Icon and Info Row */}
@@ -266,10 +290,99 @@ export default function ResumesPage() {
                       <Trash2 className="mr-1.5 h-4 w-4" />
                       Delete
                     </Button>
+                    {resume.file_name.toLowerCase().endsWith('.pdf') && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleFindJobs(resume)}
+                        disabled={matchingId === resume.id}
+                        className="col-span-2 sm:col-span-1 border-primary/40 text-primary hover:bg-primary/5"
+                      >
+                        {matchingId === resume.id ? (
+                          <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="mr-1.5 h-4 w-4" />
+                        )}
+                        {matchingId === resume.id ? 'Analyzing...' : 'Find Matching Jobs'}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
+
+            {/* Job match results panel — shows below the resume that was analyzed */}
+            {matchResult?.resumeId === resume.id && (
+              <Card className="border-primary/30 bg-primary/5">
+                <CardContent className="p-4 sm:p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="font-semibold flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-primary" />
+                        AI Analysis Results
+                      </h3>
+                      <p className="text-sm text-muted-foreground mt-0.5">{matchResult.analysis.summary}</p>
+                    </div>
+                    <button onClick={() => setMatchResult(null)} className="text-muted-foreground hover:text-foreground">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* Extracted skills */}
+                  {matchResult.analysis.skills.length > 0 && (
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">SKILLS DETECTED</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {matchResult.analysis.skills.map((s) => (
+                          <span key={s} className="px-2 py-0.5 bg-primary/10 text-primary rounded-full text-xs font-medium">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground mb-4">
+                    <span>Level: <strong className="text-foreground">{matchResult.analysis.experience_level}</strong></span>
+                    <span>Experience: <strong className="text-foreground">{matchResult.analysis.years_experience}+ yrs</strong></span>
+                  </div>
+
+                  {/* Matched jobs */}
+                  {matchResult.jobs.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-xs font-medium text-muted-foreground">{matchResult.total_found} MATCHING JOBS</p>
+                      {matchResult.jobs.slice(0, 5).map((job) => (
+                        <Link
+                          key={job.id}
+                          href={`/jobs/${job.slug}`}
+                          className="flex items-start gap-3 p-3 rounded-lg bg-background border hover:border-primary/40 transition-colors"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{job.title}</p>
+                            <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                              <span className="flex items-center gap-1"><Building2 className="h-3 w-3" />{job.company_name}</span>
+                              {job.city && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{job.city}</span>}
+                              {job.workplace_type === 'REMOTE' && <span className="text-green-600 font-medium">Remote</span>}
+                            </div>
+                          </div>
+                        </Link>
+                      ))}
+                      {matchResult.total_found > 5 && (
+                        <Link
+                          href="/jobs"
+                          className="block text-center text-sm text-primary hover:underline pt-1"
+                        >
+                          Browse all {matchResult.total_found} matching jobs →
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No matching jobs found right now. New jobs are added daily!</p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            </div>
           ))}
         </div>
       )}

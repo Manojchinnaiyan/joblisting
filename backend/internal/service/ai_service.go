@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -2423,4 +2424,91 @@ Return ONLY the simplified HTML content, nothing else. Do not add any explanatio
 	simplifiedContent = strings.TrimSpace(simplifiedContent)
 
 	return simplifiedContent, nil
+}
+
+// ResumeAnalysis contains the extracted candidate profile from a resume
+type ResumeAnalysis struct {
+	Skills          []string `json:"skills"`
+	ExperienceLevel string   `json:"experience_level"`
+	JobTypes        []string `json:"job_types"`
+	YearsExperience int      `json:"years_experience"`
+	PreferredRoles  []string `json:"preferred_roles"`
+	Summary         string   `json:"summary"`
+}
+
+// AnalyzeResume analyzes a PDF resume using Claude AI and returns a candidate profile
+func (s *AIService) AnalyzeResume(ctx context.Context, fileContent []byte, mimeType string) (*ResumeAnalysis, error) {
+	if s.apiKey == "" {
+		return nil, fmt.Errorf("ANTHROPIC_API_KEY not set")
+	}
+	if mimeType != "application/pdf" {
+		return nil, fmt.Errorf("only PDF resumes are supported for AI analysis")
+	}
+
+	encoded := base64.StdEncoding.EncodeToString(fileContent)
+
+	prompt := `Analyze this resume and extract the candidate profile. Return ONLY a JSON object with these exact fields:
+{
+  "skills": ["specific technical skills only - programming languages, frameworks, tools, platforms"],
+  "experience_level": "one of exactly: ENTRY, MID, SENIOR, LEAD, EXECUTIVE",
+  "job_types": ["one or more of: FULL_TIME, PART_TIME, CONTRACT, INTERNSHIP"],
+  "years_experience": total years of work experience as integer,
+  "preferred_roles": ["3-5 job titles this candidate would likely target"],
+  "summary": "2-sentence plain English summary of the candidate profile"
+}
+
+Rules:
+- skills: Only concrete technical skills (Go, Python, React, PostgreSQL, AWS, Docker, Kubernetes). No soft skills like communication or teamwork.
+- experience_level: ENTRY=0-2yr, MID=2-5yr, SENIOR=5-10yr, LEAD=10+yr or management, EXECUTIVE=C-level/VP
+- Return ONLY valid JSON, no markdown, no extra text`
+
+	requestBody := map[string]interface{}{
+		"model":      "claude-3-haiku-20240307",
+		"max_tokens": 1024,
+		"messages": []interface{}{
+			map[string]interface{}{
+				"role": "user",
+				"content": []interface{}{
+					map[string]interface{}{
+						"type": "document",
+						"source": map[string]interface{}{
+							"type":       "base64",
+							"media_type": "application/pdf",
+							"data":       encoded,
+						},
+					},
+					map[string]interface{}{
+						"type": "text",
+						"text": prompt,
+					},
+				},
+			},
+		},
+	}
+
+	reqBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	claudeResp, err := s.callClaudeAPIWithRetry(ctx, reqBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	text := strings.TrimSpace(claudeResp.Content[0].Text)
+	// Strip markdown code blocks if present
+	if strings.HasPrefix(text, "```") {
+		lines := strings.Split(text, "\n")
+		if len(lines) > 2 {
+			text = strings.Join(lines[1:len(lines)-1], "\n")
+		}
+	}
+
+	var analysis ResumeAnalysis
+	if err := json.Unmarshal([]byte(text), &analysis); err != nil {
+		return nil, fmt.Errorf("failed to parse resume analysis: %w", err)
+	}
+
+	return &analysis, nil
 }

@@ -25,7 +25,12 @@ export interface Job {
   is_saved?: boolean
   has_applied?: boolean
   original_url?: string
+  application_url?: string
   scrape_status?: string
+  external_id?: string
+  source?: string
+  normalized_title?: string
+  schema_json?: string
 }
 
 export type JobType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'FREELANCE' | 'INTERNSHIP'
