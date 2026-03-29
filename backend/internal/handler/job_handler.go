@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -541,4 +542,128 @@ func (h *JobHandler) SearchJobs(c *gin.Context) {
 		"query":             result.Query,
 		"processing_time_ms": result.ProcessingTimeMs,
 	})
+}
+
+// GetJobsBySkill retrieves jobs filtered by a specific skill
+// GET /api/v1/jobs/by-skill/:skill
+func (h *JobHandler) GetJobsBySkill(c *gin.Context) {
+	skill := c.Param("skill")
+	if skill == "" {
+		response.BadRequest(c, errors.New("skill is required"))
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	// Use query filter to search by skill in title, description, and skills array
+	filters := repository.JobFilters{
+		Query: skill,
+	}
+
+	jobs, total, err := h.jobService.GetFilteredJobs(filters, limit, offset)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	var userID *uuid.UUID
+	if user, err := middleware.GetUserFromContext(c); err == nil {
+		userID = &user.ID
+	}
+
+	jobsResponse := dto.ToJobListResponse(jobs, total, page, limit, userID)
+	response.OK(c, "Jobs by skill retrieved successfully", jobsResponse)
+}
+
+// GetJobsByCity retrieves jobs filtered by city/location
+// GET /api/v1/jobs/by-location/:city
+func (h *JobHandler) GetJobsByCity(c *gin.Context) {
+	city := c.Param("city")
+	if city == "" {
+		response.BadRequest(c, errors.New("city is required"))
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	filters := repository.JobFilters{
+		Location: city,
+	}
+
+	jobs, total, err := h.jobService.GetFilteredJobs(filters, limit, offset)
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	var userID *uuid.UUID
+	if user, err := middleware.GetUserFromContext(c); err == nil {
+		userID = &user.ID
+	}
+
+	jobsResponse := dto.ToJobListResponse(jobs, total, page, limit, userID)
+	response.OK(c, "Jobs by location retrieved successfully", jobsResponse)
+}
+
+// GetStats returns platform job statistics
+// GET /api/v1/stats
+func (h *JobHandler) GetStats(c *gin.Context) {
+	ctx := context.Background()
+	cacheKey := "platform:stats"
+
+	// Try cache first
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		var cached map[string]interface{}
+		if err := h.cacheService.Get(ctx, cacheKey, &cached); err == nil {
+			response.OK(c, "Stats retrieved successfully", cached)
+			return
+		}
+	}
+
+	byType, err := h.jobService.CountByJobType()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	byLevel, err := h.jobService.CountByExperienceLevel()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	byWorkplace, err := h.jobService.CountByWorkplaceType()
+	if err != nil {
+		response.InternalError(c, err)
+		return
+	}
+
+	stats := map[string]interface{}{
+		"by_job_type":        byType,
+		"by_experience":      byLevel,
+		"by_workplace":       byWorkplace,
+	}
+
+	// Cache for 1 hour
+	if h.cacheService != nil && h.cacheService.IsAvailable() {
+		_ = h.cacheService.Set(ctx, cacheKey, stats, time.Hour)
+	}
+
+	response.OK(c, "Stats retrieved successfully", stats)
 }

@@ -1048,3 +1048,18 @@ func (s *JobService) GetEmployerOverviewAnalytics(employerID uuid.UUID, period s
 
 	return analytics, nil
 }
+
+// CountByJobType returns active job counts grouped by job type
+func (s *JobService) CountByJobType() (map[string]int64, error) {
+	return s.jobRepo.CountByJobType()
+}
+
+// CountByExperienceLevel returns active job counts grouped by experience level
+func (s *JobService) CountByExperienceLevel() (map[string]int64, error) {
+	return s.jobRepo.CountByExperienceLevel()
+}
+
+// CountByWorkplaceType returns active job counts grouped by workplace type
+func (s *JobService) CountByWorkplaceType() (map[string]int64, error) {
+	return s.jobRepo.CountByWorkplaceType()
+}
